@@ -381,6 +381,9 @@ activate(GtkApplication *app, gpointer user_data)
       search_button, "clicked", G_CALLBACK(on_search_button_clicked), widgets);
 
   g_signal_connect(
+      entry, "activate", G_CALLBACK(on_search_button_clicked), widgets);
+
+  g_signal_connect(
       listbox, "row-selected", G_CALLBACK(on_package_selected), widgets);
 
   gtk_window_present(GTK_WINDOW(window));
