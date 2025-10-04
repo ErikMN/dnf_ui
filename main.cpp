@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <vector>
+#include <thread>
 
 #include <libdnf5/base/base.hpp>
 #include <libdnf5/rpm/package_query.hpp>
@@ -103,6 +104,7 @@ fill_listbox(GtkListBox *listbox, const std::vector<std::string> &items)
 struct SearchWidgets {
   GtkEntry *entry;
   GtkListBox *listbox;
+  GtkSpinner *spinner;
 };
 
 // ------------------------------------------------------------
@@ -116,19 +118,56 @@ on_list_button_clicked(GtkButton *button, gpointer user_data)
   fill_listbox(listbox, packages);
 }
 
+// Async task completion handler
+static void
+on_search_task_finished(GObject *source, GAsyncResult *res, gpointer user_data)
+{
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  GTask *task = G_TASK(res);
+  std::vector<std::string> *packages =
+      (std::vector<std::string> *)g_task_propagate_pointer(task, NULL);
+
+  // Stop spinner
+  gtk_spinner_stop(widgets->spinner);
+  gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
+
+  if (packages) {
+    fill_listbox(widgets->listbox, *packages);
+    delete packages;
+  }
+}
+
+// Background thread function
+static void
+on_search_task(GTask *task,
+               gpointer source,
+               gpointer task_data,
+               GCancellable *cancellable)
+{
+  const char *pattern = (const char *)task_data;
+  auto *results =
+      new std::vector<std::string>(search_available_packages(pattern));
+  g_task_return_pointer(task, results, NULL);
+}
+
+// Search button clicked
 static void
 on_search_button_clicked(GtkButton *button, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
-  GtkEntry *entry = widgets->entry;
-  GtkListBox *listbox = widgets->listbox;
-
-  const char *pattern = gtk_editable_get_text(GTK_EDITABLE(entry));
+  const char *pattern = gtk_editable_get_text(GTK_EDITABLE(widgets->entry));
   if (!pattern || !*pattern)
     return;
 
-  auto packages = search_available_packages(pattern);
-  fill_listbox(listbox, packages);
+  // Show spinner while searching
+  gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), TRUE);
+  gtk_spinner_start(widgets->spinner);
+
+  // Run async task
+  GTask *task = g_task_new(NULL, NULL, on_search_task_finished, widgets);
+  g_task_set_task_data(task, g_strdup(pattern), g_free);
+  g_task_run_in_thread(task, on_search_task);
+  g_object_unref(task);
 }
 
 static void
@@ -177,6 +216,11 @@ activate(GtkApplication *app, gpointer user_data)
   GtkWidget *search_button = gtk_button_new_with_label("Search");
   gtk_box_append(GTK_BOX(hbox), search_button);
 
+  // --- Spinner indicator ---
+  GtkWidget *spinner = gtk_spinner_new();
+  gtk_widget_set_visible(spinner, FALSE);
+  gtk_box_append(GTK_BOX(hbox), spinner);
+
   // --- Scrollable list ---
   GtkWidget *scrolled = gtk_scrolled_window_new();
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
@@ -198,6 +242,7 @@ activate(GtkApplication *app, gpointer user_data)
   SearchWidgets *widgets = g_new(SearchWidgets, 1);
   widgets->entry = GTK_ENTRY(entry);
   widgets->listbox = GTK_LIST_BOX(listbox);
+  widgets->spinner = GTK_SPINNER(spinner);
 
   g_signal_connect(
       search_button, "clicked", G_CALLBACK(on_search_button_clicked), widgets);
