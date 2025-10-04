@@ -225,6 +225,29 @@ struct SearchWidgets {
 static std::map<std::string, std::vector<std::string>> g_search_cache;
 
 // ------------------------------------------------------------
+// Helper: Update status label with color
+// ------------------------------------------------------------
+static void
+set_status(GtkLabel *label, const std::string &text, const std::string &color)
+{
+  std::string bg;
+  if (color == "green")
+    bg = "#ccffcc";
+  else if (color == "red")
+    bg = "#ffcccc";
+  else if (color == "blue")
+    bg = "#cce5ff";
+  else if (color == "gray")
+    bg = "#f0f0f0";
+  else
+    bg = "#ffffff";
+
+  std::string markup = "<span background=\"" + bg + "\" foreground=\"black\">" +
+      text + "</span>";
+  gtk_label_set_markup(label, markup.c_str());
+}
+
+// ------------------------------------------------------------
 // Virtualized ListView population
 // ------------------------------------------------------------
 static void
@@ -287,14 +310,14 @@ fill_listbox_async(SearchWidgets *widgets,
             if (pos != std::string::npos)
               pkg_name = pkg_name.substr(0, pos);
 
-            gtk_label_set_text(widgets->status_label,
-                               "Fetching package info...");
+            set_status(
+                widgets->status_label, "Fetching package info...", "blue");
             while (g_main_context_iteration(nullptr, false))
               ;
 
             std::string info = get_package_info(pkg_name);
             gtk_label_set_text(widgets->details_label, info.c_str());
-            gtk_label_set_text(widgets->status_label, "Package info loaded.");
+            set_status(widgets->status_label, "Package info loaded.", "green");
           }),
       widgets);
 }
@@ -333,11 +356,11 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     char msg[256];
     snprintf(
         msg, sizeof(msg), "Found %zu installed packages.", packages->size());
-    gtk_label_set_text(widgets->status_label, msg);
+    set_status(widgets->status_label, msg, "green");
     gtk_label_set_text(widgets->details_label, "Select a package for details.");
     delete packages;
   } else {
-    gtk_label_set_text(widgets->status_label, "Error listing packages.");
+    set_status(widgets->status_label, "Error listing packages.", "red");
   }
 }
 
@@ -346,7 +369,7 @@ static void
 on_list_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
-  gtk_label_set_text(widgets->status_label, "Listing installed packages...");
+  set_status(widgets->status_label, "Listing installed packages...", "blue");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
 
@@ -397,10 +420,10 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     fill_listbox_async(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
-    gtk_label_set_text(widgets->status_label, msg);
+    set_status(widgets->status_label, msg, "green");
     delete packages;
   } else {
-    gtk_label_set_text(widgets->status_label, "Error or no results.");
+    set_status(widgets->status_label, "Error or no results.", "red");
   }
 }
 
@@ -429,8 +452,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
     return;
 
   gtk_editable_set_text(GTK_EDITABLE(widgets->entry), term.c_str());
-  gtk_label_set_text(widgets->status_label,
-                     ("Searching for '" + term + "'...").c_str());
+  set_status(widgets->status_label, "Searching for '" + term + "'...", "blue");
   gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), TRUE);
   gtk_spinner_start(widgets->spinner);
 
@@ -446,7 +468,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
     fill_listbox_async(widgets, it->second);
     char msg[256];
     snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
-    gtk_label_set_text(widgets->status_label, msg);
+    set_status(widgets->status_label, msg, "gray");
     gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
     gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
     return;
@@ -498,7 +520,7 @@ on_clear_button_clicked(GtkButton *, gpointer user_data)
         GTK_LIST_VIEW(gtk_list_view_new(GTK_SELECTION_MODEL(sel), factory));
     gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(lv));
   }
-  gtk_label_set_text(widgets->status_label, "Ready.");
+  set_status(widgets->status_label, "Ready.", "gray");
   gtk_label_set_text(widgets->details_label, "");
 }
 
@@ -620,6 +642,20 @@ activate(GtkApplication *app, gpointer)
   widgets->search_button = GTK_BUTTON(search_button);
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
+
+  // --- Modern GTK4 CSS for status bar background ---
+  {
+    GtkCssProvider *css = gtk_css_provider_new();
+    gtk_css_provider_load_from_string(
+        css, "label.status-bar { padding: 4px; border-radius: 4px; }");
+    gtk_style_context_add_provider_for_display(
+        gdk_display_get_default(),
+        GTK_STYLE_PROVIDER(css),
+        GTK_STYLE_PROVIDER_PRIORITY_USER);
+    gtk_widget_add_css_class(GTK_WIDGET(widgets->status_label), "status-bar");
+    g_object_unref(css);
+  }
+  set_status(widgets->status_label, "Ready.", "gray");
 
   // --- Connect signals ---
   g_signal_connect(
