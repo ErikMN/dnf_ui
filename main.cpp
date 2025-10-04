@@ -105,7 +105,8 @@ get_package_info(const std::string &pkg_name)
       << "Release: " << pkg.get_release() << "\n"
       << "Arch: " << pkg.get_arch() << "\n"
       << "Repo: " << pkg.get_repo_id() << "\n"
-      << "Summary: " << pkg.get_summary() << "\n"
+      << "\nSummary:\n"
+      << pkg.get_summary() << "\n\n"
       << "Description:\n"
       << pkg.get_description();
   return oss.str();
@@ -270,7 +271,6 @@ on_package_selected(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
   const char *pkg_text = gtk_label_get_text(GTK_LABEL(child));
 
   std::string pkg_name = pkg_text;
-  // Remove version suffix if present
   auto pos = pkg_name.find('-');
   if (pos != std::string::npos)
     pkg_name = pkg_name.substr(0, pos);
@@ -292,7 +292,7 @@ activate(GtkApplication *app, gpointer user_data)
 {
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
-  gtk_window_set_default_size(GTK_WINDOW(window), 800, 700);
+  gtk_window_set_default_size(GTK_WINDOW(window), 900, 700);
 
   GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
   gtk_window_set_child(GTK_WINDOW(window), vbox);
@@ -323,22 +323,37 @@ activate(GtkApplication *app, gpointer user_data)
   gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
   gtk_box_append(GTK_BOX(vbox), status_label);
 
-  GtkWidget *scrolled = gtk_scrolled_window_new();
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+  // --- Main horizontal paned area ---
+  GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_box_append(GTK_BOX(vbox), paned);
+  gtk_widget_set_vexpand(paned, TRUE);
+
+  // --- Left: package list ---
+  GtkWidget *scrolled_list = gtk_scrolled_window_new();
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_list),
                                  GTK_POLICY_AUTOMATIC,
                                  GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_vexpand(scrolled, TRUE);
-  gtk_box_append(GTK_BOX(vbox), scrolled);
+  gtk_widget_set_vexpand(scrolled_list, TRUE);
+  gtk_paned_set_start_child(GTK_PANED(paned), scrolled_list);
 
   GtkWidget *listbox = gtk_list_box_new();
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), listbox);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_list), listbox);
 
-  // --- New details area ---
-  GtkWidget *details_label = gtk_label_new("");
+  // --- Right: details view ---
+  GtkWidget *scrolled_details = gtk_scrolled_window_new();
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_details),
+                                 GTK_POLICY_AUTOMATIC,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_widget_set_vexpand(scrolled_details, TRUE);
+  gtk_paned_set_end_child(GTK_PANED(paned), scrolled_details);
+
+  GtkWidget *details_label = gtk_label_new("Select a package for details.");
   gtk_label_set_xalign(GTK_LABEL(details_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(details_label), TRUE);
   gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
-  gtk_box_append(GTK_BOX(vbox), details_label);
+  gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_details),
+                                details_label);
 
   // --- Struct setup ---
   SearchWidgets *widgets = g_new(SearchWidgets, 1);
