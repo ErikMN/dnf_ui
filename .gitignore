@@ -1,0 +1,5 @@
+dnf_ui
+.history
+*.exe
+*.o
+*.d

@@ -1,0 +1,163 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "BUILD",
+      "detail": "Build the app",
+      "type": "shell",
+      "command": [
+        "make"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "fileLocation": [
+            "relative",
+            "${workspaceFolder}"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "CLEAN",
+      "detail": "Clean the app",
+      "type": "shell",
+      "command": [
+        "make clean"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "fileLocation": [
+            "relative",
+            "${workspaceFolder}"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "CLEAN+BUILD",
+      "detail": "Clean and build the app",
+      "type": "shell",
+      "command": [
+        "make clean && make"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "fileLocation": [
+            "relative",
+            "${workspaceFolder}"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "CLEAN+BUILD+RUN",
+      "detail": "Clean, build and run the app",
+      "type": "shell",
+      "command": [
+        "make clean && make && ./${workspaceFolderBasename}"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "fileLocation": [
+            "relative",
+            "${workspaceFolder}"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "RUN",
+      "detail": "Run the app",
+      "type": "shell",
+      "command": [
+        "./${workspaceFolderBasename}"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "fileLocation": [
+            "relative",
+            "${workspaceFolder}"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "VALGRIND",
+      "detail": "Memcheck the app",
+      "type": "shell",
+      "command": [
+        "valgrind --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes ./${workspaceFolderBasename}"
+      ],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": true
+      },
+      "problemMatcher": [
+        {
+          "base": "$gcc",
+          "fileLocation": [
+            "relative",
+            "${workspaceFolder}"
+          ]
+        }
+      ]
+    }
+  ]
+}

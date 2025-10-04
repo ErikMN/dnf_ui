@@ -1,0 +1,36 @@
+{
+  "terminal.integrated.profiles.linux": {
+    "zsh": {
+      "path": "zsh",
+      "args": [
+        "-c",
+        "echo \"\\033[1;32m*** Hello Linux Visual Studio Code project\\033[0m\"; zsh"
+      ]
+    },
+    "bash": {
+      "path": "bash",
+      "args": [
+        "-l",
+        "-c",
+        "echo -e \"\\033[1;34m*** Hello Linux Visual Studio Code project\\033[0m\"; bash"
+      ]
+    }
+  },
+  "terminal.integrated.profiles.osx": {
+    "zsh": {
+      "path": "zsh",
+      "args": [
+        "-c",
+        "echo \"\\033[1;32m*** Hello macOS Visual Studio Code project\\033[0m\"; zsh"
+      ]
+    },
+    "bash": {
+      "path": "bash",
+      "args": [
+        "-l",
+        "-c",
+        "echo -e \"\\033[1;34m*** Hello macOS Visual Studio Code project\\033[0m\"; bash"
+      ]
+    }
+  }
+}
