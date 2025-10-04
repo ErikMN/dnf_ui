@@ -327,6 +327,9 @@ activate(GtkApplication *app, gpointer user_data)
   GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_box_append(GTK_BOX(vbox), paned);
   gtk_widget_set_vexpand(paned, TRUE);
+  gtk_paned_set_resize_start_child(GTK_PANED(paned), TRUE);
+  gtk_paned_set_resize_end_child(GTK_PANED(paned), TRUE);
+  gtk_widget_set_hexpand(paned, TRUE);
 
   // --- Left: package list ---
   GtkWidget *scrolled_list = gtk_scrolled_window_new();
