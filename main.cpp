@@ -137,10 +137,8 @@ get_installed_packages()
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
-
-  for (auto pkg : query) {
+  for (auto pkg : query)
     packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
-  }
 
   return packages;
 }
@@ -165,10 +163,8 @@ search_available_packages(const std::string &pattern)
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
   query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
-
-  for (auto pkg : query) {
+  for (auto pkg : query)
     packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
-  }
 
   return packages;
 }
@@ -189,10 +185,8 @@ get_package_info(const std::string &pkg_name)
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_name(pkg_name);
-
-  if (query.empty()) {
+  if (query.empty())
     return "No details found for " + pkg_name;
-  }
 
   auto pkg = *query.begin();
   std::ostringstream oss;
@@ -200,11 +194,12 @@ get_package_info(const std::string &pkg_name)
       << "Version: " << pkg.get_version() << "\n"
       << "Release: " << pkg.get_release() << "\n"
       << "Arch: " << pkg.get_arch() << "\n"
-      << "Repo: " << pkg.get_repo_id() << "\n"
-      << "\nSummary:\n"
+      << "Repo: " << pkg.get_repo_id() << "\n\n"
+      << "Summary:\n"
       << pkg.get_summary() << "\n\n"
       << "Description:\n"
       << pkg.get_description();
+
   return oss.str();
 }
 
@@ -217,11 +212,9 @@ fill_listbox(GtkListBox *listbox, const std::vector<std::string> &items)
 #if GTK_CHECK_VERSION(4, 10, 0)
   gtk_list_box_remove_all(listbox);
 #else
-  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(listbox, 0)) {
+  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(listbox, 0))
     gtk_list_box_remove(listbox, GTK_WIDGET(row));
-  }
 #endif
-
   for (const auto &text : items) {
     GtkWidget *row = gtk_label_new(text.c_str());
     gtk_label_set_xalign(GTK_LABEL(row), 0.0);
@@ -230,26 +223,26 @@ fill_listbox(GtkListBox *listbox, const std::vector<std::string> &items)
 }
 
 // ------------------------------------------------------------
-// Struct to hold widgets for callbacks
+// Struct for UI state
 // ------------------------------------------------------------
 struct SearchWidgets {
   GtkEntry *entry;
   GtkListBox *listbox;
+  GtkListBox *history_list;
   GtkSpinner *spinner;
   GtkButton *search_button;
   GtkLabel *status_label;
   GtkLabel *details_label;
+  std::vector<std::string> history;
 };
 
 // ------------------------------------------------------------
-// Button callbacks
+// Button + async handlers
 // ------------------------------------------------------------
 static void
-on_list_button_clicked(GtkButton *button, gpointer user_data)
+on_list_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
-  GtkListBox *listbox = widgets->listbox;
-
   gtk_label_set_text(widgets->status_label, "Listing installed packages...");
 
   // Allow UI update (GTK4-safe)
@@ -257,8 +250,7 @@ on_list_button_clicked(GtkButton *button, gpointer user_data)
     ;
 
   auto packages = get_installed_packages();
-  fill_listbox(listbox, packages);
-
+  fill_listbox(widgets->listbox, packages);
   char msg[256];
   snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages.size());
   gtk_label_set_text(widgets->status_label, msg);
@@ -267,7 +259,21 @@ on_list_button_clicked(GtkButton *button, gpointer user_data)
 
 // Async task completion handler
 static void
-on_search_task_finished(GObject *source, GAsyncResult *res, gpointer user_data)
+on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
+{
+  const char *pattern = (const char *)task_data;
+  try {
+    auto *results =
+        new std::vector<std::string>(search_available_packages(pattern));
+    g_task_return_pointer(task, results, NULL);
+  } catch (const std::exception &e) {
+    g_task_return_error(
+        task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+  }
+}
+
+static void
+on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
   GTask *task = G_TASK(res);
@@ -287,38 +293,37 @@ on_search_task_finished(GObject *source, GAsyncResult *res, gpointer user_data)
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
     gtk_label_set_text(widgets->status_label, msg);
-    gtk_label_set_text(widgets->details_label, "Select a package for details.");
     delete packages;
   } else {
-    gtk_label_set_text(widgets->status_label, "No results or error occurred.");
+    gtk_label_set_text(widgets->status_label, "Error or no results.");
   }
 }
 
 // Background thread function
 static void
-on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
+add_to_history(SearchWidgets *widgets, const std::string &term)
 {
-  const char *pattern = (const char *)task_data;
-  try {
-    auto *results =
-        new std::vector<std::string>(search_available_packages(pattern));
-    g_task_return_pointer(task, results, NULL);
-  } catch (const std::exception &e) {
-    g_task_return_error(
-        task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
-  }
+  if (term.empty())
+    return;
+  for (const auto &s : widgets->history)
+    if (s == term)
+      return;
+  widgets->history.push_back(term);
+  GtkWidget *row = gtk_label_new(term.c_str());
+  gtk_label_set_xalign(GTK_LABEL(row), 0.0);
+  gtk_list_box_append(widgets->history_list, row);
 }
 
 // Search button clicked
 static void
-on_search_button_clicked(GtkButton *button, gpointer user_data)
+perform_search(SearchWidgets *widgets, const std::string &term)
 {
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
-  const char *pattern = gtk_editable_get_text(GTK_EDITABLE(widgets->entry));
-  if (!pattern || !*pattern)
+  if (term.empty())
     return;
 
-  gtk_label_set_text(widgets->status_label, "Searching...");
+  gtk_editable_set_text(GTK_EDITABLE(widgets->entry), term.c_str());
+  gtk_label_set_text(widgets->status_label,
+                     ("Searching for '" + term + "'...").c_str());
   gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), TRUE);
   gtk_spinner_start(widgets->spinner);
 
@@ -327,31 +332,28 @@ on_search_button_clicked(GtkButton *button, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
 
   GTask *task = g_task_new(NULL, NULL, on_search_task_finished, widgets);
-  g_task_set_task_data(task, g_strdup(pattern), g_free);
+  g_task_set_task_data(task, g_strdup(term.c_str()), g_free);
   g_task_run_in_thread(task, on_search_task);
   g_object_unref(task);
 }
 
 static void
-on_clear_button_clicked(GtkButton *, gpointer user_data)
+on_search_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
-  GtkListBox *listbox = widgets->listbox;
-#if GTK_CHECK_VERSION(4, 10, 0)
-  gtk_list_box_remove_all(listbox);
-#else
-  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(listbox, 0))
-    gtk_list_box_remove(listbox, GTK_WIDGET(row));
-#endif
-  gtk_label_set_text(widgets->status_label, "Ready.");
-  gtk_label_set_text(widgets->details_label, "");
+  std::string pattern = gtk_editable_get_text(GTK_EDITABLE(widgets->entry));
+  if (pattern.empty())
+    return;
+
+  add_to_history(widgets, pattern);
+  perform_search(widgets, pattern);
 }
 
 // ------------------------------------------------------------
 // When selecting a package, show detailed info
 // ------------------------------------------------------------
 static void
-on_package_selected(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
+on_package_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
 {
   if (!row)
     return;
@@ -374,6 +376,32 @@ on_package_selected(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
   gtk_label_set_text(widgets->status_label, "Package info loaded.");
 }
 
+static void
+on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
+{
+  if (!row)
+    return;
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  GtkWidget *child = gtk_list_box_row_get_child(row);
+  const char *term = gtk_label_get_text(GTK_LABEL(child));
+  perform_search(widgets, term);
+}
+
+static void
+on_clear_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+#if GTK_CHECK_VERSION(4, 10, 0)
+  gtk_list_box_remove_all(widgets->listbox);
+#else
+  while (GtkListBoxRow *row =
+             gtk_list_box_get_row_at_index(widgets->listbox, 0))
+    gtk_list_box_remove(widgets->listbox, GTK_WIDGET(row));
+#endif
+  gtk_label_set_text(widgets->status_label, "Ready.");
+  gtk_label_set_text(widgets->details_label, "");
+}
+
 // ------------------------------------------------------------
 // GTK app setup
 // ------------------------------------------------------------
@@ -384,11 +412,35 @@ activate(GtkApplication *app, gpointer)
   gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
   load_window_geometry(GTK_WINDOW(window));
 
-  GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-  gtk_window_set_child(GTK_WINDOW(window), vbox);
+  GtkWidget *outer_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_paned_set_position(GTK_PANED(outer_paned), 200);
+
+  GtkWidget *vbox_main = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  gtk_paned_set_end_child(GTK_PANED(outer_paned), vbox_main);
+
+  GtkWidget *vbox_history = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  gtk_widget_set_vexpand(vbox_history, TRUE);
+  gtk_widget_set_hexpand(vbox_history, TRUE);
+  gtk_paned_set_start_child(GTK_PANED(outer_paned), vbox_history);
+
+  GtkWidget *history_label = gtk_label_new("Search History");
+  gtk_label_set_xalign(GTK_LABEL(history_label), 0.0);
+  gtk_box_append(GTK_BOX(vbox_history), history_label);
+
+  GtkWidget *scrolled_history = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(scrolled_history, TRUE);
+  gtk_widget_set_hexpand(scrolled_history, TRUE);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_history),
+                                 GTK_POLICY_AUTOMATIC,
+                                 GTK_POLICY_AUTOMATIC);
+  gtk_box_append(GTK_BOX(vbox_history), scrolled_history);
+
+  GtkWidget *history_list = gtk_list_box_new();
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_history),
+                                history_list);
 
   GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-  gtk_box_append(GTK_BOX(vbox), hbox);
+  gtk_box_append(GTK_BOX(vbox_main), hbox);
 
   GtkWidget *list_button = gtk_button_new_with_label("List Installed");
   gtk_box_append(GTK_BOX(hbox), list_button);
@@ -411,33 +463,40 @@ activate(GtkApplication *app, gpointer)
 
   GtkWidget *status_label = gtk_label_new("Ready.");
   gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
-  gtk_box_append(GTK_BOX(vbox), status_label);
+  gtk_box_append(GTK_BOX(vbox_main), status_label);
 
-  // --- Main horizontal paned area ---
-  GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
-  gtk_box_append(GTK_BOX(vbox), paned);
-  gtk_widget_set_vexpand(paned, TRUE);
-  gtk_widget_set_hexpand(paned, TRUE);
-  gtk_paned_set_resize_start_child(GTK_PANED(paned), TRUE);
-  gtk_paned_set_resize_end_child(GTK_PANED(paned), TRUE);
-  gtk_paned_set_position(GTK_PANED(paned), load_paned_position());
+  // --- Inner paned (packages | details) ---
+  GtkWidget *inner_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_box_append(GTK_BOX(vbox_main), inner_paned);
+  gtk_widget_set_vexpand(inner_paned, TRUE);
+  gtk_widget_set_hexpand(inner_paned, TRUE);
+  gtk_paned_set_shrink_start_child(GTK_PANED(inner_paned), FALSE);
+  gtk_paned_set_shrink_end_child(GTK_PANED(inner_paned), FALSE);
+  int pos = load_paned_position();
+  if (pos < 100)
+    pos = 300;
+  gtk_paned_set_position(GTK_PANED(inner_paned), pos);
 
   // --- Left: package list ---
   GtkWidget *scrolled_list = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(scrolled_list, TRUE);
+  gtk_widget_set_vexpand(scrolled_list, TRUE);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_list),
                                  GTK_POLICY_AUTOMATIC,
                                  GTK_POLICY_AUTOMATIC);
-  gtk_paned_set_start_child(GTK_PANED(paned), scrolled_list);
+  gtk_paned_set_start_child(GTK_PANED(inner_paned), scrolled_list);
 
   GtkWidget *listbox = gtk_list_box_new();
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_list), listbox);
 
   // --- Right: details view ---
   GtkWidget *scrolled_details = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(scrolled_details, TRUE);
+  gtk_widget_set_vexpand(scrolled_details, TRUE);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_details),
                                  GTK_POLICY_AUTOMATIC,
                                  GTK_POLICY_AUTOMATIC);
-  gtk_paned_set_end_child(GTK_PANED(paned), scrolled_details);
+  gtk_paned_set_end_child(GTK_PANED(inner_paned), scrolled_details);
 
   // container to keep label top-aligned
   GtkWidget *details_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -453,12 +512,17 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_wrap(GTK_LABEL(details_label), TRUE);
   gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
   gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
+  gtk_widget_set_hexpand(details_label, TRUE);
+  gtk_widget_set_vexpand(details_label, TRUE);
   gtk_box_append(GTK_BOX(details_box), details_label);
 
+  gtk_window_set_child(GTK_WINDOW(window), outer_paned);
+
   // --- Struct setup ---
-  SearchWidgets *widgets = g_new(SearchWidgets, 1);
+  SearchWidgets *widgets = new SearchWidgets();
   widgets->entry = GTK_ENTRY(entry);
   widgets->listbox = GTK_LIST_BOX(listbox);
+  widgets->history_list = GTK_LIST_BOX(history_list);
   widgets->spinner = GTK_SPINNER(spinner);
   widgets->search_button = GTK_BUTTON(search_button);
   widgets->status_label = GTK_LABEL(status_label);
@@ -476,11 +540,20 @@ activate(GtkApplication *app, gpointer)
 
   g_signal_connect(
       entry, "activate", G_CALLBACK(on_search_button_clicked), widgets);
-
+  g_signal_connect(history_list,
+                   "row-selected",
+                   G_CALLBACK(on_history_row_selected),
+                   widgets);
   g_signal_connect(
       listbox, "row-selected", G_CALLBACK(on_package_selected), widgets);
 
-  // Save divider position and window size on close
+  g_signal_connect(window,
+                   "destroy",
+                   G_CALLBACK(+[](GtkWidget *, gpointer data) {
+                     delete static_cast<SearchWidgets *>(data);
+                   }),
+                   widgets);
+
   g_signal_connect(
       window,
       "close-request",
@@ -489,7 +562,7 @@ activate(GtkApplication *app, gpointer)
         save_paned_position(GTK_PANED(user_data));
         return FALSE;
       }),
-      paned);
+      inner_paned);
 
   gtk_window_present(GTK_WINDOW(window));
 }
