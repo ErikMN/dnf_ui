@@ -78,6 +78,29 @@ save_paned_position(GtkPaned *paned)
   save_config_map(config);
 }
 
+static void
+load_window_geometry(GtkWindow *window)
+{
+  auto config = load_config_map();
+  int w = 900, h = 700;
+  if (config.count("window_width"))
+    w = std::stoi(config["window_width"]);
+  if (config.count("window_height"))
+    h = std::stoi(config["window_height"]);
+  gtk_window_set_default_size(window, w, h);
+}
+
+static void
+save_window_geometry(GtkWindow *window)
+{
+  auto config = load_config_map();
+  int w, h;
+  gtk_window_get_default_size(window, &w, &h);
+  config["window_width"] = std::to_string(w);
+  config["window_height"] = std::to_string(h);
+  save_config_map(config);
+}
+
 // ------------------------------------------------------------
 // Helper: Query installed packages via libdnf5
 // ------------------------------------------------------------
@@ -256,10 +279,7 @@ on_search_task_finished(GObject *source, GAsyncResult *res, gpointer user_data)
 
 // Background thread function
 static void
-on_search_task(GTask *task,
-               gpointer source,
-               gpointer task_data,
-               GCancellable *cancellable)
+on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
 {
   const char *pattern = (const char *)task_data;
   try {
@@ -296,19 +316,16 @@ on_search_button_clicked(GtkButton *button, gpointer user_data)
 }
 
 static void
-on_clear_button_clicked(GtkButton *button, gpointer user_data)
+on_clear_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
   GtkListBox *listbox = widgets->listbox;
-
 #if GTK_CHECK_VERSION(4, 10, 0)
   gtk_list_box_remove_all(listbox);
 #else
-  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(listbox, 0)) {
+  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(listbox, 0))
     gtk_list_box_remove(listbox, GTK_WIDGET(row));
-  }
 #endif
-
   gtk_label_set_text(widgets->status_label, "Ready.");
   gtk_label_set_text(widgets->details_label, "");
 }
@@ -344,11 +361,11 @@ on_package_selected(GtkListBox *box, GtkListBoxRow *row, gpointer user_data)
 // GTK app setup
 // ------------------------------------------------------------
 static void
-activate(GtkApplication *app, gpointer user_data)
+activate(GtkApplication *app, gpointer)
 {
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
-  gtk_window_set_default_size(GTK_WINDOW(window), 900, 700);
+  load_window_geometry(GTK_WINDOW(window));
 
   GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
   gtk_window_set_child(GTK_WINDOW(window), vbox);
@@ -451,6 +468,7 @@ activate(GtkApplication *app, gpointer user_data)
       window,
       "close-request",
       G_CALLBACK(+[](GtkWindow *w, gpointer user_data) -> gboolean {
+        save_window_geometry(w);
         save_paned_position(GTK_PANED(user_data));
         return FALSE;
       }),
