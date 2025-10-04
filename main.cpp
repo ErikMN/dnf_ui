@@ -220,6 +220,11 @@ struct SearchWidgets {
 };
 
 // ------------------------------------------------------------
+// Global cache for search results
+// ------------------------------------------------------------
+static std::map<std::string, std::vector<std::string>> g_search_cache;
+
+// ------------------------------------------------------------
 // Virtualized ListView population
 // ------------------------------------------------------------
 static void
@@ -384,6 +389,11 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 
   if (packages) {
+    // Cache results
+    const char *term = (const char *)g_task_get_task_data(task);
+    if (term)
+      g_search_cache[term] = *packages;
+
     fill_listbox_async(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
@@ -428,6 +438,21 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
 
+  // Check cache first
+  auto it = g_search_cache.find(term);
+  if (it != g_search_cache.end()) {
+    gtk_spinner_stop(widgets->spinner);
+    gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
+    fill_listbox_async(widgets, it->second);
+    char msg[256];
+    snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
+    gtk_label_set_text(widgets->status_label, msg);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+    return;
+  }
+
+  // Otherwise, perform real search
   GTask *task = g_task_new(NULL, NULL, on_search_task_finished, widgets);
   g_task_set_task_data(task, g_strdup(term.c_str()), g_free);
   g_task_run_in_thread(task, on_search_task);
@@ -519,6 +544,14 @@ activate(GtkApplication *app, gpointer)
 
   GtkWidget *clear_button = gtk_button_new_with_label("Clear List");
   gtk_box_append(GTK_BOX(hbox), clear_button);
+
+  GtkWidget *clear_cache_button = gtk_button_new_with_label("Clear Cache");
+  gtk_box_append(GTK_BOX(hbox), clear_cache_button);
+  g_signal_connect(
+      clear_cache_button,
+      "clicked",
+      G_CALLBACK(+[](GtkButton *, gpointer) { g_search_cache.clear(); }),
+      NULL);
 
   GtkWidget *entry = gtk_entry_new();
   gtk_entry_set_placeholder_text(GTK_ENTRY(entry),
