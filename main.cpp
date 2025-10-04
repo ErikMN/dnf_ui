@@ -87,6 +87,10 @@ load_window_geometry(GtkWindow *window)
     w = std::stoi(config["window_width"]);
   if (config.count("window_height"))
     h = std::stoi(config["window_height"]);
+  if (w < 600)
+    w = 900;
+  if (h < 400)
+    h = 700;
   gtk_window_set_default_size(window, w, h);
 }
 
@@ -94,8 +98,21 @@ static void
 save_window_geometry(GtkWindow *window)
 {
   auto config = load_config_map();
-  int w, h;
-  gtk_window_get_default_size(window, &w, &h);
+  int w = 900, h = 700;
+
+#if GTK_CHECK_VERSION(4, 10, 0)
+  graphene_rect_t bounds;
+  if (gtk_widget_compute_bounds(GTK_WIDGET(window), nullptr, &bounds)) {
+    w = static_cast<int>(bounds.size.width);
+    h = static_cast<int>(bounds.size.height);
+  }
+#else
+  GtkAllocation alloc;
+  gtk_widget_get_allocation(GTK_WIDGET(window), &alloc);
+  w = alloc.width;
+  h = alloc.height;
+#endif
+
   config["window_width"] = std::to_string(w);
   config["window_height"] = std::to_string(h);
   save_config_map(config);
@@ -463,7 +480,7 @@ activate(GtkApplication *app, gpointer)
   g_signal_connect(
       listbox, "row-selected", G_CALLBACK(on_package_selected), widgets);
 
-  // Save divider position on close
+  // Save divider position and window size on close
   g_signal_connect(
       window,
       "close-request",
