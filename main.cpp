@@ -333,7 +333,6 @@ activate(GtkApplication *app, gpointer user_data)
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_list),
                                  GTK_POLICY_AUTOMATIC,
                                  GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_vexpand(scrolled_list, TRUE);
   gtk_paned_set_start_child(GTK_PANED(paned), scrolled_list);
 
   GtkWidget *listbox = gtk_list_box_new();
@@ -344,16 +343,23 @@ activate(GtkApplication *app, gpointer user_data)
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_details),
                                  GTK_POLICY_AUTOMATIC,
                                  GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_vexpand(scrolled_details, TRUE);
   gtk_paned_set_end_child(GTK_PANED(paned), scrolled_details);
+
+  // container to keep label top-aligned
+  GtkWidget *details_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_valign(details_box, GTK_ALIGN_START);
+  gtk_widget_set_halign(details_box, GTK_ALIGN_FILL);
+  gtk_widget_set_hexpand(details_box, TRUE);
+  gtk_widget_set_vexpand(details_box, TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_details),
+                                details_box);
 
   GtkWidget *details_label = gtk_label_new("Select a package for details.");
   gtk_label_set_xalign(GTK_LABEL(details_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(details_label), TRUE);
   gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
   gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_details),
-                                details_label);
+  gtk_box_append(GTK_BOX(details_box), details_label);
 
   // --- Struct setup ---
   SearchWidgets *widgets = g_new(SearchWidgets, 1);
