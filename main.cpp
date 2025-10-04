@@ -15,12 +15,42 @@
 #include <sys/types.h>
 #include <vector>
 #include <thread>
+#include <fstream>
+#include <filesystem>
 
 #include <libdnf5/base/base.hpp>
 #include <libdnf5/rpm/package_query.hpp>
 #include <gtk/gtk.h>
 
 using namespace std;
+
+// ------------------------------------------------------------
+// Config helpers for saving/restoring paned divider position
+// ------------------------------------------------------------
+static int
+load_paned_position()
+{
+  std::string config_path =
+      std::string(getenv("HOME")) + "/.config/dnf_ui.conf";
+  std::ifstream file(config_path);
+  int pos = 300; // default divider position
+  if (file.good()) {
+    file >> pos;
+  }
+  return pos;
+}
+
+static void
+save_paned_position(GtkPaned *paned)
+{
+  int pos = gtk_paned_get_position(paned);
+  std::string config_dir = std::string(getenv("HOME")) + "/.config";
+  std::filesystem::create_directories(config_dir);
+  std::ofstream file(config_dir + "/dnf_ui.conf");
+  if (file.good()) {
+    file << pos;
+  }
+}
 
 // ------------------------------------------------------------
 // Helper: Query installed packages via libdnf5
@@ -327,9 +357,10 @@ activate(GtkApplication *app, gpointer user_data)
   GtkWidget *paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_box_append(GTK_BOX(vbox), paned);
   gtk_widget_set_vexpand(paned, TRUE);
+  gtk_widget_set_hexpand(paned, TRUE);
   gtk_paned_set_resize_start_child(GTK_PANED(paned), TRUE);
   gtk_paned_set_resize_end_child(GTK_PANED(paned), TRUE);
-  gtk_widget_set_hexpand(paned, TRUE);
+  gtk_paned_set_position(GTK_PANED(paned), load_paned_position());
 
   // --- Left: package list ---
   GtkWidget *scrolled_list = gtk_scrolled_window_new();
@@ -388,6 +419,16 @@ activate(GtkApplication *app, gpointer user_data)
 
   g_signal_connect(
       listbox, "row-selected", G_CALLBACK(on_package_selected), widgets);
+
+  // Save divider position on close
+  g_signal_connect(
+      window,
+      "close-request",
+      G_CALLBACK(+[](GtkWindow *w, gpointer user_data) -> gboolean {
+        save_paned_position(GTK_PANED(user_data));
+        return FALSE;
+      }),
+      paned);
 
   gtk_window_present(GTK_WINDOW(window));
 }
