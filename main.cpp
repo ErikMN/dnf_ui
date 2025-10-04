@@ -204,10 +204,10 @@ get_package_info(const std::string &pkg_name)
 }
 
 // ------------------------------------------------------------
-// Utility: fill a GtkListBox with strings
+// Utility: synchronous clear of GtkListBox
 // ------------------------------------------------------------
 static void
-fill_listbox(GtkListBox *listbox, const std::vector<std::string> &items)
+clear_listbox(GtkListBox *listbox)
 {
 #if GTK_CHECK_VERSION(4, 10, 0)
   gtk_list_box_remove_all(listbox);
@@ -215,11 +215,6 @@ fill_listbox(GtkListBox *listbox, const std::vector<std::string> &items)
   while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(listbox, 0))
     gtk_list_box_remove(listbox, GTK_WIDGET(row));
 #endif
-  for (const auto &text : items) {
-    GtkWidget *row = gtk_label_new(text.c_str());
-    gtk_label_set_xalign(GTK_LABEL(row), 0.0);
-    gtk_list_box_append(listbox, row);
-  }
 }
 
 // ------------------------------------------------------------
@@ -234,7 +229,69 @@ struct SearchWidgets {
   GtkLabel *status_label;
   GtkLabel *details_label;
   std::vector<std::string> history;
+
+  // incremental fill job tracking
+  guint list_idle_id = 0;
 };
+
+// ------------------------------------------------------------
+// Incremental list population to keep UI responsive
+// ------------------------------------------------------------
+struct ChunkFill {
+  SearchWidgets *widgets;
+  GtkListBox *listbox;
+  std::vector<std::string> items;
+  size_t index = 0;
+  int chunk = 200; // tune this
+};
+
+static gboolean
+listbox_append_chunk(gpointer data)
+{
+  auto *state = static_cast<ChunkFill *>(data);
+  const size_t n = state->items.size();
+  const size_t end =
+      std::min(n, state->index + static_cast<size_t>(state->chunk));
+
+  for (size_t i = state->index; i < end; ++i) {
+    GtkWidget *row = gtk_label_new(state->items[i].c_str());
+    gtk_label_set_xalign(GTK_LABEL(row), 0.0);
+    gtk_list_box_append(state->listbox, row);
+  }
+
+  state->index = end;
+
+  if (state->index >= n) {
+    // finished
+    state->widgets->list_idle_id = 0;
+    return G_SOURCE_REMOVE;
+  }
+  return G_SOURCE_CONTINUE;
+}
+
+static void
+fill_listbox_async(SearchWidgets *widgets,
+                   const std::vector<std::string> &items)
+{
+  // cancel any in-flight population
+  if (widgets->list_idle_id != 0) {
+    g_source_remove(widgets->list_idle_id);
+    widgets->list_idle_id = 0;
+  }
+
+  // clear existing rows
+  clear_listbox(widgets->listbox);
+
+  // allocate state and start idle-chunk appending
+  auto *state = new ChunkFill { widgets, widgets->listbox, items, 0, 200 };
+
+  widgets->list_idle_id = g_idle_add_full(
+      G_PRIORITY_LOW,
+      [](gpointer p) -> gboolean { return listbox_append_chunk(p); },
+      state,
+      // destroy notify: cleanup state if idle is removed early
+      [](gpointer p) { delete static_cast<ChunkFill *>(p); });
+}
 
 // ------------------------------------------------------------
 // Async: Installed packages (non-blocking)
@@ -266,7 +323,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 
   if (packages) {
-    fill_listbox(widgets->listbox, *packages);
+    fill_listbox_async(widgets, *packages);
     char msg[256];
     snprintf(
         msg, sizeof(msg), "Found %zu installed packages.", packages->size());
@@ -326,7 +383,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 
   if (packages) {
-    fill_listbox(widgets->listbox, *packages);
+    fill_listbox_async(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
     gtk_label_set_text(widgets->status_label, msg);
@@ -336,7 +393,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 }
 
-// Background thread function
+// Add to search history
 static void
 add_to_history(SearchWidgets *widgets, const std::string &term)
 {
@@ -428,13 +485,12 @@ static void
 on_clear_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
-#if GTK_CHECK_VERSION(4, 10, 0)
-  gtk_list_box_remove_all(widgets->listbox);
-#else
-  while (GtkListBoxRow *row =
-             gtk_list_box_get_row_at_index(widgets->listbox, 0))
-    gtk_list_box_remove(widgets->listbox, GTK_WIDGET(row));
-#endif
+  // cancel any ongoing incremental fill
+  if (widgets->list_idle_id != 0) {
+    g_source_remove(widgets->list_idle_id);
+    widgets->list_idle_id = 0;
+  }
+  clear_listbox(widgets->listbox);
   gtk_label_set_text(widgets->status_label, "Ready.");
   gtk_label_set_text(widgets->details_label, "");
 }
