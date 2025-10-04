@@ -99,12 +99,14 @@ fill_listbox(GtkListBox *listbox, const std::vector<std::string> &items)
 }
 
 // ------------------------------------------------------------
-// Struct to hold widgets for the search callback
+// Struct to hold widgets for callbacks
 // ------------------------------------------------------------
 struct SearchWidgets {
   GtkEntry *entry;
   GtkListBox *listbox;
   GtkSpinner *spinner;
+  GtkButton *search_button;
+  GtkLabel *status_label;
 };
 
 // ------------------------------------------------------------
@@ -113,9 +115,21 @@ struct SearchWidgets {
 static void
 on_list_button_clicked(GtkButton *button, gpointer user_data)
 {
-  GtkListBox *listbox = GTK_LIST_BOX(user_data);
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  GtkListBox *listbox = widgets->listbox;
+
+  gtk_label_set_text(widgets->status_label, "Listing installed packages...");
+
+  // Allow UI update (GTK4-safe)
+  while (g_main_context_iteration(nullptr, false))
+    ;
+
   auto packages = get_installed_packages();
   fill_listbox(listbox, packages);
+
+  char msg[256];
+  snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages.size());
+  gtk_label_set_text(widgets->status_label, msg);
 }
 
 // Async task completion handler
@@ -131,9 +145,18 @@ on_search_task_finished(GObject *source, GAsyncResult *res, gpointer user_data)
   gtk_spinner_stop(widgets->spinner);
   gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
 
+  // Re-enable UI
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+
   if (packages) {
     fill_listbox(widgets->listbox, *packages);
+    char msg[256];
+    snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
+    gtk_label_set_text(widgets->status_label, msg);
     delete packages;
+  } else {
+    gtk_label_set_text(widgets->status_label, "No results or error occurred.");
   }
 }
 
@@ -145,9 +168,14 @@ on_search_task(GTask *task,
                GCancellable *cancellable)
 {
   const char *pattern = (const char *)task_data;
-  auto *results =
-      new std::vector<std::string>(search_available_packages(pattern));
-  g_task_return_pointer(task, results, NULL);
+  try {
+    auto *results =
+        new std::vector<std::string>(search_available_packages(pattern));
+    g_task_return_pointer(task, results, NULL);
+  } catch (const std::exception &e) {
+    g_task_return_error(
+        task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+  }
 }
 
 // Search button clicked
@@ -159,11 +187,14 @@ on_search_button_clicked(GtkButton *button, gpointer user_data)
   if (!pattern || !*pattern)
     return;
 
-  // Show spinner while searching
+  gtk_label_set_text(widgets->status_label, "Searching...");
   gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), TRUE);
   gtk_spinner_start(widgets->spinner);
 
-  // Run async task
+  // Disable search input and button during search
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
+
   GTask *task = g_task_new(NULL, NULL, on_search_task_finished, widgets);
   g_task_set_task_data(task, g_strdup(pattern), g_free);
   g_task_run_in_thread(task, on_search_task);
@@ -173,7 +204,8 @@ on_search_button_clicked(GtkButton *button, gpointer user_data)
 static void
 on_clear_button_clicked(GtkButton *button, gpointer user_data)
 {
-  GtkListBox *listbox = GTK_LIST_BOX(user_data);
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  GtkListBox *listbox = widgets->listbox;
 
 #if GTK_CHECK_VERSION(4, 10, 0)
   gtk_list_box_remove_all(listbox);
@@ -182,6 +214,8 @@ on_clear_button_clicked(GtkButton *button, gpointer user_data)
     gtk_list_box_remove(listbox, GTK_WIDGET(row));
   }
 #endif
+
+  gtk_label_set_text(widgets->status_label, "Ready.");
 }
 
 // ------------------------------------------------------------
@@ -197,7 +231,6 @@ activate(GtkApplication *app, gpointer user_data)
   GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
   gtk_window_set_child(GTK_WINDOW(window), vbox);
 
-  // --- Top row with buttons and search entry ---
   GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox), hbox);
 
@@ -216,12 +249,14 @@ activate(GtkApplication *app, gpointer user_data)
   GtkWidget *search_button = gtk_button_new_with_label("Search");
   gtk_box_append(GTK_BOX(hbox), search_button);
 
-  // --- Spinner indicator ---
   GtkWidget *spinner = gtk_spinner_new();
   gtk_widget_set_visible(spinner, FALSE);
   gtk_box_append(GTK_BOX(hbox), spinner);
 
-  // --- Scrollable list ---
+  GtkWidget *status_label = gtk_label_new("Ready.");
+  gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
+  gtk_box_append(GTK_BOX(vbox), status_label);
+
   GtkWidget *scrolled = gtk_scrolled_window_new();
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
                                  GTK_POLICY_AUTOMATIC,
@@ -232,17 +267,18 @@ activate(GtkApplication *app, gpointer user_data)
   GtkWidget *listbox = gtk_list_box_new();
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), listbox);
 
-  // --- Connect signals ---
-  g_signal_connect(
-      list_button, "clicked", G_CALLBACK(on_list_button_clicked), listbox);
-
-  g_signal_connect(
-      clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), listbox);
-
   SearchWidgets *widgets = g_new(SearchWidgets, 1);
   widgets->entry = GTK_ENTRY(entry);
   widgets->listbox = GTK_LIST_BOX(listbox);
   widgets->spinner = GTK_SPINNER(spinner);
+  widgets->search_button = GTK_BUTTON(search_button);
+  widgets->status_label = GTK_LABEL(status_label);
+
+  g_signal_connect(
+      list_button, "clicked", G_CALLBACK(on_list_button_clicked), widgets);
+
+  g_signal_connect(
+      clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), widgets);
 
   g_signal_connect(
       search_button, "clicked", G_CALLBACK(on_search_button_clicked), widgets);
