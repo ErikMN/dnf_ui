@@ -237,27 +237,64 @@ struct SearchWidgets {
 };
 
 // ------------------------------------------------------------
-// Button + async handlers
+// Async: Installed packages (non-blocking)
 // ------------------------------------------------------------
+static void
+on_list_task(GTask *task, gpointer, gpointer, GCancellable *)
+{
+  try {
+    auto *results = new std::vector<std::string>(get_installed_packages());
+    g_task_return_pointer(task, results, NULL);
+  } catch (const std::exception &e) {
+    g_task_return_error(
+        task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+  }
+}
+
+static void
+on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
+{
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  GTask *task = G_TASK(res);
+  std::vector<std::string> *packages =
+      (std::vector<std::string> *)g_task_propagate_pointer(task, NULL);
+
+  gtk_label_set_text(widgets->status_label, "");
+
+  // Re-enable UI after async list finishes
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+
+  if (packages) {
+    fill_listbox(widgets->listbox, *packages);
+    char msg[256];
+    snprintf(
+        msg, sizeof(msg), "Found %zu installed packages.", packages->size());
+    gtk_label_set_text(widgets->status_label, msg);
+    gtk_label_set_text(widgets->details_label, "Select a package for details.");
+    delete packages;
+  } else {
+    gtk_label_set_text(widgets->status_label, "Error listing packages.");
+  }
+}
+
+
 static void
 on_list_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
   gtk_label_set_text(widgets->status_label, "Listing installed packages...");
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
 
-  // Allow UI update (GTK4-safe)
-  while (g_main_context_iteration(nullptr, false))
-    ;
-
-  auto packages = get_installed_packages();
-  fill_listbox(widgets->listbox, packages);
-  char msg[256];
-  snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages.size());
-  gtk_label_set_text(widgets->status_label, msg);
-  gtk_label_set_text(widgets->details_label, "Select a package for details.");
+  GTask *task = g_task_new(NULL, NULL, on_list_task_finished, widgets);
+  g_task_run_in_thread(task, on_list_task);
+  g_object_unref(task);
 }
 
-// Async task completion handler
+// ------------------------------------------------------------
+// Search
+// ------------------------------------------------------------
 static void
 on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
 {
