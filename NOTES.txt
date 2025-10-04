@@ -1,0 +1,9 @@
+https://libdnf.readthedocs.io/en/dnf-5-devel/index.html
+
+
+sudo dnf install libdnf5-devel libdnf-cli-devel
+sudo dnf install gtk4-devel
+
+
+sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
+

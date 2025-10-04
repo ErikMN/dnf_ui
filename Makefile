@@ -1,8 +1,9 @@
 CC = g++
+CXXFLAGS += -std=c++20
 PROGS = dnf_ui
 LDLIBS = -lm
 
-# PKGS += mylib
+PKGS += libdnf5 gtk4
 ifdef PKGS
   LDLIBS += $(shell pkg-config --libs $(PKGS))
   CPPFLAGS += $(shell pkg-config --cflags $(PKGS))
@@ -24,7 +25,7 @@ ifeq ($(FINAL), y)
   CPPFLAGS += -Wdisabled-optimization -Wfloat-equal -Wall
 else
   # ASAN=y
-  CPPFLAGS += -g3 -DDEBUG
+  CPPFLAGS += -g3 -DDEBUG_BUILD
   ifeq ($(ASAN), y)
     CPPFLAGS += -fsanitize=address -O1 -fno-omit-frame-pointer
     LDLIBS += -fsanitize=address
