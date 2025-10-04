@@ -25,31 +25,57 @@
 using namespace std;
 
 // ------------------------------------------------------------
-// Config helpers for saving/restoring paned divider position
+// Config helpers for saving/restoring user settings
 // ------------------------------------------------------------
-static int
-load_paned_position()
+static std::map<std::string, std::string>
+load_config_map()
 {
+  std::map<std::string, std::string> config;
   std::string config_path =
       std::string(getenv("HOME")) + "/.config/dnf_ui.conf";
   std::ifstream file(config_path);
-  int pos = 300; // default divider position
-  if (file.good()) {
-    file >> pos;
+  if (!file.good())
+    return config;
+
+  std::string line;
+  while (std::getline(file, line)) {
+    if (line.empty() || line[0] == '#')
+      continue;
+    auto pos = line.find('=');
+    if (pos == std::string::npos)
+      continue;
+    std::string key = line.substr(0, pos);
+    std::string value = line.substr(pos + 1);
+    config[key] = value;
   }
-  return pos;
+  return config;
+}
+
+static void
+save_config_map(const std::map<std::string, std::string> &config)
+{
+  std::string config_dir = std::string(getenv("HOME")) + "/.config";
+  std::filesystem::create_directories(config_dir);
+  std::ofstream file(config_dir + "/dnf_ui.conf");
+  for (auto &[k, v] : config)
+    file << k << "=" << v << "\n";
+}
+
+static int
+load_paned_position()
+{
+  auto config = load_config_map();
+  if (config.count("paned_position"))
+    return std::stoi(config["paned_position"]);
+  return 300; // default
 }
 
 static void
 save_paned_position(GtkPaned *paned)
 {
-  int pos = gtk_paned_get_position(paned);
-  std::string config_dir = std::string(getenv("HOME")) + "/.config";
-  std::filesystem::create_directories(config_dir);
-  std::ofstream file(config_dir + "/dnf_ui.conf");
-  if (file.good()) {
-    file << pos;
-  }
+  auto config = load_config_map();
+  config["paned_position"] = std::to_string(gtk_paned_get_position(paned));
+  save_config_map(config);
 }
 
 // ------------------------------------------------------------
