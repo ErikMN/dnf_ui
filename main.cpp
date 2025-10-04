@@ -204,93 +204,94 @@ get_package_info(const std::string &pkg_name)
 }
 
 // ------------------------------------------------------------
-// Utility: synchronous clear of GtkListBox
-// ------------------------------------------------------------
-static void
-clear_listbox(GtkListBox *listbox)
-{
-#if GTK_CHECK_VERSION(4, 10, 0)
-  gtk_list_box_remove_all(listbox);
-#else
-  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(listbox, 0))
-    gtk_list_box_remove(listbox, GTK_WIDGET(row));
-#endif
-}
-
-// ------------------------------------------------------------
 // Struct for UI state
 // ------------------------------------------------------------
 struct SearchWidgets {
   GtkEntry *entry;
   GtkListBox *listbox;
+  GtkScrolledWindow *list_scroller;
   GtkListBox *history_list;
   GtkSpinner *spinner;
   GtkButton *search_button;
   GtkLabel *status_label;
   GtkLabel *details_label;
   std::vector<std::string> history;
-
-  // incremental fill job tracking
   guint list_idle_id = 0;
 };
 
 // ------------------------------------------------------------
-// Incremental list population to keep UI responsive
+// Virtualized ListView population
 // ------------------------------------------------------------
-struct ChunkFill {
-  SearchWidgets *widgets;
-  GtkListBox *listbox;
-  std::vector<std::string> items;
-  size_t index = 0;
-  int chunk = 200; // tune this
-};
-
-static gboolean
-listbox_append_chunk(gpointer data)
-{
-  auto *state = static_cast<ChunkFill *>(data);
-  const size_t n = state->items.size();
-  const size_t end =
-      std::min(n, state->index + static_cast<size_t>(state->chunk));
-
-  for (size_t i = state->index; i < end; ++i) {
-    GtkWidget *row = gtk_label_new(state->items[i].c_str());
-    gtk_label_set_xalign(GTK_LABEL(row), 0.0);
-    gtk_list_box_append(state->listbox, row);
-  }
-
-  state->index = end;
-
-  if (state->index >= n) {
-    // finished
-    state->widgets->list_idle_id = 0;
-    return G_SOURCE_REMOVE;
-  }
-  return G_SOURCE_CONTINUE;
-}
-
 static void
 fill_listbox_async(SearchWidgets *widgets,
                    const std::vector<std::string> &items)
 {
-  // cancel any in-flight population
-  if (widgets->list_idle_id != 0) {
-    g_source_remove(widgets->list_idle_id);
-    widgets->list_idle_id = 0;
-  }
+  GtkStringList *store = gtk_string_list_new(NULL);
+  for (const auto &pkg : items)
+    gtk_string_list_append(store, pkg.c_str());
 
-  // clear existing rows
-  clear_listbox(widgets->listbox);
+  GtkSingleSelection *sel = gtk_single_selection_new(G_LIST_MODEL(store));
+  GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
 
-  // allocate state and start idle-chunk appending
-  auto *state = new ChunkFill { widgets, widgets->listbox, items, 0, 200 };
+  g_signal_connect(
+      factory,
+      "setup",
+      G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer) {
+        GtkWidget *label = gtk_label_new(nullptr);
+        gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+        gtk_list_item_set_child(item, label);
+      }),
+      nullptr);
 
-  widgets->list_idle_id = g_idle_add_full(
-      G_PRIORITY_LOW,
-      [](gpointer p) -> gboolean { return listbox_append_chunk(p); },
-      state,
-      // destroy notify: cleanup state if idle is removed early
-      [](gpointer p) { delete static_cast<ChunkFill *>(p); });
+  g_signal_connect(
+      factory,
+      "bind",
+      G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer) {
+        GtkStringObject *sobj = GTK_STRING_OBJECT(gtk_list_item_get_item(item));
+        const char *text = gtk_string_object_get_string(sobj);
+        GtkWidget *label = gtk_list_item_get_child(item);
+        gtk_label_set_text(GTK_LABEL(label), text);
+      }),
+      nullptr);
+
+  GtkListView *list_view =
+      GTK_LIST_VIEW(gtk_list_view_new(GTK_SELECTION_MODEL(sel), factory));
+  gtk_widget_set_hexpand(GTK_WIDGET(list_view), TRUE);
+  gtk_widget_set_vexpand(GTK_WIDGET(list_view), TRUE);
+  gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(list_view));
+  widgets->listbox = nullptr;
+
+  g_signal_connect(
+      sel,
+      "selection-changed",
+      G_CALLBACK(
+          +[](GtkSingleSelection *self, guint, guint, gpointer user_data) {
+            SearchWidgets *widgets = (SearchWidgets *)user_data;
+            guint index = gtk_single_selection_get_selected(self);
+            if (index == GTK_INVALID_LIST_POSITION)
+              return;
+
+            GObject *obj = (GObject *)g_list_model_get_item(
+                gtk_single_selection_get_model(self), index);
+            const char *pkg_text =
+                gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+            std::string pkg_name = pkg_text;
+            g_object_unref(obj);
+
+            auto pos = pkg_name.find('-');
+            if (pos != std::string::npos)
+              pkg_name = pkg_name.substr(0, pos);
+
+            gtk_label_set_text(widgets->status_label,
+                               "Fetching package info...");
+            while (g_main_context_iteration(nullptr, false))
+              ;
+
+            std::string info = get_package_info(pkg_name);
+            gtk_label_set_text(widgets->details_label, info.c_str());
+            gtk_label_set_text(widgets->status_label, "Package info loaded.");
+          }),
+      widgets);
 }
 
 // ------------------------------------------------------------
@@ -393,7 +394,9 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 }
 
-// Add to search history
+// ------------------------------------------------------------
+// History, clear, etc.
+// ------------------------------------------------------------
 static void
 add_to_history(SearchWidgets *widgets, const std::string &term)
 {
@@ -443,33 +446,6 @@ on_search_button_clicked(GtkButton *, gpointer user_data)
   perform_search(widgets, pattern);
 }
 
-// ------------------------------------------------------------
-// When selecting a package, show detailed info
-// ------------------------------------------------------------
-static void
-on_package_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
-{
-  if (!row)
-    return;
-
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
-  GtkWidget *child = gtk_list_box_row_get_child(row);
-  const char *pkg_text = gtk_label_get_text(GTK_LABEL(child));
-
-  std::string pkg_name = pkg_text;
-  auto pos = pkg_name.find('-');
-  if (pos != std::string::npos)
-    pkg_name = pkg_name.substr(0, pos);
-
-  gtk_label_set_text(widgets->status_label, "Fetching package info...");
-  while (g_main_context_iteration(nullptr, false))
-    ;
-
-  std::string info = get_package_info(pkg_name);
-  gtk_label_set_text(widgets->details_label, info.c_str());
-  gtk_label_set_text(widgets->status_label, "Package info loaded.");
-}
-
 static void
 on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
 {
@@ -485,12 +461,18 @@ static void
 on_clear_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
-  // cancel any ongoing incremental fill
-  if (widgets->list_idle_id != 0) {
-    g_source_remove(widgets->list_idle_id);
-    widgets->list_idle_id = 0;
+  if (widgets->listbox) {
+    while (GtkListBoxRow *row =
+               gtk_list_box_get_row_at_index(widgets->listbox, 0))
+      gtk_list_box_remove(widgets->listbox, GTK_WIDGET(row));
+  } else if (widgets->list_scroller) {
+    GtkStringList *empty = gtk_string_list_new(NULL);
+    GtkSingleSelection *sel = gtk_single_selection_new(G_LIST_MODEL(empty));
+    GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
+    GtkListView *lv =
+        GTK_LIST_VIEW(gtk_list_view_new(GTK_SELECTION_MODEL(sel), factory));
+    gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(lv));
   }
-  clear_listbox(widgets->listbox);
   gtk_label_set_text(widgets->status_label, "Ready.");
   gtk_label_set_text(widgets->details_label, "");
 }
@@ -523,9 +505,6 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *scrolled_history = gtk_scrolled_window_new();
   gtk_widget_set_vexpand(scrolled_history, TRUE);
   gtk_widget_set_hexpand(scrolled_history, TRUE);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_history),
-                                 GTK_POLICY_AUTOMATIC,
-                                 GTK_POLICY_AUTOMATIC);
   gtk_box_append(GTK_BOX(vbox_history), scrolled_history);
 
   GtkWidget *history_list = gtk_list_box_new();
@@ -563,8 +542,6 @@ activate(GtkApplication *app, gpointer)
   gtk_box_append(GTK_BOX(vbox_main), inner_paned);
   gtk_widget_set_vexpand(inner_paned, TRUE);
   gtk_widget_set_hexpand(inner_paned, TRUE);
-  gtk_paned_set_shrink_start_child(GTK_PANED(inner_paned), FALSE);
-  gtk_paned_set_shrink_end_child(GTK_PANED(inner_paned), FALSE);
   int pos = load_paned_position();
   if (pos < 100)
     pos = 300;
@@ -574,9 +551,6 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *scrolled_list = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scrolled_list, TRUE);
   gtk_widget_set_vexpand(scrolled_list, TRUE);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_list),
-                                 GTK_POLICY_AUTOMATIC,
-                                 GTK_POLICY_AUTOMATIC);
   gtk_paned_set_start_child(GTK_PANED(inner_paned), scrolled_list);
 
   GtkWidget *listbox = gtk_list_box_new();
@@ -586,17 +560,11 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *scrolled_details = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scrolled_details, TRUE);
   gtk_widget_set_vexpand(scrolled_details, TRUE);
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled_details),
-                                 GTK_POLICY_AUTOMATIC,
-                                 GTK_POLICY_AUTOMATIC);
   gtk_paned_set_end_child(GTK_PANED(inner_paned), scrolled_details);
 
   // container to keep label top-aligned
   GtkWidget *details_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_valign(details_box, GTK_ALIGN_START);
-  gtk_widget_set_halign(details_box, GTK_ALIGN_FILL);
-  gtk_widget_set_hexpand(details_box, TRUE);
-  gtk_widget_set_vexpand(details_box, TRUE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_details),
                                 details_box);
 
@@ -605,8 +573,6 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_wrap(GTK_LABEL(details_label), TRUE);
   gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
   gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
-  gtk_widget_set_hexpand(details_label, TRUE);
-  gtk_widget_set_vexpand(details_label, TRUE);
   gtk_box_append(GTK_BOX(details_box), details_label);
 
   gtk_window_set_child(GTK_WINDOW(window), outer_paned);
@@ -615,6 +581,7 @@ activate(GtkApplication *app, gpointer)
   SearchWidgets *widgets = new SearchWidgets();
   widgets->entry = GTK_ENTRY(entry);
   widgets->listbox = GTK_LIST_BOX(listbox);
+  widgets->list_scroller = GTK_SCROLLED_WINDOW(scrolled_list);
   widgets->history_list = GTK_LIST_BOX(history_list);
   widgets->spinner = GTK_SPINNER(spinner);
   widgets->search_button = GTK_BUTTON(search_button);
@@ -637,8 +604,6 @@ activate(GtkApplication *app, gpointer)
                    "row-selected",
                    G_CALLBACK(on_history_row_selected),
                    widgets);
-  g_signal_connect(
-      listbox, "row-selected", G_CALLBACK(on_package_selected), widgets);
 
   g_signal_connect(window,
                    "destroy",
