@@ -218,10 +218,20 @@ get_package_info(const std::string &pkg_name)
 
   libdnf5::rpm::PackageQuery query(*base);
   query.filter_name(pkg_name);
+
   if (query.empty())
     return "No details found for " + pkg_name;
 
-  auto pkg = *query.begin();
+  // Prefer installed package if available
+  libdnf5::rpm::PackageQuery installed(query);
+  installed.filter_installed();
+
+  libdnf5::rpm::PackageQuery best_candidate = installed.empty() ? query : installed;
+  // choose latest version if multiple
+  best_candidate.filter_latest_evr();
+
+  auto pkg = *best_candidate.begin();
+
   std::ostringstream oss;
   oss << "Name: " << pkg.get_name() << "\n"
       << "Version: " << pkg.get_version() << "\n"
