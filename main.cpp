@@ -156,9 +156,10 @@ get_installed_packages()
 }
 
 // ------------------------------------------------------------
-// Helper: Search available packages by substring
+// Helper: Search available packages by substring or exact match
 // ------------------------------------------------------------
 static bool g_search_in_description = false;
+static bool g_exact_match = false;
 
 static std::vector<std::string>
 search_available_packages(const std::string &pattern)
@@ -185,12 +186,21 @@ search_available_packages(const std::string &pattern)
       std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
       std::transform(name.begin(), name.end(), name.begin(), ::tolower);
 
-      if (desc.find(pattern_lower) != std::string::npos ||
-          name.find(pattern_lower) != std::string::npos)
-        packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+      if (g_exact_match) {
+        if (name == pattern_lower)
+          packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+      } else {
+        if (desc.find(pattern_lower) != std::string::npos ||
+            name.find(pattern_lower) != std::string::npos)
+          packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+      }
     }
   } else {
-    query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
+    if (g_exact_match)
+      query.filter_name(pattern, libdnf5::sack::QueryCmp::EQ);
+    else
+      query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
+
     for (auto pkg : query)
       packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
   }
@@ -240,6 +250,7 @@ struct SearchWidgets {
   GtkLabel *details_label;
   GtkLabel *count_label;
   GtkCheckButton *desc_checkbox;
+  GtkCheckButton *exact_checkbox;
   std::vector<std::string> history;
   guint list_idle_id = 0;
 };
@@ -252,7 +263,10 @@ static std::map<std::string, std::vector<std::string>> g_search_cache;
 static std::string
 cache_key_for(const std::string &term)
 {
-  return (g_search_in_description ? "desc:" : "name:") + term;
+  std::string key = (g_search_in_description ? "desc:" : "name:");
+  key += (g_exact_match ? "exact:" : "contains:");
+  key += term;
+  return key;
 }
 
 // ------------------------------------------------------------
@@ -553,6 +567,8 @@ on_search_button_clicked(GtkButton *, gpointer user_data)
   SearchWidgets *widgets = (SearchWidgets *)user_data;
   g_search_in_description =
       gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->desc_checkbox));
+  g_exact_match =
+      gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->exact_checkbox));
   std::string pattern = gtk_editable_get_text(GTK_EDITABLE(widgets->entry));
   if (pattern.empty())
     return;
@@ -648,6 +664,9 @@ activate(GtkApplication *app, gpointer)
       gtk_check_button_new_with_label("Search in description");
   gtk_box_append(GTK_BOX(hbox_search), desc_checkbox);
 
+  GtkWidget *exact_checkbox = gtk_check_button_new_with_label("Exact match");
+  gtk_box_append(GTK_BOX(hbox_search), exact_checkbox);
+
   GtkWidget *spinner = gtk_spinner_new();
   gtk_widget_set_visible(spinner, FALSE);
   gtk_box_append(GTK_BOX(hbox_search), spinner);
@@ -733,6 +752,7 @@ activate(GtkApplication *app, gpointer)
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
   widgets->desc_checkbox = GTK_CHECK_BUTTON(desc_checkbox);
+  widgets->exact_checkbox = GTK_CHECK_BUTTON(exact_checkbox);
   widgets->count_label = GTK_LABEL(count_label);
 
   // --- Modern GTK4 CSS for status bar background ---
