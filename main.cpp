@@ -123,24 +123,18 @@ save_window_geometry(GtkWindow *window)
 }
 
 // ------------------------------------------------------------
-// Helper: Shared libdnf5::Base instance (thread-safe)
+// Helper: create fresh libdnf5::Base (thread-safe per-thread)
 // ------------------------------------------------------------
-static std::mutex g_base_mutex;
-static std::unique_ptr<libdnf5::Base> g_shared_base;
-
-static libdnf5::Base &
-get_shared_base()
+static std::unique_ptr<libdnf5::Base>
+create_fresh_base()
 {
-  std::lock_guard<std::mutex> lock(g_base_mutex);
-  if (!g_shared_base) {
-    g_shared_base = std::make_unique<libdnf5::Base>();
-    g_shared_base->load_config();
-    g_shared_base->setup();
-    auto repo_sack = g_shared_base->get_repo_sack();
-    repo_sack->create_repos_from_system_configuration();
-    repo_sack->load_repos();
-  }
-  return *g_shared_base;
+  auto base = std::make_unique<libdnf5::Base>();
+  base->load_config();
+  base->setup();
+  auto repo_sack = base->get_repo_sack();
+  repo_sack->create_repos_from_system_configuration();
+  repo_sack->load_repos();
+  return base;
 }
 
 // ------------------------------------------------------------
@@ -151,9 +145,9 @@ get_installed_packages()
 {
   std::vector<std::string> packages;
 
-  libdnf5::Base &base = get_shared_base();
+  auto base = create_fresh_base();
 
-  libdnf5::rpm::PackageQuery query(base);
+  libdnf5::rpm::PackageQuery query(*base);
   query.filter_installed();
   for (auto pkg : query)
     packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
@@ -171,9 +165,9 @@ search_available_packages(const std::string &pattern)
 {
   std::vector<std::string> packages;
 
-  libdnf5::Base &base = get_shared_base();
+  auto base = create_fresh_base();
 
-  libdnf5::rpm::PackageQuery query(base);
+  libdnf5::rpm::PackageQuery query(*base);
   query.filter_available();
 
   if (g_search_in_description) {
@@ -210,9 +204,9 @@ search_available_packages(const std::string &pattern)
 static std::string
 get_package_info(const std::string &pkg_name)
 {
-  libdnf5::Base &base = get_shared_base();
+  auto base = create_fresh_base();
 
-  libdnf5::rpm::PackageQuery query(base);
+  libdnf5::rpm::PackageQuery query(*base);
   query.filter_name(pkg_name);
   if (query.empty())
     return "No details found for " + pkg_name;
@@ -328,33 +322,64 @@ fill_listbox_async(SearchWidgets *widgets,
   g_signal_connect(
       sel,
       "selection-changed",
-      G_CALLBACK(
-          +[](GtkSingleSelection *self, guint, guint, gpointer user_data) {
-            SearchWidgets *widgets = (SearchWidgets *)user_data;
-            guint index = gtk_single_selection_get_selected(self);
-            if (index == GTK_INVALID_LIST_POSITION)
-              return;
+      G_CALLBACK(+[](GtkSingleSelection *self,
+                     guint,
+                     guint,
+                     gpointer user_data) {
+        SearchWidgets *widgets = (SearchWidgets *)user_data;
+        guint index = gtk_single_selection_get_selected(self);
+        if (index == GTK_INVALID_LIST_POSITION)
+          return;
 
-            GObject *obj = (GObject *)g_list_model_get_item(
-                gtk_single_selection_get_model(self), index);
-            const char *pkg_text =
-                gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
-            std::string pkg_name = pkg_text;
-            g_object_unref(obj);
+        GObject *obj = (GObject *)g_list_model_get_item(
+            gtk_single_selection_get_model(self), index);
+        const char *pkg_text =
+            gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+        std::string pkg_name = pkg_text;
+        g_object_unref(obj);
 
-            auto pos = pkg_name.find('-');
-            if (pos != std::string::npos)
-              pkg_name = pkg_name.substr(0, pos);
+        auto pos = pkg_name.find('-');
+        if (pos != std::string::npos)
+          pkg_name = pkg_name.substr(0, pos);
 
-            set_status(
-                widgets->status_label, "Fetching package info...", "blue");
-            while (g_main_context_iteration(nullptr, false))
-              ;
+        set_status(widgets->status_label, "Fetching package info...", "blue");
 
-            std::string info = get_package_info(pkg_name);
-            gtk_label_set_text(widgets->details_label, info.c_str());
-            set_status(widgets->status_label, "Package info loaded.", "green");
-          }),
+        GTask *task = g_task_new(
+            NULL,
+            NULL,
+            +[](GObject *, GAsyncResult *res, gpointer user_data) {
+              SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+              GTask *task = G_TASK(res);
+              char *info =
+                  static_cast<char *>(g_task_propagate_pointer(task, NULL));
+              if (info) {
+                gtk_label_set_text(widgets->details_label, info);
+                set_status(
+                    widgets->status_label, "Package info loaded.", "green");
+                g_free(info);
+              } else {
+                set_status(widgets->status_label, "Error loading info.", "red");
+              }
+            },
+            widgets);
+
+        g_task_run_in_thread(
+            task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
+              const char *pkg_name = static_cast<const char *>(task_data);
+              try {
+                std::string info = get_package_info(pkg_name);
+                g_task_return_pointer(t, g_strdup(info.c_str()), g_free);
+              } catch (const std::exception &e) {
+                g_task_return_error(t,
+                                    g_error_new_literal(G_IO_ERROR,
+                                                        G_IO_ERROR_FAILED,
+                                                        e.what()));
+              }
+            });
+
+        g_task_set_task_data(task, g_strdup(pkg_name.c_str()), g_free);
+        g_object_unref(task);
+      }),
       widgets);
 }
 
