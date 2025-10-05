@@ -30,6 +30,11 @@
 #include <gtk/gtk.h>
 
 // -----------------------------------------------------------------------------
+// Globals
+// -----------------------------------------------------------------------------
+static std::set<std::string> g_installed_names;
+
+// -----------------------------------------------------------------------------
 // Config helpers for saving/restoring user settings
 // -----------------------------------------------------------------------------
 static std::map<std::string, std::string>
@@ -160,6 +165,7 @@ get_installed_packages()
   libdnf5::rpm::PackageQuery query(*base);
   query.filter_installed();
   for (auto pkg : query) {
+    g_installed_names.insert(pkg.get_name());
     packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
   }
 
@@ -317,7 +323,7 @@ set_status(GtkLabel *label, const std::string &text, const std::string &color)
 // Virtualized ListView population
 // -----------------------------------------------------------------------------
 static void
-fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items)
+fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items, bool highlight_installed = true)
 {
   GtkStringList *store = gtk_string_list_new(NULL);
   for (const auto &pkg : items) {
@@ -336,15 +342,34 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                    }),
                    nullptr);
 
-  g_signal_connect(factory,
-                   "bind",
-                   G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer) {
-                     GtkStringObject *sobj = GTK_STRING_OBJECT(gtk_list_item_get_item(item));
-                     const char *text = gtk_string_object_get_string(sobj);
-                     GtkWidget *label = gtk_list_item_get_child(item);
-                     gtk_label_set_text(GTK_LABEL(label), text);
-                   }),
-                   nullptr);
+  // Pass highlight flag to the bind callback
+  g_signal_connect_data(factory,
+                        "bind",
+                        G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer user_data) {
+                          bool highlight = GPOINTER_TO_INT(user_data);
+                          GtkStringObject *sobj = GTK_STRING_OBJECT(gtk_list_item_get_item(item));
+                          const char *text = gtk_string_object_get_string(sobj);
+                          GtkWidget *label = gtk_list_item_get_child(item);
+                          gtk_label_set_text(GTK_LABEL(label), text);
+
+                          if (!highlight) {
+                            return;
+                          }
+                          // Highlight installed packages
+                          std::string pkg_name = text;
+                          auto dash_pos = pkg_name.find('-');
+                          if (dash_pos != std::string::npos) {
+                            pkg_name = pkg_name.substr(0, dash_pos);
+                          }
+                          if (g_installed_names.count(pkg_name)) {
+                            gtk_widget_add_css_class(label, "installed");
+                          } else {
+                            gtk_widget_remove_css_class(label, "installed");
+                          }
+                        }),
+                        GINT_TO_POINTER(highlight_installed),
+                        NULL,
+                        G_CONNECT_DEFAULT);
 
   GtkListView *list_view = GTK_LIST_VIEW(gtk_list_view_new(GTK_SELECTION_MODEL(sel), factory));
   gtk_widget_set_hexpand(GTK_WIDGET(list_view), TRUE);
@@ -439,7 +464,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 
   if (packages) {
-    fill_listbox_async(widgets, *packages);
+    fill_listbox_async(widgets, *packages, false);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages->size());
     set_status(widgets->status_label, msg, "green");
@@ -499,8 +524,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     if (term) {
       g_search_cache[cache_key_for(term)] = *packages;
     }
-
-    fill_listbox_async(widgets, *packages);
+    fill_listbox_async(widgets, *packages, true);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
     set_status(widgets->status_label, msg, "green");
@@ -551,7 +575,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   if (it != g_search_cache.end()) {
     gtk_spinner_stop(widgets->spinner);
     gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
-    fill_listbox_async(widgets, it->second);
+    fill_listbox_async(widgets, it->second, true);
     char msg[256];
     snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
     set_status(widgets->status_label, msg, "gray");
@@ -623,6 +647,15 @@ static void
 activate(GtkApplication *app, gpointer)
 {
   GtkWidget *window = gtk_application_window_new(app);
+  // Preload installed package names for highlighting
+  {
+    auto base = create_fresh_base();
+    libdnf5::rpm::PackageQuery query(*base);
+    query.filter_installed();
+    for (auto pkg : query) {
+      g_installed_names.insert(pkg.get_name());
+    }
+  }
   gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
   load_window_geometry(GTK_WINDOW(window));
 
@@ -780,8 +813,13 @@ activate(GtkApplication *app, gpointer)
     GtkCssProvider *css = gtk_css_provider_new();
     gtk_css_provider_load_from_string(css,
                                       "label.status-bar { padding: 4px; border-radius: 4px; } "
-                                      ".bottom-bar { padding: 5px;  border-top: 1px "
-                                      "solid #666; }");
+                                      ".bottom-bar { padding: 5px; border-top: 1px solid #666; } "
+                                      ".installed { "
+                                      "  background-color: #b3f0b3; " /* softer green */
+                                      "  color: black; "              /* readable text */
+                                      "  padding: 2px 4px; "
+                                      "  border-radius: 2px; "
+                                      "}");
     gtk_style_context_add_provider_for_display(
         gdk_display_get_default(), GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_USER);
     gtk_widget_add_css_class(GTK_WIDGET(widgets->status_label), "status-bar");
