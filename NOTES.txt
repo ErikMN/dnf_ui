@@ -1,9 +1,18 @@
+// About:
+The purpose of this project is to create a functional and reliable UI for DNF
+on Fedora. Debian/Ubuntus "Synaptic" is used as inspiration.
+
+// Useful commands:
+sudo dnf install libdnf5-devel libdnf-cli-devel
+sudo dnf install gtk4-devel
+sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
+
+// Useful links:
 https://libdnf.readthedocs.io/en/dnf-5-devel/index.html
 
 
-sudo dnf install libdnf5-devel libdnf-cli-devel
-sudo dnf install gtk4-devel
-
-
-sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
-
+// TODO:
+* Come up with a good name for the app
+* Add install/uninstall options
+* Faster app
+* Nicer UI
