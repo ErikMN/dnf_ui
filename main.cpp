@@ -238,6 +238,7 @@ struct SearchWidgets {
   GtkButton *search_button;
   GtkLabel *status_label;
   GtkLabel *details_label;
+  GtkLabel *count_label;
   GtkCheckButton *desc_checkbox;
   std::vector<std::string> history;
   guint list_idle_id = 0;
@@ -318,6 +319,11 @@ fill_listbox_async(SearchWidgets *widgets,
   gtk_widget_set_vexpand(GTK_WIDGET(list_view), TRUE);
   gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(list_view));
   widgets->listbox = nullptr;
+
+  // update count label
+  char count_msg[128];
+  snprintf(count_msg, sizeof(count_msg), "Items: %zu", items.size());
+  gtk_label_set_text(widgets->count_label, count_msg);
 
   g_signal_connect(
       sel,
@@ -582,6 +588,7 @@ on_clear_button_clicked(GtkButton *, gpointer user_data)
         GTK_LIST_VIEW(gtk_list_view_new(GTK_SELECTION_MODEL(sel), factory));
     gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(lv));
   }
+  gtk_label_set_text(widgets->count_label, "Items: 0");
   set_status(widgets->status_label, "Ready.", "gray");
   gtk_label_set_text(widgets->details_label, "");
 }
@@ -596,7 +603,11 @@ activate(GtkApplication *app, gpointer)
   gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
   load_window_geometry(GTK_WINDOW(window));
 
+  GtkWidget *vbox_root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  gtk_window_set_child(GTK_WINDOW(window), vbox_root);
+
   GtkWidget *outer_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_box_append(GTK_BOX(vbox_root), outer_paned);
   gtk_paned_set_position(GTK_PANED(outer_paned), 200);
 
   GtkWidget *vbox_main = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -701,7 +712,15 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
   gtk_box_append(GTK_BOX(details_box), details_label);
 
-  gtk_window_set_child(GTK_WINDOW(window), outer_paned);
+  // --- Bottom bar with item count ---
+  GtkWidget *bottom_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+  gtk_widget_set_hexpand(bottom_bar, TRUE);
+  gtk_widget_add_css_class(bottom_bar, "bottom-bar");
+  gtk_box_append(GTK_BOX(vbox_root), bottom_bar);
+
+  GtkWidget *count_label = gtk_label_new("Items: 0");
+  gtk_label_set_xalign(GTK_LABEL(count_label), 0.0);
+  gtk_box_append(GTK_BOX(bottom_bar), count_label);
 
   // --- Struct setup ---
   SearchWidgets *widgets = new SearchWidgets();
@@ -714,12 +733,16 @@ activate(GtkApplication *app, gpointer)
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
   widgets->desc_checkbox = GTK_CHECK_BUTTON(desc_checkbox);
+  widgets->count_label = GTK_LABEL(count_label);
 
   // --- Modern GTK4 CSS for status bar background ---
   {
     GtkCssProvider *css = gtk_css_provider_new();
     gtk_css_provider_load_from_string(
-        css, "label.status-bar { padding: 4px; border-radius: 4px; }");
+        css,
+        "label.status-bar { padding: 4px; border-radius: 4px; } "
+        ".bottom-bar { padding: 5px;  border-top: 1px "
+        "solid #666; }");
     gtk_style_context_add_provider_for_display(
         gdk_display_get_default(),
         GTK_STYLE_PROVIDER(css),
