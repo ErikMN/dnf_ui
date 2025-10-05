@@ -146,6 +146,8 @@ get_installed_packages()
 // ------------------------------------------------------------
 // Helper: Search available packages by substring
 // ------------------------------------------------------------
+static bool g_search_in_description = false;
+
 static std::vector<std::string>
 search_available_packages(const std::string &pattern)
 {
@@ -162,9 +164,31 @@ search_available_packages(const std::string &pattern)
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
-  query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
-  for (auto pkg : query)
-    packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+
+  if (g_search_in_description) {
+    // We’ll manually match pattern in description (case-insensitive)
+    std::string pattern_lower = pattern;
+    std::transform(pattern_lower.begin(),
+                   pattern_lower.end(),
+                   pattern_lower.begin(),
+                   ::tolower);
+
+    for (auto pkg : query) {
+      std::string desc = pkg.get_description();
+      std::string name = pkg.get_name();
+
+      std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
+      std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+      if (desc.find(pattern_lower) != std::string::npos ||
+          name.find(pattern_lower) != std::string::npos)
+        packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+    }
+  } else {
+    query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
+    for (auto pkg : query)
+      packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+  }
 
   return packages;
 }
@@ -215,6 +239,7 @@ struct SearchWidgets {
   GtkButton *search_button;
   GtkLabel *status_label;
   GtkLabel *details_label;
+  GtkCheckButton *desc_checkbox;
   std::vector<std::string> history;
   guint list_idle_id = 0;
 };
@@ -485,6 +510,8 @@ static void
 on_search_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
+  g_search_in_description =
+      gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->desc_checkbox));
   std::string pattern = gtk_editable_get_text(GTK_EDITABLE(widgets->entry));
   if (pattern.empty())
     return;
@@ -584,6 +611,10 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *search_button = gtk_button_new_with_label("Search");
   gtk_box_append(GTK_BOX(hbox), search_button);
 
+  GtkWidget *desc_checkbox =
+      gtk_check_button_new_with_label("Search in description");
+  gtk_box_append(GTK_BOX(hbox), desc_checkbox);
+
   GtkWidget *spinner = gtk_spinner_new();
   gtk_widget_set_visible(spinner, FALSE);
   gtk_box_append(GTK_BOX(hbox), spinner);
@@ -642,6 +673,7 @@ activate(GtkApplication *app, gpointer)
   widgets->search_button = GTK_BUTTON(search_button);
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
+  widgets->desc_checkbox = GTK_CHECK_BUTTON(desc_checkbox);
 
   // --- Modern GTK4 CSS for status bar background ---
   {
