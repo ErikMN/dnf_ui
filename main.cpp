@@ -626,6 +626,25 @@ activate(GtkApplication *app, gpointer)
   gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
   load_window_geometry(GTK_WINDOW(window));
 
+  // Keyboard shortcuts: Ctrl+Q and Ctrl+W to close window
+  GtkEventController *shortcuts = GTK_EVENT_CONTROLLER(gtk_shortcut_controller_new());
+  gtk_widget_add_controller(window, shortcuts);
+
+  auto shortcut_callback = +[](GtkWidget *widget, GVariant *args, gpointer) -> gboolean {
+    gtk_window_close(GTK_WINDOW(widget));
+    return TRUE;
+  };
+
+  // Ctrl+Q
+  GtkShortcut *close_shortcut_q = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_q, GDK_CONTROL_MASK),
+                                                   gtk_callback_action_new(shortcut_callback, NULL, NULL));
+  gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), close_shortcut_q);
+
+  // Ctrl+W
+  GtkShortcut *close_shortcut_w = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_w, GDK_CONTROL_MASK),
+                                                   gtk_callback_action_new(shortcut_callback, NULL, NULL));
+  gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), close_shortcut_w);
+
   GtkWidget *vbox_root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
   gtk_window_set_child(GTK_WINDOW(window), vbox_root);
 
