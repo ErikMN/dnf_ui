@@ -591,39 +591,44 @@ activate(GtkApplication *app, gpointer)
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_history),
                                 history_list);
 
-  GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-  gtk_box_append(GTK_BOX(vbox_main), hbox);
-
-  GtkWidget *list_button = gtk_button_new_with_label("List Installed");
-  gtk_box_append(GTK_BOX(hbox), list_button);
-
-  GtkWidget *clear_button = gtk_button_new_with_label("Clear List");
-  gtk_box_append(GTK_BOX(hbox), clear_button);
-
-  GtkWidget *clear_cache_button = gtk_button_new_with_label("Clear Cache");
-  gtk_box_append(GTK_BOX(hbox), clear_cache_button);
-  g_signal_connect(
-      clear_cache_button,
-      "clicked",
-      G_CALLBACK(+[](GtkButton *, gpointer) { g_search_cache.clear(); }),
-      NULL);
+  // --- Search bar row ---
+  GtkWidget *hbox_search = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+  gtk_box_append(GTK_BOX(vbox_main), hbox_search);
 
   GtkWidget *entry = gtk_entry_new();
   gtk_entry_set_placeholder_text(GTK_ENTRY(entry),
                                  "Search available packages...");
   gtk_widget_set_hexpand(entry, TRUE);
-  gtk_box_append(GTK_BOX(hbox), entry);
+  gtk_box_append(GTK_BOX(hbox_search), entry);
 
   GtkWidget *search_button = gtk_button_new_with_label("Search");
-  gtk_box_append(GTK_BOX(hbox), search_button);
+  gtk_box_append(GTK_BOX(hbox_search), search_button);
 
   GtkWidget *desc_checkbox =
       gtk_check_button_new_with_label("Search in description");
-  gtk_box_append(GTK_BOX(hbox), desc_checkbox);
+  gtk_box_append(GTK_BOX(hbox_search), desc_checkbox);
 
   GtkWidget *spinner = gtk_spinner_new();
   gtk_widget_set_visible(spinner, FALSE);
-  gtk_box_append(GTK_BOX(hbox), spinner);
+  gtk_box_append(GTK_BOX(hbox_search), spinner);
+
+  // --- Buttons row ---
+  GtkWidget *hbox_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+  gtk_box_append(GTK_BOX(vbox_main), hbox_buttons);
+
+  GtkWidget *list_button = gtk_button_new_with_label("List Installed");
+  gtk_box_append(GTK_BOX(hbox_buttons), list_button);
+
+  GtkWidget *clear_button = gtk_button_new_with_label("Clear List");
+  gtk_box_append(GTK_BOX(hbox_buttons), clear_button);
+
+  GtkWidget *clear_cache_button = gtk_button_new_with_label("Clear Cache");
+  gtk_box_append(GTK_BOX(hbox_buttons), clear_cache_button);
+  g_signal_connect(
+      clear_cache_button,
+      "clicked",
+      G_CALLBACK(+[](GtkButton *, gpointer) { g_search_cache.clear(); }),
+      NULL);
 
   GtkWidget *status_label = gtk_label_new("Ready.");
   gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
