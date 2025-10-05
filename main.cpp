@@ -395,7 +395,6 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 }
 
-
 static void
 on_list_button_clicked(GtkButton *, gpointer user_data)
 {
