@@ -17,6 +17,8 @@
 #include <thread>
 #include <fstream>
 #include <filesystem>
+#include <mutex>
+#include <glib.h>
 
 #include <libdnf5/base/base.hpp>
 #include <libdnf5/rpm/package_query.hpp>
@@ -31,8 +33,9 @@ static std::map<std::string, std::string>
 load_config_map()
 {
   std::map<std::string, std::string> config;
+  const char *home = g_get_home_dir();
   std::string config_path =
-      std::string(getenv("HOME")) + "/.config/dnf_ui.conf";
+      std::string(home ? home : "") + "/.config/dnf_ui.conf";
   std::ifstream file(config_path);
   if (!file.good())
     return config;
@@ -54,7 +57,8 @@ load_config_map()
 static void
 save_config_map(const std::map<std::string, std::string> &config)
 {
-  std::string config_dir = std::string(getenv("HOME")) + "/.config";
+  const char *home = g_get_home_dir();
+  std::string config_dir = std::string(home ? home : "") + "/.config";
   std::filesystem::create_directories(config_dir);
   std::ofstream file(config_dir + "/dnf_ui.conf");
   for (auto &[k, v] : config)
@@ -119,6 +123,27 @@ save_window_geometry(GtkWindow *window)
 }
 
 // ------------------------------------------------------------
+// Helper: Shared libdnf5::Base instance (thread-safe)
+// ------------------------------------------------------------
+static std::mutex g_base_mutex;
+static std::unique_ptr<libdnf5::Base> g_shared_base;
+
+static libdnf5::Base &
+get_shared_base()
+{
+  std::lock_guard<std::mutex> lock(g_base_mutex);
+  if (!g_shared_base) {
+    g_shared_base = std::make_unique<libdnf5::Base>();
+    g_shared_base->load_config();
+    g_shared_base->setup();
+    auto repo_sack = g_shared_base->get_repo_sack();
+    repo_sack->create_repos_from_system_configuration();
+    repo_sack->load_repos();
+  }
+  return *g_shared_base;
+}
+
+// ------------------------------------------------------------
 // Helper: Query installed packages via libdnf5
 // ------------------------------------------------------------
 static std::vector<std::string>
@@ -126,14 +151,7 @@ get_installed_packages()
 {
   std::vector<std::string> packages;
 
-  libdnf5::Base base;
-  base.load_config();
-  base.setup();
-
-  // Load system repositories (RPM DB only, fast and offline)
-  auto repo_sack = base.get_repo_sack();
-  repo_sack->create_repos_from_system_configuration();
-  repo_sack->load_repos();
+  libdnf5::Base &base = get_shared_base();
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
@@ -153,14 +171,7 @@ search_available_packages(const std::string &pattern)
 {
   std::vector<std::string> packages;
 
-  libdnf5::Base base;
-  base.load_config();
-  base.setup();
-
-  // Load configured repositories (may take a few seconds)
-  auto repo_sack = base.get_repo_sack();
-  repo_sack->create_repos_from_system_configuration();
-  repo_sack->load_repos();
+  libdnf5::Base &base = get_shared_base();
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
@@ -199,13 +210,7 @@ search_available_packages(const std::string &pattern)
 static std::string
 get_package_info(const std::string &pkg_name)
 {
-  libdnf5::Base base;
-  base.load_config();
-  base.setup();
-
-  auto repo_sack = base.get_repo_sack();
-  repo_sack->create_repos_from_system_configuration();
-  repo_sack->load_repos();
+  libdnf5::Base &base = get_shared_base();
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_name(pkg_name);
