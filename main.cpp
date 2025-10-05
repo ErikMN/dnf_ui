@@ -395,6 +395,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                          },
                          widgets);
 
+                     g_task_set_task_data(task, g_strdup(pkg_name.c_str()), g_free);
                      g_task_run_in_thread(
                          task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
                            const char *pkg_name = static_cast<const char *>(task_data);
@@ -405,8 +406,6 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                              g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
                            }
                          });
-
-                     g_task_set_task_data(task, g_strdup(pkg_name.c_str()), g_free);
                      g_object_unref(task);
                    }),
                    widgets);
