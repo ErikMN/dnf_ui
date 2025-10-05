@@ -55,7 +55,7 @@ $(PROGS): $(OBJS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 .PHONY: run
-run: $(PROGS)
+run: clean $(PROGS)
 	@./$(PROGS)
 
 .PHONY: valgrind
