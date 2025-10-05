@@ -482,7 +482,16 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
   set_status(widgets->status_label, "Listing installed packages...", "blue");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
-
+  // --- Refresh global installed package cache ---
+  {
+    g_installed_names.clear();
+    auto base = create_fresh_base();
+    libdnf5::rpm::PackageQuery query(*base);
+    query.filter_installed();
+    for (auto pkg : query) {
+      g_installed_names.insert(pkg.get_name());
+    }
+  }
   GTask *task = g_task_new(NULL, NULL, on_list_task_finished, widgets);
   g_task_run_in_thread(task, on_list_task);
   g_object_unref(task);
