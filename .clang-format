@@ -8,7 +8,7 @@ BasedOnStyle: WebKit
 BinPackArguments: false
 BinPackParameters: false
 BreakBeforeBinaryOperators: None
-ColumnLimit: 80
+ColumnLimit: 120
 ExperimentalAutoDetectBinPacking: false
 IndentWidth: 2
 MaxEmptyLinesToKeep: 1
