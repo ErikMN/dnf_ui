@@ -249,6 +249,12 @@ struct SearchWidgets {
 // ------------------------------------------------------------
 static std::map<std::string, std::vector<std::string>> g_search_cache;
 
+static std::string
+cache_key_for(const std::string &term)
+{
+  return (g_search_in_description ? "desc:" : "name:") + term;
+}
+
 // ------------------------------------------------------------
 // Helper: Update status label with color
 // ------------------------------------------------------------
@@ -440,7 +446,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     // Cache results
     const char *term = (const char *)g_task_get_task_data(task);
     if (term)
-      g_search_cache[term] = *packages;
+      g_search_cache[cache_key_for(term)] = *packages;
 
     fill_listbox_async(widgets, *packages);
     char msg[256];
@@ -486,7 +492,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
 
   // Check cache first
-  auto it = g_search_cache.find(term);
+  auto it = g_search_cache.find(cache_key_for(term));
   if (it != g_search_cache.end()) {
     gtk_spinner_stop(widgets->spinner);
     gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
