@@ -1,33 +1,35 @@
-CC = g++
-CXXFLAGS += -std=c++20
+CXX = g++
+CXXFLAGS += -std=c++20 -Werror -MMD -MP -pipe -fdiagnostics-color=always
 PROGS = dnf_ui
 LDLIBS = -lm
 
 PKGS += libdnf5 gtk4
-ifdef PKGS
+PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
+ifeq ($(PKG_OK),yes)
   LDLIBS += $(shell pkg-config --libs $(PKGS))
   CPPFLAGS += $(shell pkg-config --cflags $(PKGS))
+else
+  $(error "Missing dependencies: please install development packages for $(PKGS)")
 endif
 
 SRCS = $(wildcard *.cpp)
 OBJS = $(SRCS:.cpp=.o)
 DEPS = $(SRCS:.cpp=.d)
-CPPFLAGS += -Werror -MMD -MP
 
 -include $(DEPS)
 
 # FINAL=y
 ifeq ($(FINAL), y)
   LDFLAGS += -s
-  CFLAGS += -DNDEBUG -g0 -O2
-  CPPFLAGS += -Wpedantic -Wextra -Wmaybe-uninitialized
-  CPPFLAGS += -W -Wformat=2 -Wpointer-arith -Winline
-  CPPFLAGS += -Wdisabled-optimization -Wfloat-equal -Wall
+  CXXFLAGS += -DNDEBUG -g0 -O2
+  CXXFLAGS += -Wpedantic -Wextra -Wmaybe-uninitialized
+  CXXFLAGS += -W -Wformat=2 -Wpointer-arith -Winline
+  CXXFLAGS += -Wdisabled-optimization -Wfloat-equal -Wall
 else
   # ASAN=y
-  CPPFLAGS += -g3 -DDEBUG_BUILD
+  CXXFLAGS += -g3 -DDEBUG_BUILD
   ifeq ($(ASAN), y)
-    CPPFLAGS += -fsanitize=address -O1 -fno-omit-frame-pointer
+    CXXFLAGS += -fsanitize=address -O1 -fno-omit-frame-pointer
     LDLIBS += -fsanitize=address
   endif
 endif
@@ -40,12 +42,17 @@ debug:
 	@echo "*** Debug info:"
 	@echo "Source-files:" $(SRCS)
 	@echo "Object-files:" $(OBJS)
-	@echo "Compiler-flags:" $(CPPFLAGS)
+	@echo "Compiler-flags:" $(CXXFLAGS)
 	@echo "Linker-flags:" $(LDFLAGS)
 	@echo "Linker-libs:" $(LDLIBS)
 
 $(PROGS): $(OBJS)
-	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+	@echo "Linking $@..."
+	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
+%.o: %.cpp
+	@echo "Compiling $<..."
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 .PHONY: run
 run: $(PROGS)
