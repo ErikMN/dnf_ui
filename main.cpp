@@ -279,6 +279,7 @@ struct SearchWidgets {
   GtkLabel *count_label;
   GtkCheckButton *desc_checkbox;
   GtkCheckButton *exact_checkbox;
+  GtkLabel *files_label;
   std::vector<std::string> history;
   guint list_idle_id = 0;
 };
@@ -412,6 +413,35 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                            char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
                            if (info) {
                              gtk_label_set_text(widgets->details_label, info);
+
+                             // Fetch and display the file list for the selected package
+                             try {
+                               auto base = create_fresh_base();
+                               libdnf5::rpm::PackageQuery q(*base);
+
+                               q.filter_name((const char *)g_task_get_task_data(task));
+                               q.filter_installed(); // only show files for installed packages
+
+                               if (!q.empty()) {
+                                 q.filter_latest_evr();
+                                 auto pkg = *q.begin();
+                                 std::ostringstream files;
+                                 for (const auto &f : pkg.get_files()) {
+                                   files << f << "\n";
+                                 }
+                                 std::string files_str = files.str();
+                                 if (files_str.empty()) {
+                                   files_str = "No files recorded for this installed package.";
+                                 }
+                                 gtk_label_set_text(widgets->files_label, files_str.c_str());
+                               } else {
+                                 gtk_label_set_text(widgets->files_label,
+                                                    "File list available only for installed packages.");
+                               }
+                             } catch (const std::exception &e) {
+                               gtk_label_set_text(widgets->files_label, e.what());
+                             }
+
                              set_status(widgets->status_label, "Package info loaded.", "green");
                              g_free(info);
                            } else {
@@ -775,11 +805,17 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *listbox = gtk_list_box_new();
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_list), listbox);
 
-  // --- Right: details view ---
+  // --- Right: details + files split ---
+  GtkWidget *right_paned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
+  gtk_widget_set_hexpand(right_paned, TRUE);
+  gtk_widget_set_vexpand(right_paned, TRUE);
+  gtk_paned_set_end_child(GTK_PANED(inner_paned), right_paned);
+
+  // --- Top: package details ---
   GtkWidget *scrolled_details = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scrolled_details, TRUE);
   gtk_widget_set_vexpand(scrolled_details, TRUE);
-  gtk_paned_set_end_child(GTK_PANED(inner_paned), scrolled_details);
+  gtk_paned_set_start_child(GTK_PANED(right_paned), scrolled_details);
 
   // container to keep label top-aligned
   GtkWidget *details_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -792,6 +828,20 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
   gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
   gtk_box_append(GTK_BOX(details_box), details_label);
+
+  // --- Bottom: file list ---
+  GtkWidget *scrolled_files = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(scrolled_files, TRUE);
+  gtk_widget_set_vexpand(scrolled_files, TRUE);
+  gtk_paned_set_end_child(GTK_PANED(right_paned), scrolled_files);
+
+  // --- File info ---
+  GtkWidget *files_label = gtk_label_new("");
+  gtk_label_set_xalign(GTK_LABEL(files_label), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(files_label), TRUE);
+  gtk_label_set_selectable(GTK_LABEL(files_label), TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_files), files_label);
+  gtk_widget_set_valign(files_label, GTK_ALIGN_START);
 
   // --- Bottom bar with item count ---
   GtkWidget *bottom_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
@@ -813,6 +863,7 @@ activate(GtkApplication *app, gpointer)
   widgets->search_button = GTK_BUTTON(search_button);
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
+  widgets->files_label = GTK_LABEL(files_label);
   widgets->desc_checkbox = GTK_CHECK_BUTTON(desc_checkbox);
   widgets->exact_checkbox = GTK_CHECK_BUTTON(exact_checkbox);
   widgets->count_label = GTK_LABEL(count_label);
