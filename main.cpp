@@ -2,6 +2,9 @@
 // Graphical user interface for DNF
 // Inspired by Synaptic
 // Fast, reliable and easy to use
+//
+// NOTE: This is the old single-file app, it will be removed
+//
 // -----------------------------------------------------------------------------
 #include <array>
 #include <cassert>
@@ -695,7 +698,7 @@ activate(GtkApplication *app, gpointer)
       g_installed_names.insert(pkg.get_name());
     }
   }
-  gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
+  gtk_window_set_title(GTK_WINDOW(window), "OLD DNF Package Viewer");
   load_window_geometry(GTK_WINDOW(window));
 
   // Keyboard shortcuts: Ctrl+Q and Ctrl+W to close window

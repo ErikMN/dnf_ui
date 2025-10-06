@@ -12,9 +12,11 @@ else
   $(error "Missing dependencies: please install development packages for $(PKGS)")
 endif
 
-SRCS = $(wildcard *.cpp)
+SRCS = $(wildcard src/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
 DEPS = $(SRCS:.cpp=.d)
+
+CPPFLAGS += -Iinclude -Isrc
 
 -include $(DEPS)
 
@@ -55,7 +57,7 @@ $(PROGS): $(OBJS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 .PHONY: run
-run: clean $(PROGS)
+run: $(PROGS)
 	@./$(PROGS)
 
 .PHONY: valgrind
