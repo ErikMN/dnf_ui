@@ -5,6 +5,7 @@
 #include "ui_helpers.hpp"
 #include "dnf_backend.hpp"
 #include "config.hpp"
+#include "base_manager.hpp"
 
 #include <string>
 #include <vector>
@@ -129,8 +130,8 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
   // --- Refresh global installed package cache ---
   {
     g_installed_names.clear();
-    auto base = create_fresh_base();
-    libdnf5::rpm::PackageQuery query(*base);
+    auto &base = BaseManager::instance().get_base();
+    libdnf5::rpm::PackageQuery query(base);
     query.filter_installed();
     for (auto pkg : query) {
       g_installed_names.insert(pkg.get_name());

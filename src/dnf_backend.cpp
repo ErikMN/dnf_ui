@@ -2,6 +2,8 @@
 // libdnf5 backend helpers
 // -----------------------------------------------------------------------------
 #include "dnf_backend.hpp"
+#include "base_manager.hpp"
+
 #include <algorithm>
 #include <iostream>
 #include <set>
@@ -16,22 +18,6 @@ bool g_search_in_description = false;
 bool g_exact_match = false;
 
 // -----------------------------------------------------------------------------
-// Helper: create fresh libdnf5::Base (thread-safe per-thread)
-// -----------------------------------------------------------------------------
-std::unique_ptr<libdnf5::Base>
-create_fresh_base()
-{
-  auto base = std::make_unique<libdnf5::Base>();
-  base->load_config();
-  base->setup();
-  auto repo_sack = base->get_repo_sack();
-  repo_sack->create_repos_from_system_configuration();
-  repo_sack->load_repos();
-
-  return base;
-}
-
-// -----------------------------------------------------------------------------
 // Helper: Query installed packages via libdnf5
 // -----------------------------------------------------------------------------
 std::vector<std::string>
@@ -39,9 +25,8 @@ get_installed_packages()
 {
   std::vector<std::string> packages;
 
-  auto base = create_fresh_base();
-
-  libdnf5::rpm::PackageQuery query(*base);
+  auto &base = BaseManager::instance().get_base();
+  libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
   for (auto pkg : query) {
     g_installed_names.insert(pkg.get_name());
@@ -60,9 +45,8 @@ search_available_packages(const std::string &pattern)
 {
   std::vector<std::string> packages;
 
-  auto base = create_fresh_base();
-
-  libdnf5::rpm::PackageQuery query(*base);
+  auto &base = BaseManager::instance().get_base();
+  libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
 
   if (g_search_in_description) {
@@ -108,9 +92,8 @@ search_available_packages(const std::string &pattern)
 std::string
 get_package_info(const std::string &pkg_name)
 {
-  auto base = create_fresh_base();
-
-  libdnf5::rpm::PackageQuery query(*base);
+  auto &base = BaseManager::instance().get_base();
+  libdnf5::rpm::PackageQuery query(base);
   query.filter_name(pkg_name);
 
   if (query.empty()) {

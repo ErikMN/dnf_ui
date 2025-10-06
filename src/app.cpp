@@ -6,6 +6,7 @@
 #include "config.hpp"
 #include "dnf_backend.hpp"
 #include "ui_helpers.hpp"
+#include "base_manager.hpp"
 
 #include <gtk/gtk.h>
 #include <libdnf5/rpm/package_query.hpp>
@@ -33,8 +34,8 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *window = gtk_application_window_new(app);
   // Preload installed package names for highlighting
   {
-    auto base = create_fresh_base();
-    libdnf5::rpm::PackageQuery query(*base);
+    auto &base = BaseManager::instance().get_base();
+    libdnf5::rpm::PackageQuery query(base);
     query.filter_installed();
     for (auto pkg : query) {
       g_installed_names.insert(pkg.get_name());

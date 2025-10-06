@@ -9,7 +9,6 @@
 // -----------------------------------------------------------------------------
 // libdnf5 backend helpers
 // -----------------------------------------------------------------------------
-std::unique_ptr<libdnf5::Base> create_fresh_base();
 std::vector<std::string> get_installed_packages();
 std::vector<std::string> search_available_packages(const std::string &pattern);
 std::string get_package_info(const std::string &pkg_name);
