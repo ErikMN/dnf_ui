@@ -3,11 +3,14 @@ CXXFLAGS += -std=c++20 -Werror -MMD -MP -pipe -fdiagnostics-color=always
 PROGS = dnf_ui
 LDLIBS = -lm
 
-PKGS += libdnf5 gtk4
+PKGS = libdnf5 gtk4
+
+PKG_LIBS := $(shell pkg-config --libs $(PKGS))
+PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS))
 PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
 ifeq ($(PKG_OK),yes)
-  LDLIBS += $(shell pkg-config --libs $(PKGS))
-  CPPFLAGS += $(shell pkg-config --cflags $(PKGS))
+  LDLIBS += $(PKG_LIBS)
+  CPPFLAGS += $(PKG_CFLAGS)
 else
   $(error "Missing dependencies: please install development packages for $(PKGS)")
 endif
