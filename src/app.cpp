@@ -156,6 +156,7 @@ activate(GtkApplication *app, gpointer)
   gtk_widget_set_hexpand(right_paned, TRUE);
   gtk_widget_set_vexpand(right_paned, TRUE);
   gtk_paned_set_end_child(GTK_PANED(inner_paned), right_paned);
+  gtk_widget_add_css_class(right_paned, "right-split");
 
   // --- Top: package details ---
   GtkWidget *scrolled_details = gtk_scrolled_window_new();
@@ -226,6 +227,11 @@ activate(GtkApplication *app, gpointer)
                                       "  color: black; "              /* readable text */
                                       "  padding: 2px 4px; "
                                       "  border-radius: 2px; "
+                                      "} "
+                                      "paned.right-split > separator { "
+                                      "  background: none; "
+                                      "  border: none; "
+                                      "  border-top: 3px solid @borders; "
                                       "}");
     gtk_style_context_add_provider_for_display(
         gdk_display_get_default(), GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_USER);
