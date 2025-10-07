@@ -1,5 +1,7 @@
 // -----------------------------------------------------------------------------
 // UI utility helpers
+// Provides helper functions for updating UI widgets, handling status feedback,
+// and populating virtualized GTK4 ListView widgets with package data.
 // -----------------------------------------------------------------------------
 #include "ui_helpers.hpp"
 #include "widgets.hpp"
@@ -37,19 +39,24 @@ set_status(GtkLabel *label, const std::string &text, const std::string &color)
 
 // -----------------------------------------------------------------------------
 // Virtualized ListView population
+// Populates the main package list asynchronously using a GTK4 ListView and
+// GtkStringList model. Supports optional installed-package highlighting.
 // -----------------------------------------------------------------------------
 void
 fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items, bool highlight_installed)
 
 {
+  // Build a new string list model from provided package names
   GtkStringList *store = gtk_string_list_new(NULL);
   for (const auto &pkg : items) {
     gtk_string_list_append(store, pkg.c_str());
   }
 
+  // Use GTK4 model-view setup
   GtkSingleSelection *sel = gtk_single_selection_new(G_LIST_MODEL(store));
   GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
 
+  // Create label widgets for each list item
   g_signal_connect(factory,
                    "setup",
                    G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer) {
@@ -59,7 +66,8 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                    }),
                    nullptr);
 
-  // Pass highlight flag to the bind callback
+  // Bind callback: called whenever a list item becomes visible
+  // Applies highlighting for installed packages if enabled
   g_signal_connect_data(factory,
                         "bind",
                         G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer user_data) {
@@ -72,12 +80,16 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                           if (!highlight) {
                             return;
                           }
+
                           // Highlight installed packages
+                          // Check if the package is installed (by name prefix)
                           std::string pkg_name = text;
                           auto dash_pos = pkg_name.find('-');
                           if (dash_pos != std::string::npos) {
                             pkg_name = pkg_name.substr(0, dash_pos);
                           }
+
+                          // Add or remove installed CSS class
                           if (g_installed_names.count(pkg_name)) {
                             gtk_widget_add_css_class(label, "installed");
                           } else {
@@ -88,6 +100,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                         NULL,
                         G_CONNECT_DEFAULT);
 
+  // Create a virtualized GTK4 ListView and attach it to the scrolled container
   GtkListView *list_view = GTK_LIST_VIEW(gtk_list_view_new(GTK_SELECTION_MODEL(sel), factory));
   gtk_widget_set_hexpand(GTK_WIDGET(list_view), TRUE);
   gtk_widget_set_vexpand(GTK_WIDGET(list_view), TRUE);
@@ -99,6 +112,10 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
   snprintf(count_msg, sizeof(count_msg), "Items: %zu", items.size());
   gtk_label_set_text(widgets->count_label, count_msg);
 
+  // ---------------------------------------------------------------------------
+  // Selection callback: triggered when user selects a package from the list
+  // Asynchronously fetches package info and (if installed) its file list.
+  // ---------------------------------------------------------------------------
   g_signal_connect(sel,
                    "selection-changed",
                    G_CALLBACK(+[](GtkSingleSelection *self, guint, guint, gpointer user_data) {
@@ -108,11 +125,13 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                        return;
                      }
 
+                     // Retrieve selected package name
                      GObject *obj = (GObject *)g_list_model_get_item(gtk_single_selection_get_model(self), index);
                      const char *pkg_text = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
                      std::string pkg_name = pkg_text;
                      g_object_unref(obj);
 
+                     // Strip version suffix to get base package name
                      auto pos = pkg_name.find('-');
                      if (pos != std::string::npos) {
                        pkg_name = pkg_name.substr(0, pos);
@@ -120,6 +139,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 
                      set_status(widgets->status_label, "Fetching package info...", "blue");
 
+                     // --- Async task: Fetch and display package info + file list ---
                      GTask *task = g_task_new(
                          NULL,
                          NULL,
@@ -128,6 +148,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                            GTask *task = G_TASK(res);
                            char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
                            if (info) {
+                             // Display general package information
                              gtk_label_set_text(widgets->details_label, info);
 
                              // Fetch and display the file list for the selected package
@@ -166,7 +187,10 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                          },
                          widgets);
 
+                     // Pass package name to background task
                      g_task_set_task_data(task, g_strdup(pkg_name.c_str()), g_free);
+
+                     // Run background task to fetch metadata using dnf_backend
                      g_task_run_in_thread(
                          task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
                            const char *pkg_name = static_cast<const char *>(task_data);

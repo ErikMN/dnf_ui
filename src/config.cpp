@@ -1,5 +1,10 @@
 // -----------------------------------------------------------------------------
 // Config helpers for saving/restoring user settings
+// Handles persistent UI state (window size, pane divider positions, etc.)
+// The configuration is stored as key=value pairs in:
+//   ~/.config/dnf_ui.conf
+//
+// TODO: FIXME: Consider switching to GKeyFile or JSON for more structured data
 // -----------------------------------------------------------------------------
 #include "config.hpp"
 #include <fstream>

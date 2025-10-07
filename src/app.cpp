@@ -22,6 +22,7 @@ run_dnf_ui(int argc, char **argv)
 
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
+
   return status;
 }
 
@@ -82,6 +83,12 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_xalign(GTK_LABEL(history_label), 0.0);
   gtk_box_append(GTK_BOX(vbox_history), history_label);
 
+  // --- Flat line separator below Search History label ---
+  GtkWidget *line_history = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_size_request(line_history, -1, 1);
+  gtk_widget_add_css_class(line_history, "thin-line");
+  gtk_box_append(GTK_BOX(vbox_history), line_history);
+
   GtkWidget *scrolled_history = gtk_scrolled_window_new();
   gtk_widget_set_vexpand(scrolled_history, TRUE);
   gtk_widget_set_hexpand(scrolled_history, TRUE);
@@ -112,6 +119,12 @@ activate(GtkApplication *app, gpointer)
   gtk_widget_set_visible(spinner, FALSE);
   gtk_box_append(GTK_BOX(hbox_search), spinner);
 
+  // --- Flat line separator below Search bar ---
+  GtkWidget *line_search_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_size_request(line_search_buttons, -1, 1);
+  gtk_widget_add_css_class(line_search_buttons, "thin-line");
+  gtk_box_append(GTK_BOX(vbox_main), line_search_buttons);
+
   // --- Buttons row ---
   GtkWidget *hbox_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_main), hbox_buttons);
@@ -127,9 +140,20 @@ activate(GtkApplication *app, gpointer)
   g_signal_connect(
       clear_cache_button, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) { clear_search_cache(); }), NULL);
 
+  // --- Flat line separator ---
+  GtkWidget *line_buttons_status = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_size_request(line_buttons_status, -1, 1);
+  gtk_widget_add_css_class(line_buttons_status, "thin-line");
+  gtk_box_append(GTK_BOX(vbox_main), line_buttons_status);
+
   GtkWidget *status_label = gtk_label_new("Ready.");
   gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
   gtk_box_append(GTK_BOX(vbox_main), status_label);
+
+  GtkWidget *line_status_paned = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_set_size_request(line_status_paned, -1, 1);
+  gtk_widget_add_css_class(line_status_paned, "thin-line");
+  gtk_box_append(GTK_BOX(vbox_main), line_status_paned);
 
   // --- Inner paned (packages | details) ---
   GtkWidget *inner_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
@@ -232,7 +256,13 @@ activate(GtkApplication *app, gpointer)
                                       "  background: none; "
                                       "  border: none; "
                                       "  border-top: 3px solid @borders; "
-                                      "}");
+                                      "} "
+                                      ".thin-line { "
+                                      "  background-color: @borders; " /* subtle border color */
+                                      "  margin: 0; "
+                                      "  padding: 0; "
+                                      "  min-height: 1px; "
+                                      "} ");
     gtk_style_context_add_provider_for_display(
         gdk_display_get_default(), GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_USER);
     gtk_widget_add_css_class(GTK_WIDGET(widgets->status_label), "status-bar");

@@ -1,3 +1,9 @@
+// -----------------------------------------------------------------------------
+// BaseManager: Provides cached access to a libdnf5::Base instance
+// - Ensures thread-safe creation and reuse of libdnf5 Base objects
+// - Refreshes automatically after a fixed timeout (10 minutes)
+// - Supports manual rebuilds when repositories are refreshed
+// -----------------------------------------------------------------------------
 #include "base_manager.hpp"
 
 #include <libdnf5/conf/option_bool.hpp>
@@ -26,6 +32,7 @@ BaseManager::get_base()
   // Check cache age refresh every 10 minutes
   const auto now = std::chrono::steady_clock::now();
   if (!thread_base || (now - last_refresh) > std::chrono::minutes(10)) {
+    // Only one thread rebuilds the global base at a time
     std::scoped_lock lock(rebuild_mutex);
 
     if (!global_base || (now - last_refresh) > std::chrono::minutes(10)) {
@@ -33,6 +40,7 @@ BaseManager::get_base()
       auto base = std::make_shared<libdnf5::Base>();
       base->load_config();
       base->setup();
+
       auto repo_sack = base->get_repo_sack();
       repo_sack->create_repos_from_system_configuration();
       repo_sack->load_repos();
@@ -41,6 +49,7 @@ BaseManager::get_base()
       last_refresh = now;
     }
     // Reuse the shared copy for this thread
+    // Store shared global base reference in this thread's local cache
     thread_base = global_base;
   }
 
@@ -53,19 +62,23 @@ BaseManager::get_base()
 void
 BaseManager::rebuild()
 {
+  // Lock to ensure only one rebuild runs at a time
   std::scoped_lock lock(rebuild_mutex);
 
-  // Discard current cache
+  // Clear global cached Base instance to force fresh creation
   global_base.reset();
 
-  // Recreate and fully initialize new Base
+  // Build a new Base and reload all repository data
   auto base = std::make_shared<libdnf5::Base>();
   base->load_config();
   base->setup();
+
   auto repo_sack = base->get_repo_sack();
   repo_sack->create_repos_from_system_configuration();
   repo_sack->load_repos();
 
   global_base = base;
+
+  // Update timestamp to mark last successful rebuild
   last_refresh = std::chrono::steady_clock::now();
 }
