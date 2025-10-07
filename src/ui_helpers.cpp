@@ -82,14 +82,18 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                           }
 
                           // Highlight installed packages
-                          // Check if the package is installed (by name prefix)
+                          // Extract the package name by trimming only the last two dash-separated fields
+                          // (version-release)
                           std::string pkg_name = text;
-                          auto dash_pos = pkg_name.find('-');
-                          if (dash_pos != std::string::npos) {
-                            pkg_name = pkg_name.substr(0, dash_pos);
+                          auto last_dash = pkg_name.rfind('-');
+                          if (last_dash != std::string::npos) {
+                            auto second_last_dash = pkg_name.rfind('-', last_dash - 1);
+                            if (second_last_dash != std::string::npos) {
+                              pkg_name = pkg_name.substr(0, second_last_dash);
+                            }
                           }
 
-                          // Add or remove installed CSS class
+                          // Add or remove installed CSS class based on exact package name
                           if (g_installed_names.count(pkg_name)) {
                             gtk_widget_add_css_class(label, "installed");
                           } else {
@@ -131,10 +135,13 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                      std::string pkg_name = pkg_text;
                      g_object_unref(obj);
 
-                     // Strip version suffix to get base package name
-                     auto pos = pkg_name.find('-');
-                     if (pos != std::string::npos) {
-                       pkg_name = pkg_name.substr(0, pos);
+                     // Strip version-release suffix to get base package name
+                     auto last_dash = pkg_name.rfind('-');
+                     if (last_dash != std::string::npos) {
+                       auto second_last_dash = pkg_name.rfind('-', last_dash - 1);
+                       if (second_last_dash != std::string::npos) {
+                         pkg_name = pkg_name.substr(0, second_last_dash);
+                       }
                      }
 
                      set_status(widgets->status_label, "Fetching package info...", "blue");
