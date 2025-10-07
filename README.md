@@ -1,6 +1,5 @@
 # DNF UI
 
-The purpose of this project is to create a functional and reliable UI for DNF
-on Fedora. \
+DNF UI is a work-in-progress graphical frontend for Fedora's DNF package manager, inspired by the classic Synaptic tool on Debian and Ubuntu.
 
-Debian/Ubuntu "Synaptic" is used as inspiration.
+Its goal is to provide a simple, functional and reliable interface for managing software packages on Fedora, built with GTK 4 and libdnf5.
