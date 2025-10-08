@@ -45,7 +45,6 @@ set_status(GtkLabel *label, const std::string &text, const std::string &color)
 // -----------------------------------------------------------------------------
 void
 fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items, bool highlight_installed)
-
 {
   // Build a new string list model from provided package names
   GtkStringList *store = gtk_string_list_new(NULL);
@@ -82,20 +81,8 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                             return;
                           }
 
-                          // Highlight installed packages
-                          // Extract the package name by trimming only the last two dash-separated fields
-                          // (version-release)
-                          std::string pkg_name = text;
-                          auto last_dash = pkg_name.rfind('-');
-                          if (last_dash != std::string::npos) {
-                            auto second_last_dash = pkg_name.rfind('-', last_dash - 1);
-                            if (second_last_dash != std::string::npos) {
-                              pkg_name = pkg_name.substr(0, second_last_dash);
-                            }
-                          }
-
-                          // Add or remove installed CSS class based on exact package name
-                          if (g_installed_names.count(pkg_name)) {
+                          // Highlight installed packages using exact NEVRA match
+                          if (g_installed_nevras.count(text)) {
                             gtk_widget_add_css_class(label, "installed");
                           } else {
                             gtk_widget_remove_css_class(label, "installed");
@@ -135,15 +122,6 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                      const char *pkg_text = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
                      std::string pkg_name = pkg_text;
                      g_object_unref(obj);
-
-                     // Strip version-release suffix to get base package name
-                     auto last_dash = pkg_name.rfind('-');
-                     if (last_dash != std::string::npos) {
-                       auto second_last_dash = pkg_name.rfind('-', last_dash - 1);
-                       if (second_last_dash != std::string::npos) {
-                         pkg_name = pkg_name.substr(0, second_last_dash);
-                       }
-                     }
 
                      set_status(widgets->status_label, "Fetching package info...", "blue");
 

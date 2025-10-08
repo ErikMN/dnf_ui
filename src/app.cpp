@@ -292,7 +292,7 @@ activate(GtkApplication *app, gpointer)
   g_timeout_add_seconds(
       300, // 5 minutes
       [](gpointer) -> gboolean {
-        refresh_installed_names();
+        refresh_installed_nevras();
         return TRUE; // keep repeating
       },
       nullptr);

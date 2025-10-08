@@ -22,35 +22,35 @@
 // -----------------------------------------------------------------------------
 // Global state used by UI highlighting and query filters
 // -----------------------------------------------------------------------------
-std::set<std::string> g_installed_names; // Cached names of installed packages for UI highlighting
-bool g_search_in_description = false;    // Global flag: include description field in search
-bool g_exact_match = false;              // Global flag: match package name/desc exactly
+std::set<std::string> g_installed_nevras; // Cached NEVRAs of installed packages for UI highlighting
+bool g_search_in_description = false;     // Global flag: include description field in search
+bool g_exact_match = false;               // Global flag: match package name/desc exactly
 
 // -----------------------------------------------------------------------------
-// Helper: Refresh global installed package name cache
-// Clears and repopulates g_installed_names by querying all currently installed
+// Helper: Refresh global installed package NEVRA (Name Epoch Version Release Architecture) cache
+// Clears and repopulates g_installed_nevras by querying all currently installed
 // packages through libdnf5. This should be called whenever the UI needs to
 // update its installed-package highlighting or when transactions have modified
 // the system package set.
 // -----------------------------------------------------------------------------
 void
-refresh_installed_names()
+refresh_installed_nevras()
 {
-  g_installed_names.clear();
+  g_installed_nevras.clear();
 
   auto &base = BaseManager::instance().get_base();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
   for (auto pkg : query) {
-    g_installed_names.insert(pkg.get_name());
+    g_installed_nevras.insert(pkg.get_nevra());
   }
 }
 
 // -----------------------------------------------------------------------------
 // Helper: Query installed packages via libdnf5
 // Returns a list of all installed packages in "name-evr" format (e.g., pkg-1.0-1.fc38).
-// Also updates the global set of installed package names (g_installed_names).
+// Also updates the global set of installed package NEVRAs (g_installed_nevras).
 // -----------------------------------------------------------------------------
 std::vector<std::string>
 get_installed_packages()
@@ -61,10 +61,11 @@ get_installed_packages()
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
-  // Collect all installed packages and populate global name cache
+  // Collect all installed packages and populate global NEVRA cache
   for (auto pkg : query) {
-    g_installed_names.insert(pkg.get_name());
-    packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+    std::string nevra = pkg.get_nevra();
+    g_installed_nevras.insert(nevra);
+    packages.push_back(nevra);
   }
 
   return packages;
@@ -103,11 +104,11 @@ search_available_packages(const std::string &pattern)
 
       if (g_exact_match) {
         if (name == pattern_lower) {
-          packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+          packages.push_back(pkg.get_nevra());
         }
       } else {
         if (desc.find(pattern_lower) != std::string::npos || name.find(pattern_lower) != std::string::npos) {
-          packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+          packages.push_back(pkg.get_nevra());
         }
       }
     }
@@ -120,7 +121,7 @@ search_available_packages(const std::string &pattern)
     }
 
     for (auto pkg : query) {
-      packages.push_back(pkg.get_name() + "-" + pkg.get_evr());
+      packages.push_back(pkg.get_nevra());
     }
   }
 

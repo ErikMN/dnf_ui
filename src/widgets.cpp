@@ -147,7 +147,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
       g_search_cache[cache_key_for(term)] = *packages;
     }
 
-    refresh_installed_names();
+    refresh_installed_nevras();
 
     // Fill UI list and display result count
     fill_listbox_async(widgets, *packages, true);
@@ -175,7 +175,7 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
 
   // --- Refresh global installed package cache ---
-  refresh_installed_names();
+  refresh_installed_nevras();
 
   // Run query asynchronously
   GTask *task = g_task_new(NULL, NULL, on_list_task_finished, widgets);
