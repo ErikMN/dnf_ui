@@ -34,15 +34,6 @@ static void
 activate(GtkApplication *app, gpointer)
 {
   GtkWidget *window = gtk_application_window_new(app);
-  // Preload installed package names for highlighting
-  {
-    auto &base = BaseManager::instance().get_base();
-    libdnf5::rpm::PackageQuery query(base);
-    query.filter_installed();
-    for (auto pkg : query) {
-      g_installed_names.insert(pkg.get_name());
-    }
-  }
   gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
   load_window_geometry(GTK_WINDOW(window));
 
@@ -286,6 +277,7 @@ activate(GtkApplication *app, gpointer)
                    G_CALLBACK(+[](GtkWidget *, gpointer data) { delete static_cast<SearchWidgets *>(data); }),
                    widgets);
 
+  // Save paned position on close
   g_signal_connect(window,
                    "close-request",
                    G_CALLBACK(+[](GtkWindow *w, gpointer user_data) -> gboolean {
@@ -294,6 +286,15 @@ activate(GtkApplication *app, gpointer)
                      return FALSE;
                    }),
                    inner_paned);
+
+  // --- Periodic refresh of installed package names every 5 minutes ---
+  g_timeout_add_seconds(
+      300, // 5 minutes
+      [](gpointer) -> gboolean {
+        refresh_installed_names();
+        return TRUE; // keep repeating
+      },
+      nullptr);
 
   gtk_window_present(GTK_WINDOW(window));
 }

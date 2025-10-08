@@ -147,6 +147,8 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
       g_search_cache[cache_key_for(term)] = *packages;
     }
 
+    refresh_installed_names();
+
     // Fill UI list and display result count
     fill_listbox_async(widgets, *packages, true);
     char msg[256];
@@ -173,15 +175,7 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
 
   // --- Refresh global installed package cache ---
-  {
-    g_installed_names.clear();
-    auto &base = BaseManager::instance().get_base();
-    libdnf5::rpm::PackageQuery query(base);
-    query.filter_installed();
-    for (auto pkg : query) {
-      g_installed_names.insert(pkg.get_name());
-    }
-  }
+  refresh_installed_names();
 
   // Run query asynchronously
   GTask *task = g_task_new(NULL, NULL, on_list_task_finished, widgets);

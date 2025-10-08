@@ -27,6 +27,27 @@ bool g_search_in_description = false;    // Global flag: include description fie
 bool g_exact_match = false;              // Global flag: match package name/desc exactly
 
 // -----------------------------------------------------------------------------
+// Helper: Refresh global installed package name cache
+// Clears and repopulates g_installed_names by querying all currently installed
+// packages through libdnf5. This should be called whenever the UI needs to
+// update its installed-package highlighting or when transactions have modified
+// the system package set.
+// -----------------------------------------------------------------------------
+void
+refresh_installed_names()
+{
+  g_installed_names.clear();
+
+  auto &base = BaseManager::instance().get_base();
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_installed();
+
+  for (auto pkg : query) {
+    g_installed_names.insert(pkg.get_name());
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Helper: Query installed packages via libdnf5
 // Returns a list of all installed packages in "name-evr" format (e.g., pkg-1.0-1.fc38).
 // Also updates the global set of installed package names (g_installed_names).
