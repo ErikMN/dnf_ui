@@ -34,7 +34,7 @@ static void
 activate(GtkApplication *app, gpointer)
 {
   GtkWidget *window = gtk_application_window_new(app);
-  gtk_window_set_title(GTK_WINDOW(window), "DNF Package Viewer");
+  gtk_window_set_title(GTK_WINDOW(window), "DNF UI");
   load_window_geometry(GTK_WINDOW(window));
 
   // Keyboard shortcuts: Ctrl+Q and Ctrl+W to close window
