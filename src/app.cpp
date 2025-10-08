@@ -277,15 +277,16 @@ activate(GtkApplication *app, gpointer)
                    G_CALLBACK(+[](GtkWidget *, gpointer data) { delete static_cast<SearchWidgets *>(data); }),
                    widgets);
 
+  // TODO: FIXME: This is broken
   // Save paned position on close
-  g_signal_connect(window,
-                   "close-request",
-                   G_CALLBACK(+[](GtkWindow *w, gpointer user_data) -> gboolean {
-                     save_window_geometry(w);
-                     save_paned_position(GTK_PANED(user_data));
-                     return FALSE;
-                   }),
-                   inner_paned);
+  // g_signal_connect(window,
+  //                  "close-request",
+  //                  G_CALLBACK(+[](GtkWindow *w, gpointer user_data) -> gboolean {
+  //                    save_window_geometry(w);
+  //                    save_paned_position(GTK_PANED(user_data));
+  //                    return FALSE;
+  //                  }),
+  //                  inner_paned);
 
   // --- Periodic refresh of installed package names every 5 minutes ---
   g_timeout_add_seconds(
