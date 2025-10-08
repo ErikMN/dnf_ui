@@ -7,6 +7,8 @@
 // -----------------------------------------------------------------------------
 #include "base_manager.hpp"
 
+#include <iostream>
+
 #include <libdnf5/conf/option_bool.hpp>
 #include <libdnf5/rpm/package_query.hpp>
 
@@ -80,7 +82,13 @@ BaseManager::ensure_base_initialized()
   // Load system repositories
   auto repo_sack = base->get_repo_sack();
   repo_sack->create_repos_from_system_configuration();
-  repo_sack->load_repos();
+  // Force load all enabled repos; skip disabled safely
+  try {
+    repo_sack->load_repos();
+  } catch (const std::exception &e) {
+    std::cerr << "Warning: repo load failed: " << e.what() << std::endl;
+    throw;
+  }
 
   // Update cached instance and timestamp
   base_ptr = base;
