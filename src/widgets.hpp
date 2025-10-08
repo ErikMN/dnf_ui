@@ -1,3 +1,4 @@
+// src/widgets.hpp
 #pragma once
 
 #include <string>

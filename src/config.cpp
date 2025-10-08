@@ -1,4 +1,5 @@
 // -----------------------------------------------------------------------------
+// src/config.cpp
 // Config helpers for saving/restoring user settings
 // Handles persistent UI state (window size, pane divider positions, etc.)
 // The configuration is stored as key=value pairs in:

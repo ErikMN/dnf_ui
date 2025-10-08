@@ -1,3 +1,4 @@
+// src/ui_helpers.hpp
 #pragma once
 
 #include <string>

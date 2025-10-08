@@ -1,4 +1,5 @@
 // -----------------------------------------------------------------------------
+// src/ui_helpers.cpp
 // UI utility helpers
 // Provides helper functions for updating UI widgets, handling status feedback,
 // and populating virtualized GTK4 ListView widgets with package data.

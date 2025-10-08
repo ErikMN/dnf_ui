@@ -1,4 +1,5 @@
 // -----------------------------------------------------------------------------
+// src/widgets.cpp
 // Signal callbacks and search logic
 // Handles user-triggered actions (search, clear, history, etc.)
 // and asynchronous DNF queries for package information.

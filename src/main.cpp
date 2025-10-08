@@ -1,4 +1,5 @@
 // -----------------------------------------------------------------------------
+// src/main.cpp
 // Graphical user interface for DNF
 // Inspired by Synaptic
 // Fast, reliable and easy to use

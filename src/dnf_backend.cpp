@@ -1,4 +1,5 @@
 // -----------------------------------------------------------------------------
+// src/dnf_backend.cpp
 // libdnf5 backend helpers
 // Provides simplified helper functions for interacting with the DNF (libdnf5)
 // package management backend. These wrappers abstract query logic and return

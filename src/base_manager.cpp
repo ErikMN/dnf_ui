@@ -1,4 +1,5 @@
 // -----------------------------------------------------------------------------
+// src/base_manager.cpp
 // BaseManager: Provides cached access to a libdnf5::Base instance
 // - Ensures thread-safe creation and reuse of libdnf5 Base objects
 // - Refreshes automatically after a fixed timeout (10 minutes)
