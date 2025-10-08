@@ -1,17 +1,18 @@
 // src/base_manager.hpp
 #pragma once
 
-#include <libdnf5/base/base.hpp>
+#include <chrono>
 #include <memory>
 #include <mutex>
-#include <thread>
-#include <chrono>
+#include <shared_mutex>
+
+#include <libdnf5/base/base.hpp>
 
 class BaseManager {
   public:
   static BaseManager &instance();
 
-  // Returns the thread-local base, creating if needed
+  // Returns the shared base instance, thread-safe for concurrent access
   libdnf5::Base &get_base();
 
   // Force rebuild
@@ -22,7 +23,11 @@ class BaseManager {
   BaseManager(const BaseManager &) = delete;
   BaseManager &operator=(const BaseManager &) = delete;
 
-  std::mutex rebuild_mutex;
-  std::shared_ptr<libdnf5::Base> global_base;
+  void ensure_base_initialized();
+
+  std::shared_ptr<libdnf5::Base> base_ptr;
   std::chrono::steady_clock::time_point last_refresh;
+
+  // Shared mutex allows many readers but only one writer
+  mutable std::shared_mutex base_mutex;
 };

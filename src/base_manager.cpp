@@ -21,40 +21,32 @@ BaseManager::instance()
 }
 
 // -----------------------------------------------------------------------------
-// Retrieve cached libdnf5::Base instance (per-thread)
+// Retrieve cached libdnf5::Base instance (thread-safe)
 // Initializes if missing or older than 10 minutes
 // -----------------------------------------------------------------------------
 libdnf5::Base &
 BaseManager::get_base()
 {
-  // Thread-local shared_ptr so each thread uses its own copy safely
-  thread_local std::shared_ptr<libdnf5::Base> thread_base;
-
-  // Check cache age refresh every 10 minutes
   const auto now = std::chrono::steady_clock::now();
-  if (!thread_base || (now - last_refresh) > std::chrono::minutes(10)) {
-    // Only one thread rebuilds the global base at a time
-    std::scoped_lock lock(rebuild_mutex);
 
-    if (!global_base || (now - last_refresh) > std::chrono::minutes(10)) {
-      // Create and fully initialize a new libdnf5::Base
-      auto base = std::make_shared<libdnf5::Base>();
-      base->load_config();
-      base->setup();
-
-      auto repo_sack = base->get_repo_sack();
-      repo_sack->create_repos_from_system_configuration();
-      repo_sack->load_repos();
-
-      global_base = base;
-      last_refresh = now;
+  // Shared lock allows concurrent read access
+  {
+    std::shared_lock lock(base_mutex);
+    if (base_ptr && (now - last_refresh) <= std::chrono::minutes(10)) {
+      return *base_ptr;
     }
-    // Reuse the shared copy for this thread
-    // Store shared global base reference in this thread's local cache
-    thread_base = global_base;
   }
 
-  return *thread_base;
+  // Base missing or expired: reacquire exclusive lock before reinitializing
+  std::unique_lock lock(base_mutex);
+  if (!base_ptr || (now - last_refresh) > std::chrono::minutes(10)) {
+    // Create and fully initialize a new libdnf5::Base
+    ensure_base_initialized();
+  }
+
+  // Reuse the shared copy for this thread
+  // Store shared global base reference in this thread's local cache
+  return *base_ptr;
 }
 
 // -----------------------------------------------------------------------------
@@ -64,22 +56,33 @@ void
 BaseManager::rebuild()
 {
   // Lock to ensure only one rebuild runs at a time
-  std::scoped_lock lock(rebuild_mutex);
+  std::unique_lock lock(base_mutex);
 
   // Clear global cached Base instance to force fresh creation
-  global_base.reset();
+  base_ptr.reset();
 
   // Build a new Base and reload all repository data
+  ensure_base_initialized();
+}
+
+// -----------------------------------------------------------------------------
+// Internal helper: ensure_base_initialized()
+// Called under unique_lock to (re)create base if missing or expired
+// -----------------------------------------------------------------------------
+void
+BaseManager::ensure_base_initialized()
+{
+  // Create and fully initialize a new libdnf5::Base
   auto base = std::make_shared<libdnf5::Base>();
   base->load_config();
   base->setup();
 
+  // Load system repositories
   auto repo_sack = base->get_repo_sack();
   repo_sack->create_repos_from_system_configuration();
   repo_sack->load_repos();
 
-  global_base = base;
-
-  // Update timestamp to mark last successful rebuild
+  // Update cached instance and timestamp
+  base_ptr = base;
   last_refresh = std::chrono::steady_clock::now();
 }
