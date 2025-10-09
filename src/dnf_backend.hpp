@@ -13,6 +13,7 @@
 extern bool g_search_in_description;
 extern bool g_exact_match;
 extern std::set<std::string> g_installed_nevras;
+extern std::set<std::string> g_installed_names;
 
 void refresh_installed_nevras();
 std::vector<std::string> get_installed_packages();

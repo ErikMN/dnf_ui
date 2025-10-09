@@ -23,6 +23,7 @@
 // Global state used by UI highlighting and query filters
 // -----------------------------------------------------------------------------
 std::set<std::string> g_installed_nevras; // Cached NEVRAs of installed packages for UI highlighting
+std::set<std::string> g_installed_names;  // Cached package names for name-based lookups
 bool g_search_in_description = false;     // Global flag: include description field in search
 bool g_exact_match = false;               // Global flag: match package name/desc exactly
 
@@ -37,6 +38,7 @@ void
 refresh_installed_nevras()
 {
   g_installed_nevras.clear();
+  g_installed_names.clear();
 
   auto &base = BaseManager::instance().get_base();
   libdnf5::rpm::PackageQuery query(base);
@@ -44,12 +46,13 @@ refresh_installed_nevras()
 
   for (auto pkg : query) {
     g_installed_nevras.insert(pkg.get_nevra());
+    g_installed_names.insert(pkg.get_name());
   }
 }
 
 // -----------------------------------------------------------------------------
 // Helper: Query installed packages via libdnf5
-// Returns a list of all installed packages in "name-evr" format (e.g., pkg-1.0-1.fc38).
+// Returns a list of all installed packages in full NEVRA format (e.g., pkg-1.0-1.fc38.x86_64).
 // Also updates the global set of installed package NEVRAs (g_installed_nevras).
 // -----------------------------------------------------------------------------
 std::vector<std::string>
@@ -65,6 +68,7 @@ get_installed_packages()
   for (auto pkg : query) {
     std::string nevra = pkg.get_nevra();
     g_installed_nevras.insert(nevra);
+    g_installed_names.insert(pkg.get_name());
     packages.push_back(nevra);
   }
 

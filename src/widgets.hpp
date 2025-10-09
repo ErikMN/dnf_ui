@@ -23,7 +23,6 @@ struct SearchWidgets {
   GtkCheckButton *exact_checkbox;
   GtkLabel *files_label;
   std::vector<std::string> history;
-  guint list_idle_id = 0;
 };
 
 void on_list_button_clicked(GtkButton *, gpointer user_data);
