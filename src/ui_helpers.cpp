@@ -162,7 +162,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                                auto &base = BaseManager::instance().get_base();
                                libdnf5::rpm::PackageQuery q(base);
 
-                               q.filter_name((const char *)g_task_get_task_data(task));
+                               q.filter_nevra((const char *)g_task_get_task_data(task));
                                q.filter_installed(); // only show files for installed packages
 
                                if (!q.empty()) {
