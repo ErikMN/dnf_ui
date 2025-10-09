@@ -48,10 +48,6 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 {
   // Build a new string list model from provided package names
   GtkStringList *store = gtk_string_list_new(NULL);
-  // HACK: Insert dummy placeholder
-  // https://discourse.gnome.org/t/stop-gtk-dropdown-pre-selecting-the-first-item/25146
-  gtk_string_list_append(store, ""); // index 0 is dummy
-
   for (const auto &pkg : items) {
     gtk_string_list_append(store, pkg.c_str());
   }
@@ -80,15 +76,6 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                           const char *text = gtk_string_object_get_string(sobj);
                           GtkWidget *label = gtk_list_item_get_child(item);
                           gtk_label_set_text(GTK_LABEL(label), text);
-
-                          // --- HACK: Hide dummy (index 0) visually ---
-                          guint pos = gtk_list_item_get_position(item);
-                          if (pos == 0) {
-                            gtk_widget_set_visible(label, FALSE);
-                            return;
-                          } else {
-                            gtk_widget_set_visible(label, TRUE);
-                          }
 
                           if (!highlight) {
                             return;
@@ -123,22 +110,15 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
   // ---------------------------------------------------------------------------
   g_signal_connect(sel,
                    "selection-changed",
-                   G_CALLBACK(+[](GtkSingleSelection *self, guint previous, guint current, gpointer user_data) {
+                   G_CALLBACK(+[](GtkSingleSelection *self, guint, guint, gpointer user_data) {
                      SearchWidgets *widgets = (SearchWidgets *)user_data;
-
-                     // Ignore the dummy entry
-                     if (current == 0) {
-                       return;
-                     }
-                     guint real_index = current - 1;
-
                      guint index = gtk_single_selection_get_selected(self);
                      if (index == GTK_INVALID_LIST_POSITION) {
                        return;
                      }
 
                      // Retrieve selected package name
-                     GObject *obj = (GObject *)g_list_model_get_item(gtk_single_selection_get_model(self), real_index);
+                     GObject *obj = (GObject *)g_list_model_get_item(gtk_single_selection_get_model(self), index);
                      const char *pkg_text = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
                      std::string pkg_name = pkg_text;
                      g_object_unref(obj);
