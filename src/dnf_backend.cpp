@@ -138,18 +138,19 @@ search_available_packages(const std::string &pattern)
 //   - name, version, release, architecture, repo
 //   - summary and description
 //
-// If multiple versions are available, the latest EVR (Epoch-Version-Release)
-// is selected. Prefers installed packages when present.
+// Always performs an exact NEVRA match (the UI passes full NEVRA strings).
 // -----------------------------------------------------------------------------
 std::string
-get_package_info(const std::string &pkg_name)
+get_package_info(const std::string &pkg_nevra)
 {
   auto &base = BaseManager::instance().get_base();
   libdnf5::rpm::PackageQuery query(base);
-  query.filter_name(pkg_name);
+
+  // Exact NEVRA match only
+  query.filter_nevra(pkg_nevra);
 
   if (query.empty()) {
-    return "No details found for " + pkg_name;
+    return "No details found for " + pkg_nevra;
   }
 
   // Prefer installed package if available
