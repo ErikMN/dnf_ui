@@ -40,7 +40,7 @@ refresh_installed_nevras()
   g_installed_nevras.clear();
   g_installed_names.clear();
 
-  auto &base = BaseManager::instance().get_base();
+  auto [base, guard] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
@@ -60,7 +60,7 @@ get_installed_packages()
 {
   std::vector<std::string> packages;
 
-  auto &base = BaseManager::instance().get_base();
+  auto [base, guard] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
@@ -90,7 +90,7 @@ search_available_packages(const std::string &pattern)
 {
   std::vector<std::string> packages;
 
-  auto &base = BaseManager::instance().get_base();
+  auto [base, guard] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
 
@@ -143,7 +143,7 @@ search_available_packages(const std::string &pattern)
 std::string
 get_package_info(const std::string &pkg_nevra)
 {
-  auto &base = BaseManager::instance().get_base();
+  auto [base, guard] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
 
   // Exact NEVRA match only

@@ -139,7 +139,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 
                              // Fetch and display the file list for the selected package
                              try {
-                               auto &base = BaseManager::instance().get_base();
+                               auto [base, guard] = BaseManager::instance().acquire_read();
                                libdnf5::rpm::PackageQuery q(base);
 
                                q.filter_nevra((const char *)g_task_get_task_data(task));

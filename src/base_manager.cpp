@@ -52,6 +52,37 @@ BaseManager::get_base()
 }
 
 // -----------------------------------------------------------------------------
+// Thread-safe read accessor
+// -----------------------------------------------------------------------------
+std::pair<libdnf5::Base &, BaseGuard>
+BaseManager::acquire_read()
+{
+  std::shared_lock lock(base_mutex);
+  if (!base_ptr) {
+    lock.unlock();
+    std::unique_lock write_lock(base_mutex);
+    ensure_base_initialized();
+    write_lock.unlock();
+    lock.lock();
+  }
+  return { *base_ptr, BaseGuard(base_mutex) };
+}
+
+// -----------------------------------------------------------------------------
+// Thread-safe write accessor (exclusive)
+// -----------------------------------------------------------------------------
+std::pair<libdnf5::Base &, BaseWriteGuard>
+BaseManager::acquire_write()
+{
+  std::unique_lock lock(base_mutex);
+  if (!base_ptr) {
+    ensure_base_initialized();
+  }
+
+  return { *base_ptr, BaseWriteGuard(base_mutex) };
+}
+
+// -----------------------------------------------------------------------------
 // Force rebuild of cached Base (used when user requests "Refresh Repositories")
 // -----------------------------------------------------------------------------
 void
