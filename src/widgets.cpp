@@ -13,6 +13,7 @@
 
 #include <string>
 #include <vector>
+#include <mutex>
 
 #include <gtk/gtk.h>
 #include <libdnf5/rpm/package_query.hpp>
@@ -23,6 +24,7 @@ static void perform_search(SearchWidgets *widgets, const std::string &term);
 
 // Global cache for previous search results
 static std::map<std::string, std::vector<std::string>> g_search_cache;
+static std::mutex g_cache_mutex; // Protects g_search_cache
 
 // -----------------------------------------------------------------------------
 // Clear cached search results (called from Clear Cache button)
@@ -30,6 +32,7 @@ static std::map<std::string, std::vector<std::string>> g_search_cache;
 void
 clear_search_cache()
 {
+  std::lock_guard<std::mutex> lock(g_cache_mutex);
   g_search_cache.clear();
 }
 
@@ -144,6 +147,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     // Cache results for faster re-display next time
     const char *term = (const char *)g_task_get_task_data(task);
     if (term) {
+      std::lock_guard<std::mutex> lock(g_cache_mutex);
       g_search_cache[cache_key_for(term)] = *packages;
     }
 
@@ -294,22 +298,25 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
 
   // Check cache first
-  auto it = g_search_cache.find(cache_key_for(term));
-  if (it != g_search_cache.end()) {
-    // Use cached results and skip background thread
-    gtk_spinner_stop(widgets->spinner);
-    gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
-    fill_listbox_async(widgets, it->second, true);
+  {
+    std::lock_guard<std::mutex> lock(g_cache_mutex);
+    auto it = g_search_cache.find(cache_key_for(term));
+    if (it != g_search_cache.end()) {
+      // Use cached results and skip background thread
+      gtk_spinner_stop(widgets->spinner);
+      gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
+      fill_listbox_async(widgets, it->second, true);
 
-    char msg[256];
-    snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
-    set_status(widgets->status_label, msg, "gray");
+      char msg[256];
+      snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
+      set_status(widgets->status_label, msg, "gray");
 
-    // Re-enable search controls
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+      // Re-enable search controls
+      gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+      gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 
-    return;
+      return;
+    }
   }
 
   // Otherwise perform real background search

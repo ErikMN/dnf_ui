@@ -4,14 +4,18 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <set>
+#include <mutex>
+#include <atomic>
 
 #include <libdnf5/base/base.hpp>
 
 // -----------------------------------------------------------------------------
 // libdnf5 backend helpers
 // -----------------------------------------------------------------------------
-extern bool g_search_in_description;
-extern bool g_exact_match;
+extern std::atomic<bool> g_search_in_description;
+extern std::atomic<bool> g_exact_match;
+extern std::mutex g_installed_mutex;
 extern std::set<std::string> g_installed_nevras;
 extern std::set<std::string> g_installed_names;
 

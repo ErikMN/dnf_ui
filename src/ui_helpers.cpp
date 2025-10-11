@@ -12,6 +12,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <mutex>
 
 #include <gtk/gtk.h>
 #include <libdnf5/rpm/package_query.hpp>
@@ -82,10 +83,13 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                           }
 
                           // Highlight installed packages using exact NEVRA match
-                          if (g_installed_nevras.count(text)) {
-                            gtk_widget_add_css_class(label, "installed");
-                          } else {
-                            gtk_widget_remove_css_class(label, "installed");
+                          {
+                            std::lock_guard<std::mutex> lock(g_installed_mutex);
+                            if (g_installed_nevras.count(text)) {
+                              gtk_widget_add_css_class(label, "installed");
+                            } else {
+                              gtk_widget_remove_css_class(label, "installed");
+                            }
                           }
                         }),
                         GINT_TO_POINTER(highlight_installed),

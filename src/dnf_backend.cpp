@@ -16,6 +16,7 @@
 #include <set>
 #include <sstream>
 #include <mutex>
+#include <atomic>
 
 #include <libdnf5/base/base.hpp>
 #include <libdnf5/rpm/package_query.hpp>
@@ -23,11 +24,11 @@
 // -----------------------------------------------------------------------------
 // Global state used by UI highlighting and query filters
 // -----------------------------------------------------------------------------
-std::set<std::string> g_installed_nevras; // Cached NEVRAs of installed packages for UI highlighting
-std::set<std::string> g_installed_names;  // Cached package names for name-based lookups
-bool g_search_in_description = false;     // Global flag: include description field in search
-bool g_exact_match = false;               // Global flag: match package name/desc exactly
-static std::mutex g_installed_mutex;      // Mutex for thread-safe access to global sets
+std::set<std::string> g_installed_nevras;            // Cached NEVRAs of installed packages for UI highlighting
+std::set<std::string> g_installed_names;             // Cached package names for name-based lookups
+std::mutex g_installed_mutex;                        // Mutex for thread-safe access to global sets
+std::atomic<bool> g_search_in_description { false }; // Global flag: include description field in search
+std::atomic<bool> g_exact_match { false };           // Global flag: match package name/desc exactly
 
 // -----------------------------------------------------------------------------
 // Helper: Refresh global installed package NEVRA (Name Epoch Version Release Architecture) cache
@@ -117,7 +118,7 @@ search_available_packages(const std::string &pattern)
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
 
-  if (g_search_in_description) {
+  if (g_search_in_description.load()) {
     // Manually match pattern in description (case-insensitive)
     std::string pattern_lower = pattern;
     std::transform(pattern_lower.begin(), pattern_lower.end(), pattern_lower.begin(), ::tolower);
@@ -129,7 +130,7 @@ search_available_packages(const std::string &pattern)
       std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
       std::transform(name.begin(), name.end(), name.begin(), ::tolower);
 
-      if (g_exact_match) {
+      if (g_exact_match.load()) {
         if (name == pattern_lower) {
           packages.push_back(pkg.get_nevra());
         }
@@ -141,7 +142,7 @@ search_available_packages(const std::string &pattern)
     }
   } else {
     // Efficient name-based filtering using libdnf5 QueryCmp
-    if (g_exact_match) {
+    if (g_exact_match.load()) {
       query.filter_name(pattern, libdnf5::sack::QueryCmp::EQ);
     } else {
       query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
