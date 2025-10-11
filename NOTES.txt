@@ -7,6 +7,14 @@ sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
 https://libdnf.readthedocs.io/en/dnf-5-devel/index.html
 
 
+// File structure:
+app.cpp           Handles UI layout and signal wiring.
+widgets.cpp       Handles user interactions and async tasks.
+dnf_backend.cpp   Encapsulates libdnf queries.
+base_manager.cpp  Isolates base lifecycle and caching.
+config.cpp        Is self-contained persistence layer.
+
+
 // TODO:
 * Come up with a good name for the app
 * Add install/uninstall options
