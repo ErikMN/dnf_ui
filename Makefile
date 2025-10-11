@@ -26,7 +26,7 @@ CPPFLAGS += -Iinclude -Isrc
 # FINAL=y
 ifeq ($(FINAL), y)
   LDFLAGS += -s
-  CXXFLAGS += -DNDEBUG -g0 -O2
+  CXXFLAGS += -DNDEBUG_BUILD -g0 -O2
   CXXFLAGS += -Wpedantic -Wextra -Wmaybe-uninitialized
   CXXFLAGS += -W -Wformat=2 -Wpointer-arith -Winline
   CXXFLAGS += -Wdisabled-optimization -Wfloat-equal -Wall
@@ -52,12 +52,7 @@ debug:
 	@echo "Linker-libs:" $(LDLIBS)
 
 $(PROGS): $(OBJS)
-	@echo "Linking $@..."
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
-
-%.o: %.cpp
-	@echo "Compiling $<..."
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 .PHONY: run
 run: $(PROGS)
