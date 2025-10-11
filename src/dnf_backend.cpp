@@ -15,6 +15,7 @@
 #include <iostream>
 #include <set>
 #include <sstream>
+#include <mutex>
 
 #include <libdnf5/base/base.hpp>
 #include <libdnf5/rpm/package_query.hpp>
@@ -26,6 +27,7 @@ std::set<std::string> g_installed_nevras; // Cached NEVRAs of installed packages
 std::set<std::string> g_installed_names;  // Cached package names for name-based lookups
 bool g_search_in_description = false;     // Global flag: include description field in search
 bool g_exact_match = false;               // Global flag: match package name/desc exactly
+static std::mutex g_installed_mutex;      // Mutex for thread-safe access to global sets
 
 // -----------------------------------------------------------------------------
 // Helper: Refresh global installed package NEVRA (Name Epoch Version Release Architecture) cache
@@ -33,16 +35,24 @@ bool g_exact_match = false;               // Global flag: match package name/des
 // packages through libdnf5. This should be called whenever the UI needs to
 // update its installed-package highlighting or when transactions have modified
 // the system package set.
+//
+// Thread-safety:
+//   This function takes g_installed_mutex for the entire duration of clearing
+//   and repopulating g_installed_nevras and g_installed_names to prevent
+//   concurrent reads or writes from GTK worker threads or periodic refresh
+//   timers.
 // -----------------------------------------------------------------------------
 void
 refresh_installed_nevras()
 {
-  g_installed_nevras.clear();
-  g_installed_names.clear();
-
   auto [base, guard] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
+
+  // Acquire exclusive lock before modifying global sets.
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  g_installed_nevras.clear();
+  g_installed_names.clear();
 
   for (auto pkg : query) {
     g_installed_nevras.insert(pkg.get_nevra());
@@ -54,6 +64,10 @@ refresh_installed_nevras()
 // Helper: Query installed packages via libdnf5
 // Returns a list of all installed packages in full NEVRA format (e.g., pkg-1.0-1.fc38.x86_64).
 // Also updates the global set of installed package NEVRAs (g_installed_nevras).
+//
+// Thread-safety:
+//   The same g_installed_mutex is held during cache update to synchronize with
+//   other background refreshes and avoid data races with UI access.
 // -----------------------------------------------------------------------------
 std::vector<std::string>
 get_installed_packages()
@@ -64,7 +78,12 @@ get_installed_packages()
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
-  // Collect all installed packages and populate global NEVRA cache
+  // Collect all installed packages and populate global NEVRA cache.
+  // Lock ensures atomic clear and repopulate sequence.
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  g_installed_nevras.clear();
+  g_installed_names.clear();
+
   for (auto pkg : query) {
     std::string nevra = pkg.get_nevra();
     g_installed_nevras.insert(nevra);
@@ -84,6 +103,10 @@ get_installed_packages()
 //   - If g_search_in_description == true, searches name + description manually
 //     using case-insensitive substring comparison.
 //   - Otherwise uses libdnf5 query filters for efficient name-only search.
+//
+// Thread-safety:
+//   This function performs only reads and does not touch global caches, so no
+//   locking is required here.
 // -----------------------------------------------------------------------------
 std::vector<std::string>
 search_available_packages(const std::string &pattern)
@@ -139,6 +162,10 @@ search_available_packages(const std::string &pattern)
 //   - summary and description
 //
 // Always performs an exact NEVRA match (the UI passes full NEVRA strings).
+//
+// Thread-safety:
+//   This function reads package data from libdnf5 directly and does not touch
+//   shared global sets. No locking required.
 // -----------------------------------------------------------------------------
 std::string
 get_package_info(const std::string &pkg_nevra)
