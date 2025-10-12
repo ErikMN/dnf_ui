@@ -31,6 +31,7 @@ fi
 echo "*** Running build inside container..."
 docker run --rm -it \
   --name "$CONTAINER_NAME" \
+  --init \
   -w /workspace \
   "${DISPLAY_OPTS[@]}" \
   --device /dev/dri \
