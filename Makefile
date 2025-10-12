@@ -77,7 +77,7 @@ valgrind: $(PROGS)
 .PHONY: cppcheck
 cppcheck:
 	@echo "*** Static code analysis"
-	@cppcheck $(shell find . -name "*.cpp" -o -name "*.h") \
+	@cppcheck $(shell find src -name "*.cpp" -o -name "*.hpp") \
 		--verbose --enable=all -DDEBUG=1 \
 		--suppress=missingIncludeSystem \
 		--suppress=unknownMacro \
@@ -86,7 +86,7 @@ cppcheck:
 .PHONY: indent
 indent:
 	@echo "*** Formatting code"
-	@clang-format $(shell find . -name "*.cpp" -o -name "*.h") \
+	@clang-format $(shell find src -name "*.cpp" -o -name "*.hpp") \
 		-style=file -i -fallback-style=none
 
 .PHONY: clean
