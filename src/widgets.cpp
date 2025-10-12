@@ -95,7 +95,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 
   if (packages) {
     // Populate list asynchronously and update status
-    fill_listbox_async(widgets, *packages, false);
+    fill_listbox_async(widgets, *packages, true); // NOTE: mark all installed packages
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages->size());
     set_status(widgets->status_label, msg, "green");
