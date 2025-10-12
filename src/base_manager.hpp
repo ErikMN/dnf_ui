@@ -43,9 +43,6 @@ class BaseManager {
   public:
   static BaseManager &instance();
 
-  // Returns the shared base instance (unsafe: prefer acquire_read/acquire_write)
-  libdnf5::Base &get_base();
-
   // Thread-safe guarded accessors
   // Each accessor returns a reference to Base plus a guard object that keeps
   // the appropriate mutex lock alive until the guard goes out of scope.

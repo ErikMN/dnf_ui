@@ -23,35 +23,6 @@ BaseManager::instance()
 }
 
 // -----------------------------------------------------------------------------
-// Retrieve cached libdnf5::Base instance (thread-safe)
-// Initializes if missing or older than 10 minutes
-// -----------------------------------------------------------------------------
-libdnf5::Base &
-BaseManager::get_base()
-{
-  const auto now = std::chrono::steady_clock::now();
-
-  // Shared lock allows concurrent read access
-  {
-    std::shared_lock lock(base_mutex);
-    if (base_ptr && (now - last_refresh) <= std::chrono::minutes(10)) {
-      return *base_ptr;
-    }
-  }
-
-  // Base missing or expired: reacquire exclusive lock before reinitializing
-  std::unique_lock lock(base_mutex);
-  if (!base_ptr || (now - last_refresh) > std::chrono::minutes(10)) {
-    // Create and fully initialize a new libdnf5::Base
-    ensure_base_initialized();
-  }
-
-  // Reuse the shared copy for this thread
-  // Store shared global base reference in this thread's local cache
-  return *base_ptr;
-}
-
-// -----------------------------------------------------------------------------
 // Thread-safe read accessor
 // -----------------------------------------------------------------------------
 std::pair<libdnf5::Base &, BaseGuard>
