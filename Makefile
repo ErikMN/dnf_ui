@@ -5,14 +5,16 @@ LDLIBS = -lm
 
 PKGS = libdnf5 gtk4
 
-PKG_LIBS := $(shell pkg-config --libs $(PKGS))
-PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS))
-PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
-ifeq ($(PKG_OK),yes)
-  LDLIBS += $(PKG_LIBS)
-  CPPFLAGS += $(PKG_CFLAGS)
-else
-  $(error "Missing dependencies: please install development packages for $(PKGS)")
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
+  PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
+  ifeq ($(PKG_OK),yes)
+    PKG_LIBS := $(shell pkg-config --libs $(PKGS))
+    PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS))
+    LDLIBS += $(PKG_LIBS)
+    CPPFLAGS += $(PKG_CFLAGS)
+  else
+    $(error "Missing dependencies: please install development packages for $(PKGS)")
+  endif
 endif
 
 SRCS = $(wildcard src/*.cpp)
