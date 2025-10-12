@@ -17,6 +17,10 @@ config.cpp        Is self-contained persistence layer.
 
 // TODO:
 * Come up with a good name for the app
+  -> Suggestions:
+    Yumina
+    Dandify
+    Fynaptic
 * Add install/uninstall options
 * Faster app
 * Nicer UI
