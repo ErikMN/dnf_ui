@@ -271,6 +271,23 @@ activate(GtkApplication *app, gpointer)
   g_signal_connect(entry, "activate", G_CALLBACK(on_search_button_clicked), widgets);
   g_signal_connect(history_list, "row-selected", G_CALLBACK(on_history_row_selected), widgets);
 
+  // --- Refresh Repositories button ---
+  // Triggers an asynchronous repository rebuild using BaseManager::rebuild()
+  // Runs in a background thread to keep the GTK UI responsive
+  GtkWidget *refresh_button = gtk_button_new_with_label("Refresh Repositories");
+  gtk_box_append(GTK_BOX(hbox_buttons), refresh_button);
+  g_signal_connect(refresh_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *, gpointer user_data) {
+                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+                     set_status(widgets->status_label, "Refreshing repositories...", "blue");
+                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
+                     GTask *task = g_task_new(NULL, NULL, on_rebuild_task_finished, widgets);
+                     g_task_run_in_thread(task, on_rebuild_task);
+                     g_object_unref(task);
+                   }),
+                   widgets);
+
   g_signal_connect(window,
                    "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer data) { delete static_cast<SearchWidgets *>(data); }),

@@ -325,3 +325,40 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   g_task_run_in_thread(task, on_search_task);
   g_object_unref(task);
 }
+
+// -----------------------------------------------------------------------------
+// Async: Refresh repositories (non-blocking)
+// Runs BaseManager::rebuild() in a worker thread so GTK stays responsive
+// -----------------------------------------------------------------------------
+void
+on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *)
+{
+  try {
+    BaseManager::instance().rebuild();
+    g_task_return_boolean(task, TRUE);
+  } catch (const std::exception &e) {
+    g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Async completion handler: Refresh repositories
+// -----------------------------------------------------------------------------
+void
+on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  GTask *task = G_TASK(res);
+  GError *error = NULL;
+  gboolean success = g_task_propagate_boolean(task, &error);
+
+  if (success) {
+    set_status(widgets->status_label, "Repositories refreshed.", "green");
+  } else {
+    set_status(widgets->status_label, error ? error->message : "Repo refresh failed.", "red");
+    if (error)
+      g_error_free(error);
+  }
+
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+}
