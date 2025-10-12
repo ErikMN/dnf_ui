@@ -147,7 +147,7 @@ activate(GtkApplication *app, gpointer)
   gtk_widget_add_css_class(line_status_paned, "thin-line");
   gtk_box_append(GTK_BOX(vbox_main), line_status_paned);
 
-  // --- Inner paned (packages | details) ---
+  // --- Inner paned (packages | details/files tabs) ---
   GtkWidget *inner_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_box_append(GTK_BOX(vbox_main), inner_paned);
   gtk_widget_set_vexpand(inner_paned, TRUE);
@@ -167,18 +167,16 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *listbox = gtk_list_box_new();
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_list), listbox);
 
-  // --- Right: details + files split ---
-  GtkWidget *right_paned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
-  gtk_widget_set_hexpand(right_paned, TRUE);
-  gtk_widget_set_vexpand(right_paned, TRUE);
-  gtk_paned_set_end_child(GTK_PANED(inner_paned), right_paned);
-  gtk_widget_add_css_class(right_paned, "right-split");
+  // --- Right: notebook with tabs ---
+  GtkWidget *notebook = gtk_notebook_new();
+  gtk_widget_set_hexpand(notebook, TRUE);
+  gtk_widget_set_vexpand(notebook, TRUE);
+  gtk_paned_set_end_child(GTK_PANED(inner_paned), notebook);
 
-  // --- Top: package details ---
+  // --- Tab 1: Package Info ---
   GtkWidget *scrolled_details = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scrolled_details, TRUE);
   gtk_widget_set_vexpand(scrolled_details, TRUE);
-  gtk_paned_set_start_child(GTK_PANED(right_paned), scrolled_details);
 
   // container to keep label top-aligned
   GtkWidget *details_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
@@ -190,21 +188,27 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_wrap(GTK_LABEL(details_label), TRUE);
   gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
   gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
+  gtk_widget_set_focusable(details_label, FALSE);
   gtk_box_append(GTK_BOX(details_box), details_label);
 
-  // --- Bottom: file list ---
+  GtkWidget *tab_label_info = gtk_label_new("Info");
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_details, tab_label_info);
+
+  // --- Tab 2: File List ---
   GtkWidget *scrolled_files = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scrolled_files, TRUE);
   gtk_widget_set_vexpand(scrolled_files, TRUE);
-  gtk_paned_set_end_child(GTK_PANED(right_paned), scrolled_files);
 
-  // --- File info ---
   GtkWidget *files_label = gtk_label_new("");
   gtk_label_set_xalign(GTK_LABEL(files_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(files_label), TRUE);
   gtk_label_set_selectable(GTK_LABEL(files_label), TRUE);
+  gtk_widget_set_focusable(files_label, FALSE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_files), files_label);
   gtk_widget_set_valign(files_label, GTK_ALIGN_START);
+
+  GtkWidget *tab_label_files = gtk_label_new("Files");
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_files, tab_label_files);
 
   // --- Bottom bar with item count ---
   GtkWidget *bottom_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
@@ -244,13 +248,8 @@ activate(GtkApplication *app, gpointer)
                                       "  padding: 2px 4px; "
                                       "  border-radius: 2px; "
                                       "} "
-                                      "paned.right-split > separator { "
-                                      "  background: none; "
-                                      "  border: none; "
-                                      "  border-top: 3px solid @borders; "
-                                      "} "
                                       ".thin-line { "
-                                      "  background-color: @borders; " /* subtle border color */
+                                      "  background-color: @borders; "
                                       "  margin: 0; "
                                       "  padding: 0; "
                                       "  min-height: 1px; "
