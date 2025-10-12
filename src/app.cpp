@@ -41,7 +41,7 @@ activate(GtkApplication *app, gpointer)
   GtkEventController *shortcuts = GTK_EVENT_CONTROLLER(gtk_shortcut_controller_new());
   gtk_widget_add_controller(window, shortcuts);
 
-  auto shortcut_callback = +[](GtkWidget *widget, GVariant *args, gpointer) -> gboolean {
+  auto shortcut_callback = +[](GtkWidget *widget, GVariant *, gpointer) -> gboolean {
     gtk_window_close(GTK_WINDOW(widget));
     return TRUE;
   };
