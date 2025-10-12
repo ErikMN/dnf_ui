@@ -14,3 +14,7 @@ int load_paned_position();
 void save_paned_position(GtkPaned *paned);
 void load_window_geometry(GtkWindow *window);
 void save_window_geometry(GtkWindow *window);
+
+// -----------------------------------------------------------------------------
+// EOF
+// -----------------------------------------------------------------------------

@@ -359,3 +359,7 @@ on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 }
+
+// -----------------------------------------------------------------------------
+// EOF
+// -----------------------------------------------------------------------------

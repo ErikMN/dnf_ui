@@ -32,3 +32,7 @@ void on_clear_button_clicked(GtkButton *, gpointer user_data);
 void on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *);
 void on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data);
 void clear_search_cache();
+
+// -----------------------------------------------------------------------------
+// EOF
+// -----------------------------------------------------------------------------

@@ -65,3 +65,7 @@ class BaseManager {
   // Shared mutex allows many readers but only one writer
   mutable std::shared_mutex base_mutex;
 };
+
+// -----------------------------------------------------------------------------
+// EOF
+// -----------------------------------------------------------------------------
