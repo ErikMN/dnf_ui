@@ -7,4 +7,9 @@ RUN dnf install -y \
     gcc-c++ \
     make \
     pkgconf \
+    mesa-libEGL \
+    mesa-libGL \
+    mesa-libGLES \
+    dbus-daemon \
+    dbus-glib \
     && dnf clean all
