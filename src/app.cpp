@@ -98,6 +98,18 @@ activate(GtkApplication *app, gpointer)
   gtk_widget_set_hexpand(entry, TRUE);
   gtk_box_append(GTK_BOX(hbox_search), entry);
 
+  // Ctrl+F: focus search bar
+  GtkShortcut *focus_search = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_f, GDK_CONTROL_MASK),
+                                               gtk_callback_action_new(
+                                                   +[](GtkWidget *widget, GVariant *, gpointer user_data) -> gboolean {
+                                                     GtkEntry *entry = static_cast<GtkEntry *>(user_data);
+                                                     gtk_widget_grab_focus(GTK_WIDGET(entry));
+                                                     return TRUE;
+                                                   },
+                                                   entry,
+                                                   NULL));
+  gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), focus_search);
+
   GtkWidget *search_button = gtk_button_new_with_label("Search");
   gtk_box_append(GTK_BOX(hbox_search), search_button);
 
