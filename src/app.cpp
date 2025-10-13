@@ -192,6 +192,10 @@ activate(GtkApplication *app, gpointer)
   // container to keep label top-aligned
   GtkWidget *details_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   gtk_widget_set_valign(details_box, GTK_ALIGN_START);
+  gtk_widget_set_margin_start(details_box, 10);
+  gtk_widget_set_margin_end(details_box, 10);
+  gtk_widget_set_margin_top(details_box, 10);
+  gtk_widget_set_margin_bottom(details_box, 10);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_details), details_box);
 
   GtkWidget *details_label = gtk_label_new("Select a package for details.");
@@ -199,7 +203,7 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_wrap(GTK_LABEL(details_label), TRUE);
   gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
   gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
-  gtk_widget_set_focusable(details_label, FALSE);
+  gtk_widget_set_focusable(details_label, TRUE);
   gtk_box_append(GTK_BOX(details_box), details_label);
 
   GtkWidget *tab_label_info = gtk_label_new("Info");
@@ -214,9 +218,13 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_xalign(GTK_LABEL(files_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(files_label), TRUE);
   gtk_label_set_selectable(GTK_LABEL(files_label), TRUE);
-  gtk_widget_set_focusable(files_label, FALSE);
+  gtk_widget_set_focusable(files_label, TRUE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_files), files_label);
   gtk_widget_set_valign(files_label, GTK_ALIGN_START);
+  gtk_widget_set_margin_start(files_label, 10);
+  gtk_widget_set_margin_end(files_label, 10);
+  gtk_widget_set_margin_top(files_label, 10);
+  gtk_widget_set_margin_bottom(files_label, 10);
 
   GtkWidget *tab_label_files = gtk_label_new("Files");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_files, tab_label_files);
@@ -230,9 +238,13 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_xalign(GTK_LABEL(deps_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(deps_label), TRUE);
   gtk_label_set_selectable(GTK_LABEL(deps_label), TRUE);
-  gtk_widget_set_focusable(deps_label, FALSE);
+  gtk_widget_set_focusable(deps_label, TRUE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_deps), deps_label);
   gtk_widget_set_valign(deps_label, GTK_ALIGN_START);
+  gtk_widget_set_margin_start(deps_label, 10);
+  gtk_widget_set_margin_end(deps_label, 10);
+  gtk_widget_set_margin_top(deps_label, 10);
+  gtk_widget_set_margin_bottom(deps_label, 10);
 
   GtkWidget *tab_label_deps = gtk_label_new("Dependencies");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_deps, tab_label_deps);
