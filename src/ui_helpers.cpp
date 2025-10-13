@@ -14,9 +14,6 @@
 #include <vector>
 #include <mutex>
 
-#include <gtk/gtk.h>
-#include <libdnf5/rpm/package_query.hpp>
-
 // -----------------------------------------------------------------------------
 // Helper: Update status label with color
 // -----------------------------------------------------------------------------
@@ -143,28 +140,9 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 
                              // Fetch and display the file list for the selected package
                              try {
-                               auto [base, guard] = BaseManager::instance().acquire_read();
-                               libdnf5::rpm::PackageQuery q(base);
-
-                               q.filter_nevra((const char *)g_task_get_task_data(task));
-                               q.filter_installed(); // only show files for installed packages
-
-                               if (!q.empty()) {
-                                 q.filter_latest_evr();
-                                 auto pkg = *q.begin();
-                                 std::ostringstream files;
-                                 for (const auto &f : pkg.get_files()) {
-                                   files << f << "\n";
-                                 }
-                                 std::string files_str = files.str();
-                                 if (files_str.empty()) {
-                                   files_str = "No files recorded for this installed package.";
-                                 }
-                                 gtk_label_set_text(widgets->files_label, files_str.c_str());
-                               } else {
-                                 gtk_label_set_text(widgets->files_label,
-                                                    "File list available only for installed packages.");
-                               }
+                               std::string files =
+                                   get_installed_package_files((const char *)g_task_get_task_data(task));
+                               gtk_label_set_text(widgets->files_label, files.c_str());
                              } catch (const std::exception &e) {
                                gtk_label_set_text(widgets->files_label, e.what());
                              }

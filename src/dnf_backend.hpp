@@ -21,6 +21,7 @@ void refresh_installed_nevras();
 std::vector<std::string> get_installed_packages();
 std::vector<std::string> search_available_packages(const std::string &pattern);
 std::string get_package_info(const std::string &pkg_name);
+std::string get_installed_package_files(const std::string &pkg_nevra);
 
 // -----------------------------------------------------------------------------
 // EOF

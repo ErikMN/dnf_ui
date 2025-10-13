@@ -208,5 +208,38 @@ get_package_info(const std::string &pkg_nevra)
 }
 
 // -----------------------------------------------------------------------------
+// Helper: Retrieve file list for an installed package (by NEVRA)
+// Returns newline-separated file list or a friendly message if none.
+// -----------------------------------------------------------------------------
+std::string
+get_installed_package_files(const std::string &pkg_nevra)
+{
+  auto [base, guard] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+
+  query.filter_nevra(pkg_nevra);
+  query.filter_installed();
+
+  if (query.empty()) {
+    return "File list available only for installed packages.";
+  }
+
+  query.filter_latest_evr();
+  auto pkg = *query.begin();
+
+  std::ostringstream files;
+  for (const auto &f : pkg.get_files()) {
+    files << f << "\n";
+  }
+
+  std::string result = files.str();
+  if (result.empty()) {
+    result = "No files recorded for this installed package.";
+  }
+
+  return result;
+}
+
+// -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------
