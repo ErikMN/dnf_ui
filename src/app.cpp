@@ -221,6 +221,22 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *tab_label_files = gtk_label_new("Files");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_files, tab_label_files);
 
+  // --- Tab 3: Dependencies ---
+  GtkWidget *scrolled_deps = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(scrolled_deps, TRUE);
+  gtk_widget_set_vexpand(scrolled_deps, TRUE);
+
+  GtkWidget *deps_label = gtk_label_new("Select a package to view dependencies.");
+  gtk_label_set_xalign(GTK_LABEL(deps_label), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(deps_label), TRUE);
+  gtk_label_set_selectable(GTK_LABEL(deps_label), TRUE);
+  gtk_widget_set_focusable(deps_label, FALSE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_deps), deps_label);
+  gtk_widget_set_valign(deps_label, GTK_ALIGN_START);
+
+  GtkWidget *tab_label_deps = gtk_label_new("Dependencies");
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_deps, tab_label_deps);
+
   // --- Bottom bar with item count ---
   GtkWidget *bottom_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_widget_set_hexpand(bottom_bar, TRUE);
@@ -242,6 +258,7 @@ activate(GtkApplication *app, gpointer)
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
   widgets->files_label = GTK_LABEL(files_label);
+  widgets->deps_label = GTK_LABEL(deps_label);
   widgets->desc_checkbox = GTK_CHECK_BUTTON(desc_checkbox);
   widgets->exact_checkbox = GTK_CHECK_BUTTON(exact_checkbox);
   widgets->count_label = GTK_LABEL(count_label);

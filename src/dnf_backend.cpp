@@ -241,5 +241,45 @@ get_installed_package_files(const std::string &pkg_nevra)
 }
 
 // -----------------------------------------------------------------------------
+// Helper: Retrieve dependency information for a package (Requires/Provides/etc.)
+// Returns a formatted string for display in the "Dependencies" tab
+// -----------------------------------------------------------------------------
+std::string
+get_package_deps(const std::string &pkg_nevra)
+{
+  auto [base, guard] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+
+  query.filter_nevra(pkg_nevra);
+
+  if (query.empty()) {
+    return "No dependency information found for this package.";
+  }
+
+  auto pkg = *query.begin();
+
+  std::ostringstream out;
+
+  auto list_field = [&](const char *title, const auto &items) {
+    out << title << ":\n";
+    if (items.empty()) {
+      out << "  (none)\n\n";
+      return;
+    }
+    for (const auto &i : items) {
+      out << "  " << i.to_string() << "\n";
+    }
+    out << "\n";
+  };
+
+  list_field("Requires", pkg.get_requires());
+  list_field("Provides", pkg.get_provides());
+  list_field("Conflicts", pkg.get_conflicts());
+  list_field("Obsoletes", pkg.get_obsoletes());
+
+  return out.str();
+}
+
+// -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

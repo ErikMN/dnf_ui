@@ -23,6 +23,7 @@ struct SearchWidgets {
   GtkCheckButton *desc_checkbox;
   GtkCheckButton *exact_checkbox;
   GtkLabel *files_label;
+  GtkLabel *deps_label;
   std::vector<std::string> history;
 };
 
