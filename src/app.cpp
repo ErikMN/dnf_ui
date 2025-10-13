@@ -210,7 +210,7 @@ activate(GtkApplication *app, gpointer)
   gtk_widget_set_hexpand(scrolled_files, TRUE);
   gtk_widget_set_vexpand(scrolled_files, TRUE);
 
-  GtkWidget *files_label = gtk_label_new("");
+  GtkWidget *files_label = gtk_label_new("Select an installed package to view its file list.");
   gtk_label_set_xalign(GTK_LABEL(files_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(files_label), TRUE);
   gtk_label_set_selectable(GTK_LABEL(files_label), TRUE);
