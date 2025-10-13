@@ -5,7 +5,7 @@ LDLIBS = -lm
 
 PKGS = libdnf5 gtk4
 
-ifeq ($(filter docker_run clean,$(MAKECMDGOALS)),)
+ifeq ($(filter docker_run indent clean,$(MAKECMDGOALS)),)
   PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
   ifeq ($(PKG_OK),yes)
     PKG_LIBS := $(shell pkg-config --libs $(PKGS))
@@ -62,7 +62,7 @@ run: $(PROGS)
 
 .PHONY: docker_run
 docker_run:
-	@./docker_build.sh
+	@./docker/docker_build.sh
 
 .PHONY: valgrind
 valgrind: $(PROGS)
