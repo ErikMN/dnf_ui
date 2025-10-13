@@ -11,13 +11,6 @@
 #include "config.hpp"
 #include "base_manager.hpp"
 
-#include <string>
-#include <vector>
-#include <mutex>
-
-#include <gtk/gtk.h>
-#include <libdnf5/rpm/package_query.hpp>
-
 // Forward declarations
 static void add_to_history(SearchWidgets *widgets, const std::string &term);
 static void perform_search(SearchWidgets *widgets, const std::string &term);
