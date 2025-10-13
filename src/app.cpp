@@ -10,7 +10,6 @@
 #include "base_manager.hpp"
 
 #include <gtk/gtk.h>
-#include <libdnf5/rpm/package_query.hpp>
 
 // Forward declarations
 static void activate(GtkApplication *app, gpointer user_data);

@@ -9,9 +9,6 @@
 
 #include <iostream>
 
-#include <libdnf5/conf/option_bool.hpp>
-#include <libdnf5/rpm/package_query.hpp>
-
 // -----------------------------------------------------------------------------
 // Singleton: BaseManager instance accessor
 // -----------------------------------------------------------------------------
