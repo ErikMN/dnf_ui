@@ -21,6 +21,7 @@ config.cpp        Is self-contained persistence layer.
     Yumina
     Dandify
     Fynaptic
-* Add install/uninstall options
+* Add install/uninstall transactions
 * Faster app
 * Nicer UI
+* Unit tests
