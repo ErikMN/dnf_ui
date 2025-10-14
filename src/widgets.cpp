@@ -80,6 +80,10 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   GTask *task = G_TASK(res);
   std::vector<std::string> *packages = (std::vector<std::string> *)g_task_propagate_pointer(task, NULL);
 
+  // Stop spinner
+  gtk_spinner_stop(widgets->spinner);
+  gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
+
   gtk_label_set_text(widgets->status_label, "");
 
   // Re-enable UI after async list finishes
@@ -166,6 +170,10 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
   set_status(widgets->status_label, "Listing installed packages...", "blue");
+
+  // Show spinner
+  gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), TRUE);
+  gtk_spinner_start(widgets->spinner);
 
   // Disable search controls while loading
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
