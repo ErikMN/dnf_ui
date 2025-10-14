@@ -155,6 +155,14 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                                gtk_label_set_text(widgets->deps_label, e.what());
                              }
 
+                             // Fetch and display changelog
+                             try {
+                               std::string changelog = get_package_changelog((const char *)g_task_get_task_data(task));
+                               gtk_label_set_text(widgets->changelog_label, changelog.c_str());
+                             } catch (const std::exception &e) {
+                               gtk_label_set_text(widgets->changelog_label, e.what());
+                             }
+
                              set_status(widgets->status_label, "Package info loaded.", "green");
                              g_free(info);
                            } else {

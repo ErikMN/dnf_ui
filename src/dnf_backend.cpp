@@ -281,5 +281,43 @@ get_package_deps(const std::string &pkg_nevra)
 }
 
 // -----------------------------------------------------------------------------
+// Helper: Retrieve package changelog entries
+// Returns formatted changelog text or a friendly message if none available
+// -----------------------------------------------------------------------------
+std::string
+get_package_changelog(const std::string &pkg_nevra)
+{
+  auto [base, guard] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+
+  query.filter_nevra(pkg_nevra);
+
+  if (query.empty()) {
+    return "No changelog available.";
+  }
+
+  auto pkg = *query.begin();
+
+  std::ostringstream out;
+
+  auto entries = pkg.get_changelogs();
+  if (entries.empty()) {
+    return "No changelog entries found.";
+  }
+
+  for (const auto &entry : entries) {
+    std::time_t ts = static_cast<std::time_t>(entry.get_timestamp());
+    std::tm tm_buf {};
+    localtime_r(&ts, &tm_buf);
+
+    out << "Date: " << std::put_time(&tm_buf, "%Y-%m-%d") << "\n"
+        << "Author: " << entry.get_author() << "\n"
+        << entry.get_text() << "\n\n";
+  }
+
+  return out.str();
+}
+
+// -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

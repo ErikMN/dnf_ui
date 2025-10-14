@@ -249,6 +249,26 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *tab_label_deps = gtk_label_new("Dependencies");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_deps, tab_label_deps);
 
+  // --- Tab 4: Changelog ---
+  GtkWidget *scrolled_changelog = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(scrolled_changelog, TRUE);
+  gtk_widget_set_vexpand(scrolled_changelog, TRUE);
+
+  GtkWidget *changelog_label = gtk_label_new("Select a package to view its changelog.");
+  gtk_label_set_xalign(GTK_LABEL(changelog_label), 0.0);
+  gtk_label_set_wrap(GTK_LABEL(changelog_label), TRUE);
+  gtk_label_set_selectable(GTK_LABEL(changelog_label), TRUE);
+  gtk_widget_set_focusable(changelog_label, TRUE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_changelog), changelog_label);
+  gtk_widget_set_valign(changelog_label, GTK_ALIGN_START);
+  gtk_widget_set_margin_start(changelog_label, 10);
+  gtk_widget_set_margin_end(changelog_label, 10);
+  gtk_widget_set_margin_top(changelog_label, 10);
+  gtk_widget_set_margin_bottom(changelog_label, 10);
+
+  GtkWidget *tab_label_changelog = gtk_label_new("Changelog");
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_changelog, tab_label_changelog);
+
   // --- Bottom bar with item count ---
   GtkWidget *bottom_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_widget_set_hexpand(bottom_bar, TRUE);
@@ -274,6 +294,7 @@ activate(GtkApplication *app, gpointer)
   widgets->desc_checkbox = GTK_CHECK_BUTTON(desc_checkbox);
   widgets->exact_checkbox = GTK_CHECK_BUTTON(exact_checkbox);
   widgets->count_label = GTK_LABEL(count_label);
+  widgets->changelog_label = GTK_LABEL(changelog_label);
 
   // --- Modern GTK4 CSS for status bar background ---
   {
