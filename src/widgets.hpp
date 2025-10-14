@@ -17,6 +17,8 @@ struct SearchWidgets {
   GtkListBox *history_list;
   GtkSpinner *spinner;
   GtkButton *search_button;
+  GtkButton *install_button;
+  GtkButton *remove_button;
   GtkLabel *status_label;
   GtkLabel *details_label;
   GtkLabel *count_label;
@@ -34,6 +36,8 @@ void on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_dat
 void on_clear_button_clicked(GtkButton *, gpointer user_data);
 void on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *);
 void on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data);
+void on_install_button_clicked(GtkButton *, gpointer user_data);
+void on_remove_button_clicked(GtkButton *, gpointer user_data);
 void clear_search_cache();
 
 // -----------------------------------------------------------------------------

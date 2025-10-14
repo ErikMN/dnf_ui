@@ -25,3 +25,5 @@ config.cpp        Is self-contained persistence layer.
 * Faster app
 * Nicer UI
 * Unit tests
+
+Resource deadlock avoided
