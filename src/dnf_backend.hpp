@@ -24,6 +24,8 @@ std::string get_package_info(const std::string &pkg_name);
 std::string get_installed_package_files(const std::string &pkg_nevra);
 std::string get_package_deps(const std::string &pkg_nevra);
 std::string get_package_changelog(const std::string &pkg_nevra);
+bool install_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
+bool remove_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
 
 // -----------------------------------------------------------------------------
 // EOF

@@ -362,5 +362,188 @@ on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
+// Async: Install selected package
+// -----------------------------------------------------------------------------
+void
+on_install_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  // Determine selected package
+  GtkListView *lv = GTK_LIST_VIEW(gtk_scrolled_window_get_child(widgets->list_scroller));
+  if (!lv) {
+    return;
+  }
+
+  GtkSelectionModel *model = gtk_list_view_get_model(lv);
+  if (!model) {
+    return;
+  }
+
+  GtkSingleSelection *sel = GTK_SINGLE_SELECTION(model);
+  guint index = gtk_single_selection_get_selected(sel);
+  if (index == GTK_INVALID_LIST_POSITION) {
+    set_status(widgets->status_label, "No package selected.", "gray");
+    return;
+  }
+
+  GObject *obj = (GObject *)g_list_model_get_item(gtk_single_selection_get_model(sel), index);
+  const char *pkg_name = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+  std::string pkg = pkg_name;
+  g_object_unref(obj);
+
+  set_status(widgets->status_label, "Installing " + pkg + "...", "blue");
+
+  GTask *task = g_task_new(
+      nullptr,
+      nullptr,
+      +[](GObject *, GAsyncResult *res, gpointer user_data) {
+        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+        GTask *task = G_TASK(res);
+        GError *error = nullptr;
+        gboolean success = g_task_propagate_boolean(task, &error);
+
+        if (success) {
+          set_status(widgets->status_label, "Installation complete.", "green");
+
+          // Force BaseManager to reload the system state
+          BaseManager::instance().rebuild();
+          refresh_installed_nevras();
+
+          // Rebind current list items to update "installed" highlight
+          GtkListView *lv = GTK_LIST_VIEW(gtk_scrolled_window_get_child(widgets->list_scroller));
+          if (lv) {
+            GtkSelectionModel *model = gtk_list_view_get_model(lv);
+            if (GTK_IS_SINGLE_SELECTION(model)) {
+              GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
+              std::vector<std::string> current_items;
+              guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
+              for (guint i = 0; i < n; ++i) {
+                GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
+                const char *text = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+                current_items.emplace_back(text);
+                g_object_unref(obj);
+              }
+              fill_listbox_async(widgets, current_items, true);
+            }
+          }
+        } else {
+          set_status(widgets->status_label, error ? error->message : "Installation failed.", "red");
+          if (error) {
+            g_error_free(error);
+          }
+        }
+      },
+      widgets);
+
+  g_task_set_task_data(task, g_strdup(pkg.c_str()), g_free);
+
+  g_task_run_in_thread(
+      task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
+        const char *pkg = static_cast<const char *>(task_data);
+        std::string err;
+        bool ok = install_packages({ pkg }, err);
+        if (ok) {
+          g_task_return_boolean(t, TRUE);
+        } else {
+          g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, err.c_str()));
+        }
+      });
+
+  g_object_unref(task);
+}
+
+// -----------------------------------------------------------------------------
+// Async: Remove selected package
+// -----------------------------------------------------------------------------
+void
+on_remove_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  GtkListView *lv = GTK_LIST_VIEW(gtk_scrolled_window_get_child(widgets->list_scroller));
+  if (!lv) {
+    return;
+  }
+
+  GtkSelectionModel *model = gtk_list_view_get_model(lv);
+  if (!model) {
+    return;
+  }
+
+  GtkSingleSelection *sel = GTK_SINGLE_SELECTION(model);
+  guint index = gtk_single_selection_get_selected(sel);
+  if (index == GTK_INVALID_LIST_POSITION) {
+    set_status(widgets->status_label, "No package selected.", "gray");
+    return;
+  }
+
+  GObject *obj = (GObject *)g_list_model_get_item(gtk_single_selection_get_model(sel), index);
+  const char *pkg_name = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+  std::string pkg = pkg_name;
+  g_object_unref(obj);
+
+  set_status(widgets->status_label, "Removing " + pkg + "...", "blue");
+
+  GTask *task = g_task_new(
+      nullptr,
+      nullptr,
+      +[](GObject *, GAsyncResult *res, gpointer user_data) {
+        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+        GTask *task = G_TASK(res);
+        GError *error = nullptr;
+        gboolean success = g_task_propagate_boolean(task, &error);
+
+        if (success) {
+          set_status(widgets->status_label, "Removal complete.", "green");
+
+          // Force BaseManager to reload the system state
+          BaseManager::instance().rebuild();
+          refresh_installed_nevras();
+
+          // Rebind current list items to update "installed" highlight
+          GtkListView *lv = GTK_LIST_VIEW(gtk_scrolled_window_get_child(widgets->list_scroller));
+          if (lv) {
+            GtkSelectionModel *model = gtk_list_view_get_model(lv);
+            if (GTK_IS_SINGLE_SELECTION(model)) {
+              GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
+              std::vector<std::string> current_items;
+              guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
+              for (guint i = 0; i < n; ++i) {
+                GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
+                const char *text = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+                current_items.emplace_back(text);
+                g_object_unref(obj);
+              }
+              fill_listbox_async(widgets, current_items, true);
+            }
+          }
+        } else {
+          set_status(widgets->status_label, error ? error->message : "Removal failed.", "red");
+          if (error) {
+            g_error_free(error);
+          }
+        }
+      },
+      widgets);
+
+  g_task_set_task_data(task, g_strdup(pkg.c_str()), g_free);
+
+  g_task_run_in_thread(
+      task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
+        const char *pkg = static_cast<const char *>(task_data);
+        std::string err;
+        bool ok = remove_packages({ pkg }, err);
+        if (ok) {
+          g_task_return_boolean(t, TRUE);
+        } else {
+          g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, err.c_str()));
+        }
+      });
+
+  g_object_unref(task);
+}
+
+// -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

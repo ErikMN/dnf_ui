@@ -12,13 +12,17 @@
 #include "base_manager.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <ctime>
+#include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <set>
 #include <sstream>
-#include <mutex>
-#include <atomic>
 
 #include <libdnf5/base/base.hpp>
+#include <libdnf5/base/goal.hpp>
+#include <libdnf5/base/transaction.hpp>
 #include <libdnf5/rpm/package_query.hpp>
 
 // -----------------------------------------------------------------------------
@@ -316,6 +320,85 @@ get_package_changelog(const std::string &pkg_nevra)
   }
 
   return out.str();
+}
+
+// -----------------------------------------------------------------------------
+// Transaction helpers
+// -----------------------------------------------------------------------------
+bool
+install_packages(const std::vector<std::string> &pkg_names, std::string &error_out)
+{
+  if (geteuid() != 0) {
+    error_out = "Must be run as root to perform transactions.";
+    return false;
+  }
+
+  if (pkg_names.empty()) {
+    error_out = "No packages specified.";
+    return false;
+  }
+
+  try {
+    libdnf5::Base base;
+    base.load_config();
+    base.setup();
+
+    auto repo_sack = base.get_repo_sack();
+    repo_sack->create_repos_from_system_configuration();
+    repo_sack->load_repos();
+
+    libdnf5::Goal goal(base);
+    for (const auto &name : pkg_names) {
+      goal.add_rpm_install(name);
+    }
+
+    auto transaction = goal.resolve();
+    transaction.download();
+    transaction.run();
+
+    return true;
+  } catch (const std::exception &e) {
+    error_out = e.what();
+    return false;
+  }
+}
+
+bool
+remove_packages(const std::vector<std::string> &pkg_names, std::string &error_out)
+{
+  if (geteuid() != 0) {
+    error_out = "Must be run as root to perform transactions.";
+    return false;
+  }
+
+  if (pkg_names.empty()) {
+    error_out = "No packages specified.";
+    return false;
+  }
+
+  try {
+    libdnf5::Base base;
+    base.load_config();
+    base.setup();
+
+    auto repo_sack = base.get_repo_sack();
+    repo_sack->create_repos_from_system_configuration();
+    repo_sack->load_repos();
+
+    libdnf5::Goal goal(base);
+    for (const auto &name : pkg_names) {
+      goal.add_rpm_remove(name);
+    }
+
+    auto transaction = goal.resolve();
+    transaction.download();
+    transaction.run();
+
+    return true;
+  } catch (const std::exception &e) {
+    error_out = e.what();
+    return false;
+  }
 }
 
 // -----------------------------------------------------------------------------

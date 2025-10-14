@@ -143,6 +143,16 @@ activate(GtkApplication *app, gpointer)
   g_signal_connect(
       clear_cache_button, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) { clear_search_cache(); }), NULL);
 
+  // --- Transaction buttons row (Install / Remove) ---
+  GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+  gtk_box_append(GTK_BOX(vbox_main), hbox_tx_buttons);
+
+  GtkWidget *install_button = gtk_button_new_with_label("Install Selected");
+  gtk_box_append(GTK_BOX(hbox_tx_buttons), install_button);
+
+  GtkWidget *remove_button = gtk_button_new_with_label("Remove Selected");
+  gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
+
   // --- Flat line separator ---
   GtkWidget *line_buttons_status = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_widget_set_size_request(line_buttons_status, -1, 1);
@@ -287,6 +297,8 @@ activate(GtkApplication *app, gpointer)
   widgets->history_list = GTK_LIST_BOX(history_list);
   widgets->spinner = GTK_SPINNER(spinner);
   widgets->search_button = GTK_BUTTON(search_button);
+  widgets->install_button = GTK_BUTTON(install_button);
+  widgets->remove_button = GTK_BUTTON(remove_button);
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
   widgets->files_label = GTK_LABEL(files_label);
@@ -324,6 +336,10 @@ activate(GtkApplication *app, gpointer)
 
   // --- Connect signals ---
   g_signal_connect(list_button, "clicked", G_CALLBACK(on_list_button_clicked), widgets);
+
+  g_signal_connect(install_button, "clicked", G_CALLBACK(on_install_button_clicked), widgets);
+
+  g_signal_connect(remove_button, "clicked", G_CALLBACK(on_remove_button_clicked), widgets);
 
   g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), widgets);
 
@@ -373,6 +389,15 @@ activate(GtkApplication *app, gpointer)
         return TRUE; // keep repeating
       },
       nullptr);
+
+  // ---------------------------------------------------------------------------
+  // Disable install/remove buttons when not running as root
+  // ---------------------------------------------------------------------------
+  if (geteuid() != 0) {
+    printf("*** Not running as root ***\n");
+    gtk_widget_set_sensitive(install_button, FALSE);
+    gtk_widget_set_sensitive(remove_button, FALSE);
+  }
 
   gtk_window_present(GTK_WINDOW(window));
 }

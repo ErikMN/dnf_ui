@@ -126,6 +126,18 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 
                      set_status(widgets->status_label, "Fetching package info...", "blue");
 
+                     // Enable/disable install/remove buttons based on installed state,
+                     // but keep them disabled entirely if not running as root.
+                     {
+                       std::lock_guard<std::mutex> lock(g_installed_mutex);
+                       bool is_installed = g_installed_nevras.count(pkg_name) > 0;
+
+                       bool is_root = (geteuid() == 0);
+
+                       gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), is_root && !is_installed);
+                       gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), is_root && is_installed);
+                     }
+
                      // --- Async task: Fetch and display package info + file list ---
                      GTask *task = g_task_new(
                          NULL,
