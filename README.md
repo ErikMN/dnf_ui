@@ -1,7 +1,14 @@
 # DNF UI
 
-<img src="img/logo.png" width="300" alt="logo"/>
+<p align="center">
+  <img src="img/logo.png" width="300" alt="DNF UI logo"/>
+</p>
 
-DNF UI is a work-in-progress graphical frontend for Fedora's DNF package manager, inspired by the classic Synaptic tool on Debian and Ubuntu.
+**DNF UI** is a modern graphical frontend for Fedora’s **DNF package manager**,
+inspired by the classic **Synaptic** tool on Debian and Ubuntu.
 
-Its goal is to provide a simple, functional and reliable interface for managing software packages on Fedora, built with GTK 4 and libdnf5.
+Built with **GTK 4** and **libdnf5**, it provides a simple, reliable, and efficient way to manage software packages on Fedora.
+
+<p align="center">
+  <img src="img/latest_screenshot.png" width="600" alt="DNF UI screenshot"/>
+</p>
