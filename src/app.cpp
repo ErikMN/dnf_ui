@@ -100,7 +100,7 @@ activate(GtkApplication *app, gpointer)
   // Ctrl+F: focus search bar
   GtkShortcut *focus_search = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_f, GDK_CONTROL_MASK),
                                                gtk_callback_action_new(
-                                                   +[](GtkWidget *widget, GVariant *, gpointer user_data) -> gboolean {
+                                                   +[](GtkWidget *, GVariant *, gpointer user_data) -> gboolean {
                                                      GtkEntry *entry = static_cast<GtkEntry *>(user_data);
                                                      gtk_widget_grab_focus(GTK_WIDGET(entry));
                                                      return TRUE;
