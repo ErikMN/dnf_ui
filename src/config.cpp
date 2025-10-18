@@ -97,11 +97,21 @@ save_window_geometry(GtkWindow *window)
   auto config = load_config_map();
   int w = 900, h = 700;
 
-#if GTK_CHECK_VERSION(4, 10, 0)
-  graphene_rect_t bounds;
-  if (gtk_widget_compute_bounds(GTK_WIDGET(window), nullptr, &bounds)) {
-    w = static_cast<int>(bounds.size.width);
-    h = static_cast<int>(bounds.size.height);
+#if GTK_CHECK_VERSION(4, 0, 0)
+  // GTK4-safe: use gtk_window_get_default_size() and gtk_widget_compute_bounds()
+  int default_w = 0, default_h = 0;
+  gtk_window_get_default_size(window, &default_w, &default_h);
+
+  if (default_w > 0 && default_h > 0) {
+    w = default_w;
+    h = default_h;
+  } else {
+    // fallback to compute bounds if no default size set
+    graphene_rect_t bounds;
+    if (gtk_widget_compute_bounds(GTK_WIDGET(window), nullptr, &bounds)) {
+      w = static_cast<int>(bounds.size.width);
+      h = static_cast<int>(bounds.size.height);
+    }
   }
 #else
   GtkAllocation alloc;

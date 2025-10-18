@@ -372,14 +372,30 @@ activate(GtkApplication *app, gpointer)
 
   // TODO: FIXME: This is broken
   // Save paned position on close
-  // g_signal_connect(window,
-  //                  "close-request",
-  //                  G_CALLBACK(+[](GtkWindow *w, gpointer user_data) -> gboolean {
-  //                    save_window_geometry(w);
-  //                    save_paned_position(GTK_PANED(user_data));
-  //                    return FALSE;
-  //                  }),
-  //                  inner_paned);
+  g_signal_connect(window,
+                   "close-request",
+                   G_CALLBACK(+[](GtkWindow *w, gpointer user_data) -> gboolean {
+                     save_window_geometry(w);
+                     save_paned_position(GTK_PANED(user_data));
+                     return FALSE;
+                   }),
+                   inner_paned);
+
+  // Save window geometry and paned position when window is unrealized (destroyed)
+  g_signal_connect(window,
+                   "unrealize",
+                   G_CALLBACK(+[](GtkWidget *widget, gpointer user_data) {
+                     GtkWindow *w = GTK_WINDOW(widget);
+                     save_window_geometry(w);
+                     save_paned_position(GTK_PANED(user_data));
+                   }),
+                   inner_paned);
+
+  // Live-update: save pane position whenever the user moves the divider
+  g_signal_connect(inner_paned,
+                   "notify::position",
+                   G_CALLBACK(+[](GtkPaned *paned, GParamSpec *, gpointer) { save_paned_position(paned); }),
+                   NULL);
 
   // --- Periodic refresh of installed package names every 5 minutes ---
   g_timeout_add_seconds(
