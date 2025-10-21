@@ -394,6 +394,10 @@ on_install_button_clicked(GtkButton *, gpointer user_data)
 
   set_status(widgets->status_label, "Installing " + pkg + "...", "blue");
 
+  // Show spinner
+  gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), TRUE);
+  gtk_spinner_start(widgets->spinner);
+
   GTask *task = g_task_new(
       nullptr,
       nullptr,
@@ -402,6 +406,10 @@ on_install_button_clicked(GtkButton *, gpointer user_data)
         GTask *task = G_TASK(res);
         GError *error = nullptr;
         gboolean success = g_task_propagate_boolean(task, &error);
+
+        // Stop spinner
+        gtk_spinner_stop(widgets->spinner);
+        gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
 
         if (success) {
           set_status(widgets->status_label, "Installation complete.", "green");
@@ -485,6 +493,10 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
 
   set_status(widgets->status_label, "Removing " + pkg + "...", "blue");
 
+  // Show spinner
+  gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), TRUE);
+  gtk_spinner_start(widgets->spinner);
+
   GTask *task = g_task_new(
       nullptr,
       nullptr,
@@ -493,6 +505,10 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
         GTask *task = G_TASK(res);
         GError *error = nullptr;
         gboolean success = g_task_propagate_boolean(task, &error);
+
+        // Stop spinner
+        gtk_spinner_stop(widgets->spinner);
+        gtk_widget_set_visible(GTK_WIDGET(widgets->spinner), FALSE);
 
         if (success) {
           set_status(widgets->status_label, "Removal complete.", "green");
