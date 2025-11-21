@@ -359,9 +359,15 @@ activate(GtkApplication *app, gpointer)
                      SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
                      set_status(widgets->status_label, "Refreshing repositories...", "blue");
                      gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
-                     GTask *task = g_task_new(NULL, NULL, on_rebuild_task_finished, widgets);
+
+                     GCancellable *c = g_cancellable_new();
+                     g_signal_connect_object(
+                         GTK_WIDGET(widgets->entry), "destroy", G_CALLBACK(g_cancellable_cancel), c, G_CONNECT_SWAPPED);
+
+                     GTask *task = g_task_new(NULL, c, on_rebuild_task_finished, widgets);
                      g_task_run_in_thread(task, on_rebuild_task);
                      g_object_unref(task);
+                     g_object_unref(c);
                    }),
                    widgets);
 
