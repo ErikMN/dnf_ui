@@ -415,9 +415,6 @@ on_clear_button_clicked(GtkButton *, gpointer user_data)
     GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
     GtkListView *lv = GTK_LIST_VIEW(gtk_list_view_new(GTK_SELECTION_MODEL(sel), factory));
     gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(lv));
-    g_object_unref(empty);
-    g_object_unref(sel);
-    g_object_unref(factory);
   }
 
   // Reset UI labels
