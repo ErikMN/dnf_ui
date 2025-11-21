@@ -188,8 +188,8 @@ clear_search_cache()
 static std::string
 cache_key_for(const std::string &term)
 {
-  std::string key = (g_search_in_description ? "desc:" : "name:");
-  key += (g_exact_match ? "exact:" : "contains:");
+  std::string key = (g_search_in_description.load() ? "desc:" : "name:");
+  key += (g_exact_match.load() ? "exact:" : "contains:");
   key += term;
 
   return key;
