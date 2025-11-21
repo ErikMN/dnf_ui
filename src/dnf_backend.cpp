@@ -328,6 +328,8 @@ get_package_changelog(const std::string &pkg_nevra)
 bool
 install_packages(const std::vector<std::string> &pkg_names, std::string &error_out)
 {
+  error_out.clear();
+
   if (geteuid() != 0) {
     error_out = "Must be run as root to perform transactions.";
     return false;
@@ -353,8 +355,45 @@ install_packages(const std::vector<std::string> &pkg_names, std::string &error_o
     }
 
     auto transaction = goal.resolve();
+
+    // Check solver / dependency problems before doing anything
+    auto goal_problem = transaction.get_problems();
+    if (goal_problem != libdnf5::GoalProblem::NO_PROBLEM) {
+      std::ostringstream oss;
+      oss << "Unable to resolve install transaction.\n";
+
+      // Detailed logs from the depsolver
+      for (const auto &log : transaction.get_resolve_logs_as_strings()) {
+        oss << "  " << log << "\n";
+      }
+
+      error_out = oss.str();
+      return false;
+    }
+
+    // No packages scheduled -> treat as a no-op with a clear message
+    if (transaction.get_transaction_packages().empty()) {
+      error_out = "No packages in install transaction (nothing to do).";
+      return false;
+    }
+
+    // Download packages
     transaction.download();
-    transaction.run();
+
+    // Run transaction and inspect run result
+    auto run_result = transaction.run();
+    if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
+      std::ostringstream oss;
+      oss << "Install transaction failed (code " << static_cast<int>(run_result) << ").\n";
+
+      // Runtime problems (e.g. protected packages, scriptlet failures)
+      for (const auto &msg : transaction.get_transaction_problems()) {
+        oss << "  " << msg << "\n";
+      }
+
+      error_out = oss.str();
+      return false;
+    }
 
     return true;
   } catch (const std::exception &e) {
@@ -366,6 +405,8 @@ install_packages(const std::vector<std::string> &pkg_names, std::string &error_o
 bool
 remove_packages(const std::vector<std::string> &pkg_names, std::string &error_out)
 {
+  error_out.clear();
+
   if (geteuid() != 0) {
     error_out = "Must be run as root to perform transactions.";
     return false;
@@ -391,8 +432,42 @@ remove_packages(const std::vector<std::string> &pkg_names, std::string &error_ou
     }
 
     auto transaction = goal.resolve();
+
+    // Check solver / dependency problems before running removal
+    auto goal_problem = transaction.get_problems();
+    if (goal_problem != libdnf5::GoalProblem::NO_PROBLEM) {
+      std::ostringstream oss;
+      oss << "Unable to resolve remove transaction.\n";
+
+      for (const auto &log : transaction.get_resolve_logs_as_strings()) {
+        oss << "  " << log << "\n";
+      }
+
+      error_out = oss.str();
+      return false;
+    }
+
+    if (transaction.get_transaction_packages().empty()) {
+      error_out = "No packages in remove transaction (nothing to do).";
+      return false;
+    }
+
+    // Download (may still be relevant for some rpm operations)
     transaction.download();
-    transaction.run();
+
+    // Run transaction and inspect runtime problems
+    auto run_result = transaction.run();
+    if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
+      std::ostringstream oss;
+      oss << "Remove transaction failed (code " << static_cast<int>(run_result) << ").\n";
+
+      for (const auto &msg : transaction.get_transaction_problems()) {
+        oss << "  " << msg << "\n";
+      }
+
+      error_out = oss.str();
+      return false;
+    }
 
     return true;
   } catch (const std::exception &e) {
