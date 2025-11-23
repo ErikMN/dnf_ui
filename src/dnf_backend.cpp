@@ -476,6 +476,84 @@ remove_packages(const std::vector<std::string> &pkg_names, std::string &error_ou
   }
 }
 
+bool
+apply_transaction(const std::vector<std::string> &install_nevras,
+                  const std::vector<std::string> &remove_nevras,
+                  std::string &error_out)
+{
+  error_out.clear();
+
+  if (geteuid() != 0) {
+    error_out = "Must be run as root to perform transactions.";
+    return false;
+  }
+
+  if (install_nevras.empty() && remove_nevras.empty()) {
+    error_out = "No packages specified in transaction.";
+    return false;
+  }
+
+  try {
+    libdnf5::Base base;
+    base.load_config();
+    base.setup();
+
+    auto repo_sack = base.get_repo_sack();
+    repo_sack->create_repos_from_system_configuration();
+    repo_sack->load_repos();
+
+    libdnf5::Goal goal(base);
+
+    for (const auto &name : install_nevras) {
+      goal.add_rpm_install(name);
+    }
+
+    for (const auto &name : remove_nevras) {
+      goal.add_rpm_remove(name);
+    }
+
+    auto transaction = goal.resolve();
+
+    auto goal_problem = transaction.get_problems();
+    if (goal_problem != libdnf5::GoalProblem::NO_PROBLEM) {
+      std::ostringstream oss;
+      oss << "Unable to resolve transaction.\n";
+
+      for (const auto &log : transaction.get_resolve_logs_as_strings()) {
+        oss << "  " << log << "\n";
+      }
+
+      error_out = oss.str();
+      return false;
+    }
+
+    if (transaction.get_transaction_packages().empty()) {
+      error_out = "No packages in transaction (nothing to do).";
+      return false;
+    }
+
+    transaction.download();
+
+    auto run_result = transaction.run();
+    if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
+      std::ostringstream oss;
+      oss << "Transaction failed (code " << static_cast<int>(run_result) << ").\n";
+
+      for (const auto &msg : transaction.get_transaction_problems()) {
+        oss << "  " << msg << "\n";
+      }
+
+      error_out = oss.str();
+      return false;
+    }
+
+    return true;
+  } catch (const std::exception &e) {
+    error_out = e.what();
+    return false;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

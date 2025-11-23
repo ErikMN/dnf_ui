@@ -49,6 +49,82 @@ make_task_cancellable_for(GtkWidget *w)
   return c;
 }
 
+struct ApplyTaskData {
+  std::vector<std::string> install;
+  std::vector<std::string> remove;
+};
+
+static void
+apply_task_data_free(gpointer p)
+{
+  ApplyTaskData *d = static_cast<ApplyTaskData *>(p);
+  delete d;
+}
+
+// -----------------------------------------------------------------------------
+// Update Apply button enabled state based on pending actions
+// -----------------------------------------------------------------------------
+static void
+update_apply_button(SearchWidgets *widgets)
+{
+  if (!widgets || !widgets->apply_button) {
+    return;
+  }
+
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), !widgets->pending.empty());
+}
+
+// -----------------------------------------------------------------------------
+// Refresh Pending Actions tab
+// -----------------------------------------------------------------------------
+static void
+refresh_pending_tab(SearchWidgets *widgets)
+{
+  // Clear existing rows
+  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(widgets->pending_list, 0)) {
+    gtk_list_box_remove(widgets->pending_list, GTK_WIDGET(row));
+  }
+
+  // Re-add actions
+  for (const auto &a : widgets->pending) {
+    std::string line = (a.type == PendingAction::INSTALL ? "Install: " : "Remove: ") + a.nevra;
+    GtkWidget *row = gtk_label_new(line.c_str());
+    gtk_label_set_xalign(GTK_LABEL(row), 0.0);
+    gtk_list_box_append(widgets->pending_list, row);
+  }
+  update_apply_button(widgets);
+}
+
+// -----------------------------------------------------------------------------
+// Remove a pending action
+// -----------------------------------------------------------------------------
+static bool
+remove_pending_action(SearchWidgets *widgets, const std::string &nevra)
+{
+  for (size_t i = 0; i < widgets->pending.size(); ++i) {
+    if (widgets->pending[i].nevra == nevra) {
+      widgets->pending.erase(widgets->pending.begin() + i);
+      return true;
+    }
+  }
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Find pending action type for a package
+// -----------------------------------------------------------------------------
+static bool
+get_pending_action_type(SearchWidgets *widgets, const std::string &nevra, PendingAction::Type &out_type)
+{
+  for (const auto &a : widgets->pending) {
+    if (a.nevra == nevra) {
+      out_type = a.type;
+      return true;
+    }
+  }
+  return false;
+}
+
 // -----------------------------------------------------------------------------
 // Spinner ref-count helpers (prevents one task from hiding spinner used by another)
 // -----------------------------------------------------------------------------
@@ -640,62 +716,41 @@ on_install_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  set_status(widgets->status_label, ("Installing " + pkg + "...").c_str(), "blue");
+  // Toggle pending install
+  PendingAction::Type existing_type;
+  bool has_existing = get_pending_action_type(widgets, pkg, existing_type);
+  if (has_existing && existing_type == PendingAction::INSTALL) {
+    remove_pending_action(widgets, pkg);
+    refresh_pending_tab(widgets);
+    set_status(widgets->status_label, ("Unmarked: " + pkg).c_str(), "gray");
+  } else {
+    // If it was pending REMOVE (or anything else), replace it with INSTALL
+    remove_pending_action(widgets, pkg);
+    widgets->pending.push_back({ PendingAction::INSTALL, pkg });
+    refresh_pending_tab(widgets);
+    set_status(widgets->status_label, ("Marked for install: " + pkg).c_str(), "blue");
+  }
 
-  // Show spinner (ref-counted) and disable tx buttons
-  spinner_acquire(widgets->spinner);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), FALSE);
+  // Refresh list to apply pending highlight
+  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
+  if (GTK_IS_LIST_VIEW(child)) {
+    GtkListView *lv = GTK_LIST_VIEW(child);
+    GtkSelectionModel *model = gtk_list_view_get_model(lv);
+    GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
-  GTask *task = g_task_new(
-      nullptr,
-      c,
-      +[](GObject *, GAsyncResult *res, gpointer user_data) {
-        GTask *task = G_TASK(res);
-        if (GCancellable *c = g_task_get_cancellable(task)) {
-          if (g_cancellable_is_cancelled(c)) {
-            return;
-          }
-        }
-        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-        GError *error = nullptr;
-        gboolean success = g_task_propagate_boolean(task, &error);
+    std::vector<std::string> current;
 
-        // Stop spinner (ref-counted) and re-enable tx buttons
-        spinner_release(widgets->spinner);
-        gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), TRUE);
-        gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), TRUE);
-
-        if (success) {
-          set_status(widgets->status_label, "Installation complete.", "green");
-          // Run rebuild in background, then refresh highlights
-          rebuild_after_tx_async(widgets);
-        } else {
-          set_status(widgets->status_label, error ? error->message : "Installation failed.", "red");
-          if (error) {
-            g_error_free(error);
-          }
-        }
-      },
-      widgets);
-
-  g_task_set_task_data(task, g_strdup(pkg.c_str()), g_free);
-
-  g_task_run_in_thread(
-      task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
-        const char *pkg = static_cast<const char *>(task_data);
-        std::string err;
-        bool ok = install_packages({ pkg }, err);
-        if (ok) {
-          g_task_return_boolean(t, TRUE);
-        } else {
-          g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, err.c_str()));
-        }
-      });
-
-  g_object_unref(task);
-  g_object_unref(c);
+    guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
+    for (guint i = 0; i < n; ++i) {
+      GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
+      const char *t = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+      if (t && *t) {
+        current.emplace_back(t);
+      }
+      g_object_unref(obj);
+    }
+    fill_listbox_async(widgets, current, true);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -713,12 +768,71 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  set_status(widgets->status_label, ("Removing " + pkg + "...").c_str(), "blue");
+  // Toggle pending remove
+  PendingAction::Type existing_type;
+  bool has_existing = get_pending_action_type(widgets, pkg, existing_type);
+  if (has_existing && existing_type == PendingAction::REMOVE) {
+    remove_pending_action(widgets, pkg);
+    refresh_pending_tab(widgets);
+    set_status(widgets->status_label, ("Unmarked: " + pkg).c_str(), "gray");
+  } else {
+    // If it was pending INSTALL (or anything else), replace it with REMOVE
+    remove_pending_action(widgets, pkg);
+    widgets->pending.push_back({ PendingAction::REMOVE, pkg });
+    refresh_pending_tab(widgets);
+    set_status(widgets->status_label, ("Marked for removal: " + pkg).c_str(), "blue");
+  }
 
-  // Show spinner (ref-counted) and disable tx buttons
+  // Refresh list to apply pending highlight
+  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
+  if (GTK_IS_LIST_VIEW(child)) {
+    GtkListView *lv = GTK_LIST_VIEW(child);
+    GtkSelectionModel *model = gtk_list_view_get_model(lv);
+    GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
+
+    std::vector<std::string> current;
+
+    guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
+    for (guint i = 0; i < n; ++i) {
+      GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
+      const char *t = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+      if (t && *t) {
+        current.emplace_back(t);
+      }
+      g_object_unref(obj);
+    }
+    fill_listbox_async(widgets, current, true);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Apply pending actions in a single libdnf5 transaction (async via backend)
+// -----------------------------------------------------------------------------
+void
+on_apply_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  if (widgets->pending.empty()) {
+    set_status(widgets->status_label, "No pending changes.", "gray");
+    return;
+  }
+
+  // Build install/remove lists from pending actions
+  ApplyTaskData *td = new ApplyTaskData;
+  td->install.reserve(widgets->pending.size());
+  td->remove.reserve(widgets->pending.size());
+
+  for (const auto &a : widgets->pending) {
+    if (a.type == PendingAction::INSTALL) {
+      td->install.push_back(a.nevra);
+    } else {
+      td->remove.push_back(a.nevra);
+    }
+  }
+
+  set_status(widgets->status_label, "Applying pending changes...", "blue");
   spinner_acquire(widgets->spinner);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), FALSE);
 
   GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
   GTask *task = g_task_new(
@@ -735,17 +849,20 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
         GError *error = nullptr;
         gboolean success = g_task_propagate_boolean(task, &error);
 
-        // Stop spinner (ref-counted) and re-enable tx buttons
+        // Stop spinner (ref-counted)
         spinner_release(widgets->spinner);
-        gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), TRUE);
-        gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), TRUE);
 
         if (success) {
-          set_status(widgets->status_label, "Removal complete.", "green");
-          // Run rebuild in background, then refresh highlights
+          // Clear pending queue and refresh tab
+          widgets->pending.clear();
+          refresh_pending_tab(widgets);
+
+          set_status(widgets->status_label, "Transaction successful.", "green");
+
+          // Rebuild base and refresh installed highlighting asynchronously
           rebuild_after_tx_async(widgets);
         } else {
-          set_status(widgets->status_label, error ? error->message : "Removal failed.", "red");
+          set_status(widgets->status_label, error ? error->message : "Transaction failed.", "red");
           if (error) {
             g_error_free(error);
           }
@@ -753,13 +870,13 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
       },
       widgets);
 
-  g_task_set_task_data(task, g_strdup(pkg.c_str()), g_free);
+  g_task_set_task_data(task, td, apply_task_data_free);
 
   g_task_run_in_thread(
       task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
-        const char *pkg = static_cast<const char *>(task_data);
+        ApplyTaskData *td = static_cast<ApplyTaskData *>(task_data);
         std::string err;
-        bool ok = remove_packages({ pkg }, err);
+        bool ok = apply_transaction(td->install, td->remove, err);
         if (ok) {
           g_task_return_boolean(t, TRUE);
         } else {
