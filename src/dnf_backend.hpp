@@ -26,6 +26,9 @@ std::string get_package_deps(const std::string &pkg_nevra);
 std::string get_package_changelog(const std::string &pkg_nevra);
 bool install_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
 bool remove_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
+bool apply_transaction(const std::vector<std::string> &install_nevras,
+                       const std::vector<std::string> &remove_nevras,
+                       std::string &error_out);
 
 // -----------------------------------------------------------------------------
 // EOF

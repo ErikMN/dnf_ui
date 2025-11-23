@@ -143,6 +143,9 @@ activate(GtkApplication *app, gpointer)
   g_signal_connect(
       clear_cache_button, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) { clear_search_cache(); }), NULL);
 
+  GtkWidget *apply_button = gtk_button_new_with_label("Apply Changes");
+  gtk_box_append(GTK_BOX(hbox_buttons), apply_button);
+
   // --- Transaction buttons row (Install / Remove) ---
   GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_main), hbox_tx_buttons);
@@ -279,6 +282,17 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *tab_label_changelog = gtk_label_new("Changelog");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_changelog, tab_label_changelog);
 
+  // --- Tab 5: Pending actions ---
+  GtkWidget *pending_scrolled = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(pending_scrolled, TRUE);
+  gtk_widget_set_vexpand(pending_scrolled, TRUE);
+
+  GtkWidget *pending_list = gtk_list_box_new();
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(pending_scrolled), pending_list);
+
+  GtkWidget *tab_label_pending = gtk_label_new("Pending");
+  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), pending_scrolled, tab_label_pending);
+
   // --- Bottom bar with item count ---
   GtkWidget *bottom_bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_widget_set_hexpand(bottom_bar, TRUE);
@@ -299,6 +313,7 @@ activate(GtkApplication *app, gpointer)
   widgets->search_button = GTK_BUTTON(search_button);
   widgets->install_button = GTK_BUTTON(install_button);
   widgets->remove_button = GTK_BUTTON(remove_button);
+  widgets->apply_button = GTK_BUTTON(apply_button);
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
   widgets->files_label = GTK_LABEL(files_label);
@@ -307,6 +322,10 @@ activate(GtkApplication *app, gpointer)
   widgets->exact_checkbox = GTK_CHECK_BUTTON(exact_checkbox);
   widgets->count_label = GTK_LABEL(count_label);
   widgets->changelog_label = GTK_LABEL(changelog_label);
+  widgets->pending_list = GTK_LIST_BOX(pending_list);
+
+  // Apply is meaningful only when there are pending actions
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), FALSE);
 
   // --- Modern GTK4 CSS for status bar background ---
   {
@@ -320,6 +339,14 @@ activate(GtkApplication *app, gpointer)
                                       "  color: black; "              /* readable text */
                                       "  padding: 2px 4px; "
                                       "  border-radius: 2px; "
+                                      "} "
+                                      ".pending-install { "
+                                      "  background-color: #cce0ff; " /* soft blue */
+                                      "  color: black; "
+                                      "} "
+                                      ".pending-remove { "
+                                      "  background-color: #ffd6cc; " /* soft red */
+                                      "  color: black; "
                                       "} "
                                       ".thin-line { "
                                       "  background-color: @borders; "
@@ -347,6 +374,8 @@ activate(GtkApplication *app, gpointer)
 
   g_signal_connect(entry, "activate", G_CALLBACK(on_search_button_clicked), widgets);
   g_signal_connect(history_list, "row-selected", G_CALLBACK(on_history_row_selected), widgets);
+
+  g_signal_connect(apply_button, "clicked", G_CALLBACK(on_apply_button_clicked), widgets);
 
   // --- Refresh Repositories button ---
   // Triggers an asynchronous repository rebuild using BaseManager::rebuild()
@@ -419,6 +448,7 @@ activate(GtkApplication *app, gpointer)
     printf("*** Not running as root ***\n");
     gtk_widget_set_sensitive(install_button, FALSE);
     gtk_widget_set_sensitive(remove_button, FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), FALSE);
   }
 
   gtk_window_present(GTK_WINDOW(window));

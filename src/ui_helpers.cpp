@@ -37,6 +37,24 @@ set_status(GtkLabel *label, const std::string &text, const std::string &color)
 }
 
 // -----------------------------------------------------------------------------
+// Helper: Pending action CSS class (used when binding list items)
+// -----------------------------------------------------------------------------
+static const char *
+pending_css_class(SearchWidgets *widgets, const char *pkg)
+{
+  if (!pkg || !*pkg) {
+    return nullptr;
+  }
+
+  for (const auto &a : widgets->pending) {
+    if (a.nevra == pkg) {
+      return (a.type == PendingAction::INSTALL) ? "pending-install" : "pending-remove";
+    }
+  }
+  return nullptr;
+}
+
+// -----------------------------------------------------------------------------
 // Virtualized ListView population
 // Populates the main package list asynchronously using a GTK4 ListView and
 // GtkStringList model. Supports optional installed-package highlighting.
@@ -69,17 +87,16 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
   g_signal_connect_data(factory,
                         "bind",
                         G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer user_data) {
-                          bool highlight = GPOINTER_TO_INT(user_data);
+                          auto *widgets = static_cast<SearchWidgets *>(user_data);
+
                           GtkStringObject *sobj = GTK_STRING_OBJECT(gtk_list_item_get_item(item));
                           const char *text = gtk_string_object_get_string(sobj);
                           GtkWidget *label = gtk_list_item_get_child(item);
                           gtk_label_set_text(GTK_LABEL(label), text);
 
-                          if (!highlight) {
-                            return;
-                          }
-
-                          // Highlight installed packages using exact NEVRA match
+                          // -------------------------------------------------------------------
+                          // Installed package highlight
+                          // -------------------------------------------------------------------
                           {
                             std::lock_guard<std::mutex> lock(g_installed_mutex);
                             if (g_installed_nevras.count(text)) {
@@ -88,8 +105,19 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                               gtk_widget_remove_css_class(label, "installed");
                             }
                           }
+
+                          // -------------------------------------------------------------------
+                          // Pending action highlight (install/remove)
+                          // -------------------------------------------------------------------
+                          const char *pclass = pending_css_class(widgets, text);
+                          if (pclass) {
+                            gtk_widget_add_css_class(label, pclass);
+                          } else {
+                            gtk_widget_remove_css_class(label, "pending-install");
+                            gtk_widget_remove_css_class(label, "pending-remove");
+                          }
                         }),
-                        GINT_TO_POINTER(highlight_installed),
+                        widgets,
                         NULL,
                         G_CONNECT_DEFAULT);
 
