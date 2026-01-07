@@ -15,8 +15,8 @@
 // -----------------------------------------------------------------------------
 class BaseGuard {
   public:
-  explicit BaseGuard(std::shared_mutex &m)
-      : lock(m)
+  explicit BaseGuard(std::shared_lock<std::shared_mutex> &&l)
+      : lock(std::move(l))
   {
   }
 
@@ -26,8 +26,8 @@ class BaseGuard {
 
 class BaseWriteGuard {
   public:
-  explicit BaseWriteGuard(std::shared_mutex &m)
-      : lock(m)
+  explicit BaseWriteGuard(std::unique_lock<std::shared_mutex> &&l)
+      : lock(std::move(l))
   {
   }
 

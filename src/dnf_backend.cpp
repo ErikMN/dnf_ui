@@ -494,13 +494,8 @@ apply_transaction(const std::vector<std::string> &install_nevras,
   }
 
   try {
-    libdnf5::Base base;
-    base.load_config();
-    base.setup();
-
-    auto repo_sack = base.get_repo_sack();
-    repo_sack->create_repos_from_system_configuration();
-    repo_sack->load_repos();
+    // Exclusive access to shared libdnf Base for transactional changes
+    auto [base, guard] = BaseManager::instance().acquire_write();
 
     libdnf5::Goal goal(base);
 

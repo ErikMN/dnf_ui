@@ -25,26 +25,25 @@ BaseManager::instance()
 std::pair<libdnf5::Base &, BaseGuard>
 BaseManager::acquire_read()
 {
-  // Acquire shared lock (fast path if Base already exists)
+  // Fast path: Base already exists
   {
-    std::shared_lock shared(base_mutex);
+    std::shared_lock<std::shared_mutex> shared(base_mutex);
     if (base_ptr) {
-      return { *base_ptr, BaseGuard(base_mutex) };
+      return { *base_ptr, BaseGuard(std::move(shared)) };
     }
   }
 
-  // Acquire exclusive lock to initialize Base once
+  // Initialize under exclusive lock
   {
-    std::unique_lock unique(base_mutex);
+    std::unique_lock<std::shared_mutex> unique(base_mutex);
     if (!base_ptr) {
       ensure_base_initialized();
     }
   }
 
-  // Acquire shared lock after initialization
-  std::shared_lock shared(base_mutex);
-
-  return { *base_ptr, BaseGuard(base_mutex) };
+  // Re-acquire shared lock for the returned guard
+  std::shared_lock<std::shared_mutex> shared(base_mutex);
+  return { *base_ptr, BaseGuard(std::move(shared)) };
 }
 
 // -----------------------------------------------------------------------------
@@ -53,12 +52,12 @@ BaseManager::acquire_read()
 std::pair<libdnf5::Base &, BaseWriteGuard>
 BaseManager::acquire_write()
 {
-  std::unique_lock write_lock(base_mutex);
+  std::unique_lock<std::shared_mutex> write_lock(base_mutex);
   if (!base_ptr) {
     ensure_base_initialized();
   }
 
-  return { *base_ptr, BaseWriteGuard(base_mutex) };
+  return { *base_ptr, BaseWriteGuard(std::move(write_lock)) };
 }
 
 // -----------------------------------------------------------------------------
