@@ -730,6 +730,7 @@ on_install_button_clicked(GtkButton *, gpointer user_data)
     refresh_pending_tab(widgets);
     set_status(widgets->status_label, ("Marked for install: " + pkg).c_str(), "blue");
   }
+  update_action_button_labels(widgets, pkg);
 
   // Refresh list to apply pending highlight
   GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
@@ -782,6 +783,7 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
     refresh_pending_tab(widgets);
     set_status(widgets->status_label, ("Marked for removal: " + pkg).c_str(), "blue");
   }
+  update_action_button_labels(widgets, pkg);
 
   // Refresh list to apply pending highlight
   GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
@@ -856,6 +858,9 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
           // Clear pending queue and refresh tab
           widgets->pending.clear();
           refresh_pending_tab(widgets);
+
+          gtk_button_set_label(widgets->install_button, "Install Selected");
+          gtk_button_set_label(widgets->remove_button, "Remove Selected");
 
           set_status(widgets->status_label, "Transaction successful.", "green");
 

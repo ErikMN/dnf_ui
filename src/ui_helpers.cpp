@@ -37,6 +37,35 @@ set_status(GtkLabel *label, const std::string &text, const std::string &color)
 }
 
 // -----------------------------------------------------------------------------
+// Helper: Update install/remove button labels based on pending actions
+// -----------------------------------------------------------------------------
+void
+update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
+{
+  bool pending_install = false;
+  bool pending_remove = false;
+
+  for (const auto &a : widgets->pending) {
+    if (a.nevra == pkg) {
+      pending_install = (a.type == PendingAction::INSTALL);
+      pending_remove = (a.type == PendingAction::REMOVE);
+      break;
+    }
+  }
+
+  if (pending_install) {
+    gtk_button_set_label(widgets->install_button, "Unmark Install");
+    gtk_button_set_label(widgets->remove_button, "Remove Selected");
+  } else if (pending_remove) {
+    gtk_button_set_label(widgets->install_button, "Install Selected");
+    gtk_button_set_label(widgets->remove_button, "Unmark Remove");
+  } else {
+    gtk_button_set_label(widgets->install_button, "Install Selected");
+    gtk_button_set_label(widgets->remove_button, "Remove Selected");
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Helper: Pending action CSS class (used when binding list items)
 // -----------------------------------------------------------------------------
 static const char *
@@ -165,6 +194,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                        gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), is_root && !is_installed);
                        gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), is_root && is_installed);
                      }
+                     update_action_button_labels(widgets, pkg_name);
 
                      // --- Async task: Fetch and display package info + file list ---
                      GTask *task = g_task_new(
