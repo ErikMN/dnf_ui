@@ -859,9 +859,6 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
           widgets->pending.clear();
           refresh_pending_tab(widgets);
 
-          gtk_button_set_label(widgets->install_button, "Install Selected");
-          gtk_button_set_label(widgets->remove_button, "Remove Selected");
-
           set_status(widgets->status_label, "Transaction successful.", "green");
 
           // Rebuild base and refresh installed highlighting asynchronously

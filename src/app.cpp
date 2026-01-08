@@ -143,18 +143,18 @@ activate(GtkApplication *app, gpointer)
   g_signal_connect(
       clear_cache_button, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) { clear_search_cache(); }), NULL);
 
-  GtkWidget *apply_button = gtk_button_new_with_label("Apply Changes");
-  gtk_box_append(GTK_BOX(hbox_buttons), apply_button);
-
-  // --- Transaction buttons row (Install / Remove) ---
+  // --- Transaction buttons row (Install / Remove / Apply) ---
   GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_main), hbox_tx_buttons);
 
-  GtkWidget *install_button = gtk_button_new_with_label("Install Selected");
+  GtkWidget *install_button = gtk_button_new_with_label("Mark for Install");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), install_button);
 
-  GtkWidget *remove_button = gtk_button_new_with_label("Remove Selected");
+  GtkWidget *remove_button = gtk_button_new_with_label("Mark for Removal");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
+
+  GtkWidget *apply_button = gtk_button_new_with_label("Apply Transaction");
+  gtk_box_append(GTK_BOX(hbox_tx_buttons), apply_button);
 
   // --- Flat line separator ---
   GtkWidget *line_buttons_status = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);

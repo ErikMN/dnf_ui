@@ -55,13 +55,13 @@ update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
 
   if (pending_install) {
     gtk_button_set_label(widgets->install_button, "Unmark Install");
-    gtk_button_set_label(widgets->remove_button, "Remove Selected");
+    gtk_button_set_label(widgets->remove_button, "Mark for Removal");
   } else if (pending_remove) {
-    gtk_button_set_label(widgets->install_button, "Install Selected");
-    gtk_button_set_label(widgets->remove_button, "Unmark Remove");
+    gtk_button_set_label(widgets->install_button, "Mark for Install");
+    gtk_button_set_label(widgets->remove_button, "Unmark Removal");
   } else {
-    gtk_button_set_label(widgets->install_button, "Install Selected");
-    gtk_button_set_label(widgets->remove_button, "Remove Selected");
+    gtk_button_set_label(widgets->install_button, "Mark for Install");
+    gtk_button_set_label(widgets->remove_button, "Mark for Removal");
   }
 }
 
