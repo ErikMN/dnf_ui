@@ -326,154 +326,60 @@ get_package_changelog(const std::string &pkg_nevra)
 // Transaction helpers
 // -----------------------------------------------------------------------------
 bool
-install_packages(const std::vector<std::string> &pkg_names, std::string &error_out)
+install_packages(const std::vector<std::string> &pkg_specs, std::string &error_out)
 {
-  error_out.clear();
-
-  if (geteuid() != 0) {
-    error_out = "Must be run as root to perform transactions.";
-    return false;
-  }
-
-  if (pkg_names.empty()) {
-    error_out = "No packages specified.";
-    return false;
-  }
-
-  try {
-    libdnf5::Base base;
-    base.load_config();
-    base.setup();
-
-    auto repo_sack = base.get_repo_sack();
-    repo_sack->create_repos_from_system_configuration();
-    repo_sack->load_repos();
-
-    libdnf5::Goal goal(base);
-    for (const auto &name : pkg_names) {
-      goal.add_rpm_install(name);
-    }
-
-    auto transaction = goal.resolve();
-
-    // Check solver / dependency problems before doing anything
-    auto goal_problem = transaction.get_problems();
-    if (goal_problem != libdnf5::GoalProblem::NO_PROBLEM) {
-      std::ostringstream oss;
-      oss << "Unable to resolve install transaction.\n";
-
-      // Detailed logs from the depsolver
-      for (const auto &log : transaction.get_resolve_logs_as_strings()) {
-        oss << "  " << log << "\n";
-      }
-
-      error_out = oss.str();
-      return false;
-    }
-
-    // No packages scheduled -> treat as a no-op with a clear message
-    if (transaction.get_transaction_packages().empty()) {
-      error_out = "No packages in install transaction (nothing to do).";
-      return false;
-    }
-
-    // Download packages
-    transaction.download();
-
-    // Run transaction and inspect run result
-    auto run_result = transaction.run();
-    if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
-      std::ostringstream oss;
-      oss << "Install transaction failed (code " << static_cast<int>(run_result) << ").\n";
-
-      // Runtime problems (e.g. protected packages, scriptlet failures)
-      for (const auto &msg : transaction.get_transaction_problems()) {
-        oss << "  " << msg << "\n";
-      }
-
-      error_out = oss.str();
-      return false;
-    }
-
-    return true;
-  } catch (const std::exception &e) {
-    error_out = e.what();
-    return false;
-  }
+  return apply_transaction(pkg_specs, {}, error_out);
 }
 
 bool
-remove_packages(const std::vector<std::string> &pkg_names, std::string &error_out)
+remove_packages(const std::vector<std::string> &pkg_specs, std::string &error_out)
 {
-  error_out.clear();
+  return apply_transaction({}, pkg_specs, error_out);
+}
 
-  if (geteuid() != 0) {
-    error_out = "Must be run as root to perform transactions.";
-    return false;
-  }
+// -----------------------------------------------------------------------------
+// Helper: Format a short, bounded summary of package specs for error reporting
+//
+// Purpose:
+//   When a transaction fails or resolves to an empty set, this helper produces
+//   a concise, human-readable summary of the install/remove specs involved.
+//   This is intended purely for diagnostics and must not affect transaction
+//   logic or behavior.
+//
+// Output format:
+//   - "<count>" if empty
+//   - "<count> (spec1, spec2, ...)" with a bounded preview if non-empty
+//
+// Notes:
+//   - The output is intentionally truncated to avoid flooding the UI with
+//     large transaction payloads.
+//   - This helper is used only in failure paths.
+// -----------------------------------------------------------------------------
+static std::string
+format_specs(const std::vector<std::string> &specs)
+{
+  std::ostringstream out;
+  out << specs.size();
 
-  if (pkg_names.empty()) {
-    error_out = "No packages specified.";
-    return false;
-  }
+  if (!specs.empty()) {
+    out << " (";
 
-  try {
-    libdnf5::Base base;
-    base.load_config();
-    base.setup();
-
-    auto repo_sack = base.get_repo_sack();
-    repo_sack->create_repos_from_system_configuration();
-    repo_sack->load_repos();
-
-    libdnf5::Goal goal(base);
-    for (const auto &name : pkg_names) {
-      goal.add_rpm_remove(name);
-    }
-
-    auto transaction = goal.resolve();
-
-    // Check solver / dependency problems before running removal
-    auto goal_problem = transaction.get_problems();
-    if (goal_problem != libdnf5::GoalProblem::NO_PROBLEM) {
-      std::ostringstream oss;
-      oss << "Unable to resolve remove transaction.\n";
-
-      for (const auto &log : transaction.get_resolve_logs_as_strings()) {
-        oss << "  " << log << "\n";
+    const size_t limit = std::min<size_t>(specs.size(), 3);
+    for (size_t i = 0; i < limit; ++i) {
+      if (i > 0) {
+        out << ", ";
       }
-
-      error_out = oss.str();
-      return false;
+      out << specs[i];
     }
 
-    if (transaction.get_transaction_packages().empty()) {
-      error_out = "No packages in remove transaction (nothing to do).";
-      return false;
+    if (specs.size() > limit) {
+      out << ", ...";
     }
 
-    // Download (may still be relevant for some rpm operations)
-    transaction.download();
-
-    // Run transaction and inspect runtime problems
-    auto run_result = transaction.run();
-    if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
-      std::ostringstream oss;
-      oss << "Remove transaction failed (code " << static_cast<int>(run_result) << ").\n";
-
-      for (const auto &msg : transaction.get_transaction_problems()) {
-        oss << "  " << msg << "\n";
-      }
-
-      error_out = oss.str();
-      return false;
-    }
-
-    return true;
-  } catch (const std::exception &e) {
-    error_out = e.what();
-    return false;
+    out << ")";
   }
+
+  return out.str();
 }
 
 bool
@@ -499,12 +405,14 @@ apply_transaction(const std::vector<std::string> &install_nevras,
 
     libdnf5::Goal goal(base);
 
-    for (const auto &name : install_nevras) {
-      goal.add_rpm_install(name);
+    // NOTE: We pass package "specs" (currently NEVRA strings from the UI list).
+
+    for (const auto &spec : install_nevras) {
+      goal.add_rpm_install(spec);
     }
 
-    for (const auto &name : remove_nevras) {
-      goal.add_rpm_remove(name);
+    for (const auto &spec : remove_nevras) {
+      goal.add_rpm_remove(spec);
     }
 
     auto transaction = goal.resolve();
@@ -523,7 +431,11 @@ apply_transaction(const std::vector<std::string> &install_nevras,
     }
 
     if (transaction.get_transaction_packages().empty()) {
-      error_out = "No packages in transaction (nothing to do).";
+      std::ostringstream oss;
+      oss << "No packages in transaction (nothing to do).\n"
+          << "Install specs: " << format_specs(install_nevras) << "\n"
+          << "Remove specs: " << format_specs(remove_nevras) << "\n";
+      error_out = oss.str();
       return false;
     }
 
