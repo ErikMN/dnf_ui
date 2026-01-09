@@ -14,6 +14,24 @@
 #include <vector>
 #include <mutex>
 
+// Task data for package-info operation.
+// Snapshot generation at dispatch time so we can drop stale results after Base rebuild.
+struct InfoTaskData {
+  char *nevra;
+  uint64_t generation;
+};
+
+static void
+info_task_data_free(gpointer p)
+{
+  InfoTaskData *d = static_cast<InfoTaskData *>(p);
+  if (!d) {
+    return;
+  }
+  g_free(d->nevra);
+  g_free(d);
+}
+
 // -----------------------------------------------------------------------------
 // Helper: Update status label with color
 // -----------------------------------------------------------------------------
@@ -204,6 +222,25 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                          +[](GObject *, GAsyncResult *res, gpointer user_data) {
                            SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
                            GTask *task = G_TASK(res);
+
+                           const InfoTaskData *td = static_cast<const InfoTaskData *>(g_task_get_task_data(task));
+                           if (!td) {
+                             char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
+                             if (info) {
+                               g_free(info);
+                             }
+                             return;
+                           }
+
+                           if (td->generation != BaseManager::instance().current_generation()) {
+                             // Drop stale results, but still propagate to ensure the task result is released.
+                             char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
+                             if (info) {
+                               g_free(info);
+                             }
+                             return;
+                           }
+
                            char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
                            if (info) {
                              // Display general package information
@@ -211,8 +248,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 
                              // Fetch and display the file list for the selected package
                              try {
-                               std::string files =
-                                   get_installed_package_files((const char *)g_task_get_task_data(task));
+                               std::string files = get_installed_package_files(td->nevra);
                                gtk_label_set_text(widgets->files_label, files.c_str());
                              } catch (const std::exception &e) {
                                gtk_label_set_text(widgets->files_label, e.what());
@@ -220,7 +256,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 
                              // Fetch and display dependencies for the selected package
                              try {
-                               std::string deps = get_package_deps((const char *)g_task_get_task_data(task));
+                               std::string deps = get_package_deps(td->nevra);
                                gtk_label_set_text(widgets->deps_label, deps.c_str());
                              } catch (const std::exception &e) {
                                gtk_label_set_text(widgets->deps_label, e.what());
@@ -228,7 +264,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 
                              // Fetch and display changelog
                              try {
-                               std::string changelog = get_package_changelog((const char *)g_task_get_task_data(task));
+                               std::string changelog = get_package_changelog(td->nevra);
                                gtk_label_set_text(widgets->changelog_label, changelog.c_str());
                              } catch (const std::exception &e) {
                                gtk_label_set_text(widgets->changelog_label, e.what());
@@ -243,14 +279,17 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                          widgets);
 
                      // Pass package name to background task
-                     g_task_set_task_data(task, g_strdup(pkg_name.c_str()), g_free);
+                     InfoTaskData *td = static_cast<InfoTaskData *>(g_malloc0(sizeof *td));
+                     td->nevra = g_strdup(pkg_name.c_str());
+                     td->generation = BaseManager::instance().current_generation();
+                     g_task_set_task_data(task, td, info_task_data_free);
 
                      // Run background task to fetch metadata using dnf_backend
                      g_task_run_in_thread(
                          task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
-                           const char *pkg_name = static_cast<const char *>(task_data);
+                           InfoTaskData *td = static_cast<InfoTaskData *>(task_data);
                            try {
-                             std::string info = get_package_info(pkg_name);
+                             std::string info = get_package_info(td->nevra);
                              g_task_return_pointer(t, g_strdup(info.c_str()), g_free);
                            } catch (const std::exception &e) {
                              g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
