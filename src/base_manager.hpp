@@ -1,6 +1,7 @@
 // src/base_manager.hpp
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -36,6 +37,15 @@ class BaseWriteGuard {
 };
 
 // -----------------------------------------------------------------------------
+// Read access bundle (Base reference + guard + generation snapshot)
+// -----------------------------------------------------------------------------
+struct BaseRead {
+  libdnf5::Base &base;
+  BaseGuard guard;
+  uint64_t generation;
+};
+
+// -----------------------------------------------------------------------------
 // BaseManager
 // Provides cached access to a libdnf5::Base instance with safe locking
 // -----------------------------------------------------------------------------
@@ -46,8 +56,13 @@ class BaseManager {
   // Thread-safe guarded accessors
   // Each accessor returns a reference to Base plus a guard object that keeps
   // the appropriate mutex lock alive until the guard goes out of scope.
-  std::pair<libdnf5::Base &, BaseGuard> acquire_read();
+  BaseRead acquire_read();
   std::pair<libdnf5::Base &, BaseWriteGuard> acquire_write();
+
+  uint64_t current_generation() const
+  {
+    return generation.load(std::memory_order_relaxed);
+  }
 
   // Force rebuild
   void rebuild();
@@ -61,6 +76,8 @@ class BaseManager {
 
   std::shared_ptr<libdnf5::Base> base_ptr;
   std::chrono::steady_clock::time_point last_refresh;
+
+  std::atomic<uint64_t> generation { 0 };
 
   // Shared mutex allows many readers but only one writer
   mutable std::shared_mutex base_mutex;

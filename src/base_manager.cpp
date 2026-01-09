@@ -22,14 +22,14 @@ BaseManager::instance()
 // -----------------------------------------------------------------------------
 // Thread-safe read accessor
 // -----------------------------------------------------------------------------
-std::pair<libdnf5::Base &, BaseGuard>
+BaseRead
 BaseManager::acquire_read()
 {
   // Fast path: Base already exists
   {
     std::shared_lock<std::shared_mutex> shared(base_mutex);
     if (base_ptr) {
-      return { *base_ptr, BaseGuard(std::move(shared)) };
+      return { *base_ptr, BaseGuard(std::move(shared)), generation.load(std::memory_order_relaxed) };
     }
   }
 
@@ -43,7 +43,7 @@ BaseManager::acquire_read()
 
   // Re-acquire shared lock for the returned guard
   std::shared_lock<std::shared_mutex> shared(base_mutex);
-  return { *base_ptr, BaseGuard(std::move(shared)) };
+  return { *base_ptr, BaseGuard(std::move(shared)), generation.load(std::memory_order_relaxed) };
 }
 
 // -----------------------------------------------------------------------------

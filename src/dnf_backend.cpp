@@ -50,7 +50,7 @@ std::atomic<bool> g_exact_match { false };           // Global flag: match packa
 void
 refresh_installed_nevras()
 {
-  auto [base, guard] = BaseManager::instance().acquire_read();
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
@@ -79,7 +79,7 @@ get_installed_packages()
 {
   std::vector<std::string> packages;
 
-  auto [base, guard] = BaseManager::instance().acquire_read();
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
@@ -118,7 +118,7 @@ search_available_packages(const std::string &pattern)
 {
   std::vector<std::string> packages;
 
-  auto [base, guard] = BaseManager::instance().acquire_read();
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
 
@@ -175,7 +175,7 @@ search_available_packages(const std::string &pattern)
 std::string
 get_package_info(const std::string &pkg_nevra)
 {
-  auto [base, guard] = BaseManager::instance().acquire_read();
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
 
   // Exact NEVRA match only
@@ -218,7 +218,7 @@ get_package_info(const std::string &pkg_nevra)
 std::string
 get_installed_package_files(const std::string &pkg_nevra)
 {
-  auto [base, guard] = BaseManager::instance().acquire_read();
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
 
   query.filter_nevra(pkg_nevra);
@@ -251,7 +251,7 @@ get_installed_package_files(const std::string &pkg_nevra)
 std::string
 get_package_deps(const std::string &pkg_nevra)
 {
-  auto [base, guard] = BaseManager::instance().acquire_read();
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
 
   query.filter_nevra(pkg_nevra);
@@ -291,7 +291,7 @@ get_package_deps(const std::string &pkg_nevra)
 std::string
 get_package_changelog(const std::string &pkg_nevra)
 {
-  auto [base, guard] = BaseManager::instance().acquire_read();
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
 
   query.filter_nevra(pkg_nevra);

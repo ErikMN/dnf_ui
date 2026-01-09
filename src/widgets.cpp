@@ -25,6 +25,9 @@ static std::mutex g_cache_mutex; // Protects g_search_cache
 struct SearchTaskData {
   char *term;
   char *cache_key;
+  // Snapshot of BaseManager generation at dispatch time.
+  // Used to drop stale results if the backend Base is rebuilt while this task runs.
+  uint64_t generation;
 };
 
 static void
@@ -284,6 +287,14 @@ cache_key_for(const std::string &term)
 // packages. Runs in a worker thread via GTask to avoid blocking the GTK UI.
 // Returns a std::vector<std::string> containing package names.
 // -----------------------------------------------------------------------------
+
+// Task data for list-installed operation.
+// We snapshot the BaseManager generation at dispatch time so the UI can ignore
+// results produced against an older Base after a rebuild/transaction.
+struct ListTaskData {
+  uint64_t generation;
+};
+
 static void
 on_list_task(GTask *task, gpointer, gpointer, GCancellable *)
 {
@@ -312,6 +323,17 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     }
   }
   SearchWidgets *widgets = (SearchWidgets *)user_data;
+
+  // Drop stale results if the backend Base changed while the worker was running.
+  // This prevents rendering a list that no longer matches the current repo/system state.
+  const ListTaskData *td = static_cast<const ListTaskData *>(g_task_get_task_data(task));
+  if (td && td->generation != BaseManager::instance().current_generation()) {
+    spinner_release(widgets->spinner);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+    return;
+  }
+
   GError *error = nullptr;
   std::vector<std::string> *packages = (std::vector<std::string> *)g_task_propagate_pointer(task, &error);
 
@@ -371,6 +393,15 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     }
   }
   SearchWidgets *widgets = (SearchWidgets *)user_data;
+
+  const SearchTaskData *td = static_cast<const SearchTaskData *>(g_task_get_task_data(task));
+  if (td && td->generation != BaseManager::instance().current_generation()) {
+    spinner_release(widgets->spinner);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+    return;
+  }
+
   GError *error = nullptr;
   std::vector<std::string> *packages = (std::vector<std::string> *)g_task_propagate_pointer(task, &error);
 
@@ -383,7 +414,6 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 
   if (packages) {
     // Cache results for faster re-display next time (use dispatch-time key)
-    const SearchTaskData *td = static_cast<const SearchTaskData *>(g_task_get_task_data(task));
     if (td && td->cache_key) {
       std::lock_guard<std::mutex> lock(g_cache_mutex);
       g_search_cache[td->cache_key] = *packages;
@@ -424,7 +454,13 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
 
   // Run query asynchronously
   GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
+  // Store generation snapshot so completion can reject stale results.
+  ListTaskData *td = new ListTaskData;
+  td->generation = BaseManager::instance().current_generation();
+
   GTask *task = g_task_new(nullptr, c, on_list_task_finished, widgets);
+  g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<ListTaskData *>(p); });
+
   g_task_run_in_thread(task, on_list_task);
   g_object_unref(task);
   g_object_unref(c);
@@ -574,6 +610,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
   td->term = g_strdup(term.c_str());
   td->cache_key = g_strdup(key.c_str());
+  td->generation = BaseManager::instance().current_generation();
 
   GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
   GTask *task = g_task_new(nullptr, c, on_search_task_finished, widgets);
