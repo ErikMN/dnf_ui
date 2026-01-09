@@ -189,6 +189,7 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                        std::lock_guard<std::mutex> lock(g_installed_mutex);
                        bool is_installed = g_installed_nevras.count(pkg_name) > 0;
 
+                       // FIXME: Replace with Polkit:
                        bool is_root = (geteuid() == 0);
 
                        gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), is_root && !is_installed);

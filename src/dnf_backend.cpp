@@ -389,6 +389,7 @@ apply_transaction(const std::vector<std::string> &install_nevras,
 {
   error_out.clear();
 
+  // FIXME: Replace with Polkit:
   if (geteuid() != 0) {
     error_out = "Must be run as root to perform transactions.";
     return false;

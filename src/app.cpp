@@ -443,6 +443,7 @@ activate(GtkApplication *app, gpointer)
 
   // ---------------------------------------------------------------------------
   // Disable install/remove buttons when not running as root
+  // FIXME: Replace with Polkit:
   // ---------------------------------------------------------------------------
   if (geteuid() != 0) {
     printf("*** Not running as root ***\n");
