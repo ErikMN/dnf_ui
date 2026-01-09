@@ -69,6 +69,10 @@ BaseManager::rebuild()
   // Lock to ensure only one rebuild runs at a time
   std::unique_lock lock(base_mutex);
 
+  // Bump generation epoch so in-flight async UI tasks can detect the rebuild
+  // and drop stale results produced against the previous Base instance.
+  generation.fetch_add(1, std::memory_order_relaxed);
+
   // Clear global cached Base instance to force fresh creation
   base_ptr.reset();
 
