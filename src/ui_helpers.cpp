@@ -220,12 +220,22 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                      update_action_button_labels(widgets, pkg_name);
 
                      // --- Async task: Fetch and display package info + file list ---
+                     GCancellable *c = g_cancellable_new();
+                     g_signal_connect_object(
+                         GTK_WIDGET(widgets->entry), "destroy", G_CALLBACK(g_cancellable_cancel), c, G_CONNECT_SWAPPED);
+
                      GTask *task = g_task_new(
                          NULL,
-                         NULL,
+                         c,
                          +[](GObject *, GAsyncResult *res, gpointer user_data) {
-                           SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
                            GTask *task = G_TASK(res);
+                           if (GCancellable *c = g_task_get_cancellable(task)) {
+                             if (g_cancellable_is_cancelled(c)) {
+                               return;
+                             }
+                           }
+
+                           SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
                            const InfoTaskData *td = static_cast<const InfoTaskData *>(g_task_get_task_data(task));
                            if (!td) {
@@ -290,7 +300,10 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
 
                      // Run background task to fetch metadata using dnf_backend
                      g_task_run_in_thread(
-                         task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
+                         task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *cancellable) {
+                           if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+                             return;
+                           }
                            InfoTaskData *td = static_cast<InfoTaskData *>(task_data);
                            try {
                              std::string info = get_package_info(td->nevra);
@@ -299,7 +312,9 @@ fill_listbox_async(SearchWidgets *widgets, const std::vector<std::string> &items
                              g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
                            }
                          });
+
                      g_object_unref(task);
+                     g_object_unref(c);
                    }),
                    widgets);
 }
