@@ -301,7 +301,8 @@ on_list_task(GTask *task, gpointer, gpointer, GCancellable *)
   try {
     // Query all installed packages
     auto *results = new std::vector<std::string>(get_installed_packages());
-    g_task_return_pointer(task, results, nullptr);
+    // Ensure results are freed if never propagated (stale/cancel path).
+    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<std::string> *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
   }
@@ -317,12 +318,16 @@ static void
 on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+
   if (GCancellable *c = g_task_get_cancellable(task)) {
     if (g_cancellable_is_cancelled(c)) {
+      spinner_release(widgets->spinner);
+      gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+      gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
       return;
     }
   }
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
 
   // Drop stale results if the backend Base changed while the worker was running.
   // This prevents rendering a list that no longer matches the current repo/system state.
@@ -373,7 +378,8 @@ on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
   const char *pattern = td ? td->term : "";
   try {
     auto *results = new std::vector<std::string>(search_available_packages(pattern));
-    g_task_return_pointer(task, results, nullptr);
+    // Ensure results are freed if never propagated (stale/cancel path).
+    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<std::string> *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
   }
@@ -387,12 +393,16 @@ static void
 on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+
   if (GCancellable *c = g_task_get_cancellable(task)) {
     if (g_cancellable_is_cancelled(c)) {
+      spinner_release(widgets->spinner);
+      gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+      gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
       return;
     }
   }
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
 
   const SearchTaskData *td = static_cast<const SearchTaskData *>(g_task_get_task_data(task));
   if (td && td->generation != BaseManager::instance().current_generation()) {
