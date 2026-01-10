@@ -75,7 +75,6 @@ class BaseManager {
   void ensure_base_initialized();
 
   std::shared_ptr<libdnf5::Base> base_ptr;
-  std::chrono::steady_clock::time_point last_refresh;
 
   std::atomic<uint64_t> generation { 0 };
 

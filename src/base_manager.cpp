@@ -2,7 +2,6 @@
 // src/base_manager.cpp
 // BaseManager: Provides cached access to a libdnf5::Base instance
 // - Ensures thread-safe creation and reuse of libdnf5 Base objects
-// - Refreshes automatically after a fixed timeout (10 minutes)
 // - Supports manual rebuilds when repositories are refreshed
 // -----------------------------------------------------------------------------
 #include "base_manager.hpp"
@@ -103,9 +102,8 @@ BaseManager::ensure_base_initialized()
     throw;
   }
 
-  // Update cached instance and timestamp
+  // Make this new Base the shared instance used by the rest of the application
   base_ptr = base;
-  last_refresh = std::chrono::steady_clock::now();
 }
 
 // -----------------------------------------------------------------------------
