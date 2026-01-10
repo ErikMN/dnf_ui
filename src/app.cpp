@@ -9,6 +9,8 @@
 #include "ui_helpers.hpp"
 #include "base_manager.hpp"
 
+#include <unistd.h>
+
 #include <gtk/gtk.h>
 
 // Forward declarations

@@ -19,6 +19,7 @@
 #include <mutex>
 #include <set>
 #include <sstream>
+#include <unistd.h>
 
 #include <libdnf5/base/base.hpp>
 #include <libdnf5/base/goal.hpp>

@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <unistd.h>
 
 // Task data for package-info operation.
 // Snapshot generation at dispatch time so we can drop stale results after Base rebuild.
