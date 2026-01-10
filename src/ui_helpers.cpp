@@ -51,7 +51,10 @@ set_status(GtkLabel *label, const std::string &text, const std::string &color)
   else
     bg = "#ffffff";
 
-  std::string markup = "<span background=\"" + bg + "\" foreground=\"black\">" + text + "</span>";
+  char *escaped = g_markup_escape_text(text.c_str(), -1);
+  std::string markup = "<span background=\"" + bg + "\" foreground=\"black\">" + escaped + "</span>";
+  g_free(escaped);
+
   gtk_label_set_markup(label, markup.c_str());
 }
 
