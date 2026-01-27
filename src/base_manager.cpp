@@ -7,6 +7,7 @@
 #include "base_manager.hpp"
 
 #include <iostream>
+#include <stdexcept>
 
 // -----------------------------------------------------------------------------
 // Singleton: BaseManager instance accessor
@@ -38,10 +39,18 @@ BaseManager::acquire_read()
     if (!base_ptr) {
       ensure_base_initialized();
     }
+    if (!base_ptr) {
+      // Never return a null Base reference.
+      throw std::runtime_error("DNF backend not initialized (Base is null).");
+    }
   }
 
   // Re-acquire shared lock for the returned guard
   std::shared_lock<std::shared_mutex> shared(base_mutex);
+  if (!base_ptr) {
+    // base_ptr should not become null while we hold the mutex
+    throw std::runtime_error("DNF backend not initialized (Base is null).");
+  }
   return { *base_ptr, BaseGuard(std::move(shared)), generation.load(std::memory_order_relaxed) };
 }
 
@@ -54,6 +63,10 @@ BaseManager::acquire_write()
   std::unique_lock<std::shared_mutex> write_lock(base_mutex);
   if (!base_ptr) {
     ensure_base_initialized();
+  }
+  if (!base_ptr) {
+    // Never return a null Base reference.
+    throw std::runtime_error("DNF backend not initialized (Base is null).");
   }
 
   return { *base_ptr, BaseWriteGuard(std::move(write_lock)) };
@@ -77,6 +90,11 @@ BaseManager::rebuild()
 
   // Build a new Base and reload all repository data
   ensure_base_initialized();
+
+  if (!base_ptr) {
+    // Keep BaseManager in a consistent state.
+    throw std::runtime_error("Repository rebuild failed (Base is null).");
+  }
 }
 
 // -----------------------------------------------------------------------------
