@@ -158,6 +158,9 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *apply_button = gtk_button_new_with_label("Apply Transaction");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), apply_button);
 
+  GtkWidget *clear_pending_button = gtk_button_new_with_label("Clear Transactions");
+  gtk_box_append(GTK_BOX(hbox_tx_buttons), clear_pending_button);
+
   // --- Flat line separator ---
   GtkWidget *line_buttons_status = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_widget_set_size_request(line_buttons_status, -1, 1);
@@ -316,6 +319,7 @@ activate(GtkApplication *app, gpointer)
   widgets->install_button = GTK_BUTTON(install_button);
   widgets->remove_button = GTK_BUTTON(remove_button);
   widgets->apply_button = GTK_BUTTON(apply_button);
+  widgets->clear_pending_button = GTK_BUTTON(clear_pending_button);
   widgets->status_label = GTK_LABEL(status_label);
   widgets->details_label = GTK_LABEL(details_label);
   widgets->files_label = GTK_LABEL(files_label);
@@ -326,8 +330,9 @@ activate(GtkApplication *app, gpointer)
   widgets->changelog_label = GTK_LABEL(changelog_label);
   widgets->pending_list = GTK_LIST_BOX(pending_list);
 
-  // Apply is meaningful only when there are pending actions
+  // Apply and Clear Transactions are meaningful only when there are pending actions
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->clear_pending_button), FALSE);
 
   // --- Modern GTK4 CSS for status bar background ---
   {
@@ -378,6 +383,7 @@ activate(GtkApplication *app, gpointer)
   g_signal_connect(history_list, "row-selected", G_CALLBACK(on_history_row_selected), widgets);
 
   g_signal_connect(apply_button, "clicked", G_CALLBACK(on_apply_button_clicked), widgets);
+  g_signal_connect(clear_pending_button, "clicked", G_CALLBACK(on_clear_pending_button_clicked), widgets);
 
   // --- Refresh Repositories button ---
   // Triggers an asynchronous repository rebuild using BaseManager::rebuild()

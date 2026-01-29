@@ -74,7 +74,9 @@ update_apply_button(SearchWidgets *widgets)
     return;
   }
 
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), !widgets->pending.empty());
+  bool has_pending = !widgets->pending.empty();
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), has_pending);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->clear_pending_button), has_pending);
 }
 
 // -----------------------------------------------------------------------------
@@ -852,6 +854,67 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
     }
     fill_listbox_async(widgets, current, true);
   }
+}
+
+// -----------------------------------------------------------------------------
+// Clears all pending install/remove actions without applying them
+// -----------------------------------------------------------------------------
+void
+on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  if (widgets->pending.empty()) {
+    set_status(widgets->status_label, "No pending actions to clear.", "blue");
+    return;
+  }
+
+  size_t count = widgets->pending.size();
+  widgets->pending.clear();
+  refresh_pending_tab(widgets);
+
+  // Update UI to reflect cleared state - refresh current list to remove highlighting
+  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
+
+  // Collect current items from either ListBox or ListView
+  std::vector<std::string> current;
+
+  if (GTK_IS_LIST_BOX(child)) {
+    GtkListBox *lb = GTK_LIST_BOX(child);
+    int idx = 0;
+    while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(lb, idx++)) {
+      GtkWidget *label = gtk_list_box_row_get_child(row);
+      if (GTK_IS_LABEL(label)) {
+        const char *text = gtk_label_get_text(GTK_LABEL(label));
+        if (text && *text) {
+          current.emplace_back(text);
+        }
+      }
+    }
+  } else if (GTK_IS_LIST_VIEW(child)) {
+    GtkListView *lv = GTK_LIST_VIEW(child);
+    GtkSelectionModel *model = gtk_list_view_get_model(lv);
+    GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
+
+    guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
+    for (guint i = 0; i < n; ++i) {
+      GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
+      const char *t = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
+      if (t && *t) {
+        current.emplace_back(t);
+      }
+      g_object_unref(obj);
+    }
+  }
+
+  // Refresh the list to remove pending highlights
+  if (!current.empty()) {
+    fill_listbox_async(widgets, current, true);
+  }
+
+  char msg[256];
+  snprintf(msg, sizeof(msg), "Cleared %zu pending action%s.", count, count == 1 ? "" : "s");
+  set_status(widgets->status_label, msg, "green");
 }
 
 // -----------------------------------------------------------------------------

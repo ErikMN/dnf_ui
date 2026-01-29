@@ -28,6 +28,7 @@ struct SearchWidgets {
   GtkButton *install_button;
   GtkButton *remove_button;
   GtkButton *apply_button;
+  GtkButton *clear_pending_button;
   GtkLabel *status_label;
   GtkLabel *details_label;
   GtkLabel *count_label;
@@ -50,6 +51,7 @@ void on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data);
 void on_install_button_clicked(GtkButton *, gpointer user_data);
 void on_remove_button_clicked(GtkButton *, gpointer user_data);
 void on_apply_button_clicked(GtkButton *, gpointer user_data);
+void on_clear_pending_button_clicked(GtkButton *, gpointer user_data);
 void clear_search_cache();
 
 // -----------------------------------------------------------------------------
