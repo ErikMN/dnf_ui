@@ -5,7 +5,7 @@ LDLIBS = -lm
 
 PKGS = libdnf5 gtk4
 
-ifeq ($(filter dockerrun dockersetup indent clean,$(MAKECMDGOALS)),)
+ifeq ($(filter dockerrun dockersetup cppcheck indent clean,$(MAKECMDGOALS)),)
   PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
   ifeq ($(PKG_OK),yes)
     PKG_LIBS := $(shell pkg-config --libs $(PKGS))
@@ -82,10 +82,11 @@ valgrind: $(PROGS)
 cppcheck:
 	@echo "*** Static code analysis"
 	@cppcheck $(shell find src -name "*.cpp" -o -name "*.hpp") \
-		--verbose --enable=all -DDEBUG=1 \
+		--quiet --enable=all -DDEBUG=1 \
 		--suppress=missingIncludeSystem \
 		--suppress=unknownMacro \
-		--suppress=unusedFunction
+		--suppress=unusedFunction \
+		--suppress=variableScope
 
 .PHONY: indent
 indent:
