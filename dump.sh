@@ -8,7 +8,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR" && pwd)"
 OUT="/tmp/a.txt"
 : >"$OUT"
 
-for f in "$PROJECT_ROOT"/src/*.[ch]pp; do
+for f in "$PROJECT_ROOT"/src/*.[ch]pp "$PROJECT_ROOT"/test/*.[ch]pp; do
   {
     echo "----------------------------------------"
     echo "// BEGIN FILE: $f"
