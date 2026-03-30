@@ -16,7 +16,7 @@ static void add_to_history(SearchWidgets *widgets, const std::string &term);
 static void perform_search(SearchWidgets *widgets, const std::string &term);
 
 // Global cache for previous search results
-static std::map<std::string, std::vector<std::string>> g_search_cache;
+static std::map<std::string, std::vector<PackageRow>> g_search_cache;
 static std::mutex g_cache_mutex; // Protects g_search_cache
 
 // -----------------------------------------------------------------------------
@@ -184,76 +184,6 @@ spinner_release(GtkSpinner *spinner)
 }
 
 // -----------------------------------------------------------------------------
-// Helpers: selection handling (supports both GtkListBox and GtkListView)
-// -----------------------------------------------------------------------------
-static bool
-get_selected_package_from_listbox(GtkListBox *box, std::string &out_pkg)
-{
-  GtkListBoxRow *row = gtk_list_box_get_selected_row(box);
-  if (!row) {
-    return false;
-  }
-
-  GtkWidget *child = gtk_list_box_row_get_child(row);
-  if (!GTK_IS_LABEL(child)) {
-    return false;
-  }
-
-  const char *text = gtk_label_get_text(GTK_LABEL(child));
-  if (!text || !*text) {
-    return false;
-  }
-  out_pkg.assign(text);
-
-  return true;
-}
-
-static bool
-get_selected_package(SearchWidgets *widgets, std::string &out_pkg)
-{
-  if (!widgets || !widgets->list_scroller) {
-    return false;
-  }
-
-  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
-  if (!child) {
-    return false;
-  }
-
-  if (GTK_IS_LIST_VIEW(child)) {
-    GtkListView *lv = GTK_LIST_VIEW(child);
-    GtkSelectionModel *model = gtk_list_view_get_model(lv);
-    if (!model || !GTK_IS_SINGLE_SELECTION(model)) {
-      return false;
-    }
-
-    GtkSingleSelection *sel = GTK_SINGLE_SELECTION(model);
-    guint index = gtk_single_selection_get_selected(sel);
-    if (index == GTK_INVALID_LIST_POSITION) {
-      return false;
-    }
-
-    GObject *obj = (GObject *)g_list_model_get_item(gtk_single_selection_get_model(sel), index);
-    if (!obj) {
-      return false;
-    }
-
-    const char *pkg_name = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
-    bool ok = (pkg_name && *pkg_name);
-    if (ok) {
-      out_pkg.assign(pkg_name);
-    }
-    g_object_unref(obj);
-
-    return ok;
-  } else if (GTK_IS_LIST_BOX(child)) {
-    return get_selected_package_from_listbox(GTK_LIST_BOX(child), out_pkg);
-  }
-
-  return false;
-}
-
-// -----------------------------------------------------------------------------
 // Clear cached search results (called from Clear Cache button)
 // -----------------------------------------------------------------------------
 void
@@ -287,7 +217,7 @@ cache_key_for(const std::string &term)
 // Async: Installed packages (non-blocking)
 // Executes a background query using libdnf5 to fetch the list of installed
 // packages. Runs in a worker thread via GTask to avoid blocking the GTK UI.
-// Returns a std::vector<std::string> containing package names.
+// Returns a std::vector<PackageRow> containing structured package metadata.
 // -----------------------------------------------------------------------------
 
 // Task data for list-installed operation.
@@ -302,9 +232,9 @@ on_list_task(GTask *task, gpointer, gpointer, GCancellable *)
 {
   try {
     // Query all installed packages
-    auto *results = new std::vector<std::string>(get_installed_packages());
+    auto *results = new std::vector<PackageRow>(get_installed_package_rows());
     // Ensure results are freed if never propagated (stale/cancel path).
-    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<std::string> *>(p); });
+    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
   }
@@ -342,7 +272,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   GError *error = nullptr;
-  std::vector<std::string> *packages = (std::vector<std::string> *)g_task_propagate_pointer(task, &error);
+  std::vector<PackageRow> *packages = (std::vector<PackageRow> *)g_task_propagate_pointer(task, &error);
 
   // Stop spinner (ref-counted)
   spinner_release(widgets->spinner);
@@ -352,12 +282,16 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 
   if (packages) {
-    // Populate list asynchronously and update status
-    fill_listbox_async(widgets, *packages, true); // NOTE: mark all installed packages
+    // Populate the package table and update status
+    widgets->selected_nevra.clear();
+    fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages->size());
     set_status(widgets->status_label, msg, "green");
     gtk_label_set_text(widgets->details_label, "Select a package for details.");
+    gtk_label_set_text(widgets->files_label, "Select an installed package to view its file list.");
+    gtk_label_set_text(widgets->deps_label, "Select a package to view dependencies.");
+    gtk_label_set_text(widgets->changelog_label, "Select a package to view its changelog.");
     delete packages;
   } else {
     set_status(widgets->status_label, error ? error->message : "Error listing packages.", "red");
@@ -371,7 +305,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 // Async: Search available packages (non-blocking)
 // Executes a background libdnf5 query to find packages matching the search term.
 // Runs off the GTK main thread via GTask to keep the UI responsive.
-// Returns a std::vector<std::string> of matching package names.
+// Returns a std::vector<PackageRow> of matching package metadata.
 // -----------------------------------------------------------------------------
 static void
 on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
@@ -379,9 +313,9 @@ on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
   const SearchTaskData *td = static_cast<const SearchTaskData *>(task_data);
   const char *pattern = td ? td->term : "";
   try {
-    auto *results = new std::vector<std::string>(search_available_packages(pattern));
+    auto *results = new std::vector<PackageRow>(search_available_package_rows(pattern));
     // Ensure results are freed if never propagated (stale/cancel path).
-    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<std::string> *>(p); });
+    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
   }
@@ -415,7 +349,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   GError *error = nullptr;
-  std::vector<std::string> *packages = (std::vector<std::string> *)g_task_propagate_pointer(task, &error);
+  std::vector<PackageRow> *packages = (std::vector<PackageRow> *)g_task_propagate_pointer(task, &error);
 
   // Stop spinner (ref-counted)
   spinner_release(widgets->spinner);
@@ -433,8 +367,9 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 
     refresh_installed_nevras();
 
-    // Fill UI list and display result count
-    fill_listbox_async(widgets, *packages, true);
+    // Fill the package table and display result count
+    widgets->selected_nevra.clear();
+    fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
     set_status(widgets->status_label, msg, "green");
@@ -525,27 +460,17 @@ void
 on_clear_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
+  widgets->current_packages.clear();
+  widgets->selected_nevra.clear();
+  fill_package_view(widgets, {});
 
-  // Remove all listbox rows
-  if (widgets->listbox) {
-    while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(widgets->listbox, 0)) {
-      gtk_list_box_remove(widgets->listbox, GTK_WIDGET(row));
-    }
-  }
-  // Fallback: recreate empty scrolled window content if listbox unavailable
-  else if (widgets->list_scroller) {
-    GtkStringList *empty = gtk_string_list_new(nullptr);
-    GtkSingleSelection *sel = gtk_single_selection_new(G_LIST_MODEL(empty));
-    GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
-    GtkListView *lv = GTK_LIST_VIEW(gtk_list_view_new(GTK_SELECTION_MODEL(sel), factory));
-    gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(lv));
-  }
-
-  // Reset UI labels
-  gtk_label_set_text(widgets->count_label, "Items: 0");
+  // Reset UI labels and actions
   set_status(widgets->status_label, "Ready.", "gray");
-  gtk_label_set_text(widgets->details_label, "");
-  gtk_label_set_text(widgets->files_label, "");
+  gtk_label_set_text(widgets->details_label, "Select a package for details.");
+  gtk_label_set_text(widgets->files_label, "Select an installed package to view its file list.");
+  gtk_label_set_text(widgets->deps_label, "Select a package to view dependencies.");
+  gtk_label_set_text(widgets->changelog_label, "Select a package to view its changelog.");
+  update_action_button_labels(widgets, "");
 }
 
 // -----------------------------------------------------------------------------
@@ -588,6 +513,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
 
   gtk_editable_set_text(GTK_EDITABLE(widgets->entry), term.c_str());
   set_status(widgets->status_label, ("Searching for '" + term + "'...").c_str(), "blue");
+  widgets->selected_nevra.clear();
 
   // Show spinner (ref-counted)
   spinner_acquire(widgets->spinner);
@@ -603,7 +529,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
     if (it != g_search_cache.end()) {
       // Use cached results and skip background thread
       spinner_release(widgets->spinner);
-      fill_listbox_async(widgets, it->second, true);
+      fill_package_view(widgets, it->second);
 
       char msg[256];
       snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
@@ -695,48 +621,11 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
     return;
   }
 
-  // Refresh installed set and rebind current list items to update "installed" highlight
+  // Refresh installed state and rebind the current package rows.
   refresh_installed_nevras();
 
-  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
-  if (GTK_IS_LIST_VIEW(child)) {
-    GtkListView *lv = GTK_LIST_VIEW(child);
-    GtkSelectionModel *model = gtk_list_view_get_model(lv);
-    if (GTK_IS_SINGLE_SELECTION(model)) {
-      GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
-      std::vector<std::string> current_items;
-
-      guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
-      for (guint i = 0; i < n; ++i) {
-        GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
-        const char *text = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
-        if (text && *text) {
-          current_items.emplace_back(text);
-        }
-        g_object_unref(obj);
-      }
-      fill_listbox_async(widgets, current_items, true);
-    }
-  } else if (GTK_IS_LIST_BOX(child)) {
-    // Collect all current ListBox row labels and rebind
-    std::vector<std::string> current_items;
-    for (int i = 0;; ++i) {
-      GtkListBoxRow *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(child), i);
-      if (!row) {
-        break;
-      }
-
-      GtkWidget *c = gtk_list_box_row_get_child(row);
-      if (GTK_IS_LABEL(c)) {
-        const char *t = gtk_label_get_text(GTK_LABEL(c));
-        if (t && *t) {
-          current_items.emplace_back(t);
-        }
-      }
-    }
-    if (!current_items.empty()) {
-      fill_listbox_async(widgets, current_items, true);
-    }
+  if (!widgets->current_packages.empty()) {
+    fill_package_view(widgets, widgets->current_packages);
   }
 }
 
@@ -758,49 +647,31 @@ on_install_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
-  // Determine selected package (supports ListBox or ListView)
-  std::string pkg;
-  if (!get_selected_package(widgets, pkg)) {
+  // Determine the selected package from the current package table.
+  PackageRow pkg;
+  if (!get_selected_package_row(widgets, pkg)) {
     set_status(widgets->status_label, "No package selected.", "gray");
     return;
   }
 
   // Toggle pending install
   PendingAction::Type existing_type;
-  bool has_existing = get_pending_action_type(widgets, pkg, existing_type);
+  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
   if (has_existing && existing_type == PendingAction::INSTALL) {
-    remove_pending_action(widgets, pkg);
+    remove_pending_action(widgets, pkg.nevra);
     refresh_pending_tab(widgets);
-    set_status(widgets->status_label, ("Unmarked: " + pkg).c_str(), "gray");
+    set_status(widgets->status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
   } else {
     // If it was pending REMOVE (or anything else), replace it with INSTALL
-    remove_pending_action(widgets, pkg);
-    widgets->pending.push_back({ PendingAction::INSTALL, pkg });
+    remove_pending_action(widgets, pkg.nevra);
+    widgets->pending.push_back({ PendingAction::INSTALL, pkg.nevra });
     refresh_pending_tab(widgets);
-    set_status(widgets->status_label, ("Marked for install: " + pkg).c_str(), "blue");
+    set_status(widgets->status_label, ("Marked for install: " + pkg.name).c_str(), "blue");
   }
-  update_action_button_labels(widgets, pkg);
+  update_action_button_labels(widgets, pkg.nevra);
 
-  // Refresh list to apply pending highlight
-  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
-  if (GTK_IS_LIST_VIEW(child)) {
-    GtkListView *lv = GTK_LIST_VIEW(child);
-    GtkSelectionModel *model = gtk_list_view_get_model(lv);
-    GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
-
-    std::vector<std::string> current;
-
-    guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
-    for (guint i = 0; i < n; ++i) {
-      GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
-      const char *t = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
-      if (t && *t) {
-        current.emplace_back(t);
-      }
-      g_object_unref(obj);
-    }
-    fill_listbox_async(widgets, current, true);
-  }
+  // Refresh the package table to apply pending-state badges.
+  fill_package_view(widgets, widgets->current_packages);
 }
 
 // -----------------------------------------------------------------------------
@@ -811,53 +682,35 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
-  // Determine selected package (supports ListBox or ListView)
-  std::string pkg;
-  if (!get_selected_package(widgets, pkg)) {
+  // Determine the selected package from the current package table.
+  PackageRow pkg;
+  if (!get_selected_package_row(widgets, pkg)) {
     set_status(widgets->status_label, "No package selected.", "gray");
     return;
   }
 
   // Toggle pending remove
   PendingAction::Type existing_type;
-  bool has_existing = get_pending_action_type(widgets, pkg, existing_type);
+  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
   if (has_existing && existing_type == PendingAction::REMOVE) {
-    remove_pending_action(widgets, pkg);
+    remove_pending_action(widgets, pkg.nevra);
     refresh_pending_tab(widgets);
-    set_status(widgets->status_label, ("Unmarked: " + pkg).c_str(), "gray");
+    set_status(widgets->status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
   } else {
     // If it was pending INSTALL (or anything else), replace it with REMOVE
-    remove_pending_action(widgets, pkg);
-    widgets->pending.push_back({ PendingAction::REMOVE, pkg });
+    remove_pending_action(widgets, pkg.nevra);
+    widgets->pending.push_back({ PendingAction::REMOVE, pkg.nevra });
     refresh_pending_tab(widgets);
-    set_status(widgets->status_label, ("Marked for removal: " + pkg).c_str(), "blue");
+    set_status(widgets->status_label, ("Marked for removal: " + pkg.name).c_str(), "blue");
   }
-  update_action_button_labels(widgets, pkg);
+  update_action_button_labels(widgets, pkg.nevra);
 
-  // Refresh list to apply pending highlight
-  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
-  if (GTK_IS_LIST_VIEW(child)) {
-    GtkListView *lv = GTK_LIST_VIEW(child);
-    GtkSelectionModel *model = gtk_list_view_get_model(lv);
-    GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
-
-    std::vector<std::string> current;
-
-    guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
-    for (guint i = 0; i < n; ++i) {
-      GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
-      const char *t = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
-      if (t && *t) {
-        current.emplace_back(t);
-      }
-      g_object_unref(obj);
-    }
-    fill_listbox_async(widgets, current, true);
-  }
+  // Refresh the package table to apply pending-state badges.
+  fill_package_view(widgets, widgets->current_packages);
 }
 
 // -----------------------------------------------------------------------------
-// Clears all pending install/remove actions without applying them
+// Clears all pending install and remove actions without applying them
 // -----------------------------------------------------------------------------
 void
 on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
@@ -873,44 +726,8 @@ on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
   widgets->pending.clear();
   refresh_pending_tab(widgets);
 
-  // Update UI to reflect cleared state - refresh current list to remove highlighting
-  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
-
-  // Collect current items from either ListBox or ListView
-  std::vector<std::string> current;
-
-  if (GTK_IS_LIST_BOX(child)) {
-    GtkListBox *lb = GTK_LIST_BOX(child);
-    int idx = 0;
-    while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(lb, idx++)) {
-      GtkWidget *label = gtk_list_box_row_get_child(row);
-      if (GTK_IS_LABEL(label)) {
-        const char *text = gtk_label_get_text(GTK_LABEL(label));
-        if (text && *text) {
-          current.emplace_back(text);
-        }
-      }
-    }
-  } else if (GTK_IS_LIST_VIEW(child)) {
-    GtkListView *lv = GTK_LIST_VIEW(child);
-    GtkSelectionModel *model = gtk_list_view_get_model(lv);
-    GtkStringList *store = GTK_STRING_LIST(gtk_single_selection_get_model(GTK_SINGLE_SELECTION(model)));
-
-    guint n = g_list_model_get_n_items(G_LIST_MODEL(store));
-    for (guint i = 0; i < n; ++i) {
-      GObject *obj = G_OBJECT(g_list_model_get_item(G_LIST_MODEL(store), i));
-      const char *t = gtk_string_object_get_string(GTK_STRING_OBJECT(obj));
-      if (t && *t) {
-        current.emplace_back(t);
-      }
-      g_object_unref(obj);
-    }
-  }
-
-  // Refresh the list to remove pending highlights
-  if (!current.empty()) {
-    fill_listbox_async(widgets, current, true);
-  }
+  // Refresh the package table to remove pending-state badges.
+  fill_package_view(widgets, widgets->current_packages);
 
   char msg[256];
   snprintf(msg, sizeof(msg), "Cleared %zu pending action%s.", count, count == 1 ? "" : "s");
@@ -930,7 +747,7 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  // Build install/remove lists from pending actions
+  // Build install and remove lists from pending actions
   ApplyTaskData *td = new ApplyTaskData;
   td->install.reserve(widgets->pending.size());
   td->remove.reserve(widgets->pending.size());

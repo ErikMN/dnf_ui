@@ -36,6 +36,28 @@ std::atomic<bool> g_search_in_description { false }; // Global flag: include des
 std::atomic<bool> g_exact_match { false };           // Global flag: match package name/desc exactly
 
 // -----------------------------------------------------------------------------
+// Helper: Convert a libdnf5 package to the structured UI row model
+// -----------------------------------------------------------------------------
+static PackageRow
+make_package_row(const libdnf5::rpm::Package &pkg)
+{
+  PackageRow row;
+  row.nevra = pkg.get_nevra();
+  row.name = pkg.get_name();
+  row.version = pkg.get_version();
+  row.release = pkg.get_release();
+  row.arch = pkg.get_arch();
+  row.repo = pkg.get_repo_id();
+  row.summary = pkg.get_summary();
+
+  if (row.summary.empty()) {
+    row.summary = "(no summary)";
+  }
+
+  return row;
+}
+
+// -----------------------------------------------------------------------------
 // Helper: Refresh global installed package NEVRA (Name Epoch Version Release Architecture) cache
 // Clears and repopulates g_installed_nevras by querying all currently installed
 // packages through libdnf5. This should be called whenever the UI needs to
@@ -75,10 +97,10 @@ refresh_installed_nevras()
 //   The same g_installed_mutex is held during cache update to synchronize with
 //   other background refreshes and avoid data races with UI access.
 // -----------------------------------------------------------------------------
-std::vector<std::string>
-get_installed_packages()
+std::vector<PackageRow>
+get_installed_package_rows()
 {
-  std::vector<std::string> packages;
+  std::vector<PackageRow> packages;
 
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -94,7 +116,26 @@ get_installed_packages()
     std::string nevra = pkg.get_nevra();
     g_installed_nevras.insert(nevra);
     g_installed_names.insert(pkg.get_name());
-    packages.push_back(nevra);
+    packages.push_back(make_package_row(pkg));
+  }
+
+  return packages;
+}
+
+// -----------------------------------------------------------------------------
+// Compatibility wrapper: Installed packages as NEVRA strings
+// Preserves the original string-based API for callers and tests that do not yet
+// consume the structured PackageRow model.
+// -----------------------------------------------------------------------------
+std::vector<std::string>
+get_installed_packages()
+{
+  std::vector<PackageRow> rows = get_installed_package_rows();
+  std::vector<std::string> packages;
+  packages.reserve(rows.size());
+
+  for (const auto &row : rows) {
+    packages.push_back(row.nevra);
   }
 
   return packages;
@@ -114,10 +155,10 @@ get_installed_packages()
 //   This function performs only reads and does not touch global caches, so no
 //   locking is required here.
 // -----------------------------------------------------------------------------
-std::vector<std::string>
-search_available_packages(const std::string &pattern)
+std::vector<PackageRow>
+search_available_package_rows(const std::string &pattern)
 {
-  std::vector<std::string> packages;
+  std::vector<PackageRow> packages;
 
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -137,11 +178,11 @@ search_available_packages(const std::string &pattern)
 
       if (g_exact_match.load()) {
         if (name == pattern_lower) {
-          packages.push_back(pkg.get_nevra());
+          packages.push_back(make_package_row(pkg));
         }
       } else {
         if (desc.find(pattern_lower) != std::string::npos || name.find(pattern_lower) != std::string::npos) {
-          packages.push_back(pkg.get_nevra());
+          packages.push_back(make_package_row(pkg));
         }
       }
     }
@@ -154,8 +195,27 @@ search_available_packages(const std::string &pattern)
     }
 
     for (auto pkg : query) {
-      packages.push_back(pkg.get_nevra());
+      packages.push_back(make_package_row(pkg));
     }
+  }
+
+  return packages;
+}
+
+// -----------------------------------------------------------------------------
+// Compatibility wrapper: Search results as NEVRA strings
+// Preserves the original string-based API for callers and tests that still expect
+// raw identifiers while the UI migrates to PackageRow.
+// -----------------------------------------------------------------------------
+std::vector<std::string>
+search_available_packages(const std::string &pattern)
+{
+  std::vector<PackageRow> rows = search_available_package_rows(pattern);
+  std::vector<std::string> packages;
+  packages.reserve(rows.size());
+
+  for (const auto &row : rows) {
+    packages.push_back(row.nevra);
   }
 
   return packages;
@@ -164,7 +224,7 @@ search_available_packages(const std::string &pattern)
 // -----------------------------------------------------------------------------
 // Helper: Retrieve detailed package information
 // Fetches and formats detailed info for a single package, including:
-//   - name, version, release, architecture, repo
+//   - name, full package ID, version, release, architecture, repo
 //   - summary and description
 //
 // Always performs an exact NEVRA match (the UI passes full NEVRA strings).
@@ -200,6 +260,7 @@ get_package_info(const std::string &pkg_nevra)
 
   std::ostringstream oss;
   oss << "Name: " << pkg.get_name() << "\n"
+      << "Package ID: " << pkg.get_nevra() << "\n"
       << "Version: " << pkg.get_version() << "\n"
       << "Release: " << pkg.get_release() << "\n"
       << "Arch: " << pkg.get_arch() << "\n"
@@ -343,7 +404,7 @@ remove_packages(const std::vector<std::string> &pkg_specs, std::string &error_ou
 //
 // Purpose:
 //   When a transaction fails or resolves to an empty set, this helper produces
-//   a concise, human-readable summary of the install/remove specs involved.
+//   a concise, human-readable summary of the install and remove specs involved.
 //   This is intended purely for diagnostics and must not affect transaction
 //   logic or behavior.
 //

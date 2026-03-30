@@ -132,11 +132,32 @@ TEST_CASE("Package info formatting contains expected fields")
   auto info = get_package_info(results.front());
 
   REQUIRE(info.find("Name: ") != std::string::npos);
+  REQUIRE(info.find("Package ID: ") != std::string::npos);
   REQUIRE(info.find("Version: ") != std::string::npos);
   REQUIRE(info.find("Release: ") != std::string::npos);
   REQUIRE(info.find("Arch: ") != std::string::npos);
   REQUIRE(info.find("Summary:") != std::string::npos);
   REQUIRE(info.find("Description:") != std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
+// Structured package row metadata tests
+// -----------------------------------------------------------------------------
+TEST_CASE("Structured package rows expose searchable metadata")
+{
+  reset_backend_globals();
+
+  auto results = search_available_package_rows("bash");
+  REQUIRE(!results.empty());
+
+  const auto &row = results.front();
+  REQUIRE(!row.nevra.empty());
+  REQUIRE(!row.name.empty());
+  REQUIRE(!row.version.empty());
+  REQUIRE(!row.release.empty());
+  REQUIRE(!row.arch.empty());
+  REQUIRE(!row.repo.empty());
+  REQUIRE(!row.display_version().empty());
 }
 
 // -----------------------------------------------------------------------------

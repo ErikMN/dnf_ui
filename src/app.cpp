@@ -341,19 +341,37 @@ activate(GtkApplication *app, gpointer)
     gtk_css_provider_load_from_string(css,
                                       "label.status-bar { padding: 4px; border-radius: 4px; } "
                                       ".bottom-bar { padding: 5px; border-top: 1px solid #666; } "
-                                      ".installed { "
-                                      "  background-color: #b3f0b3; " /* softer green */
-                                      "  color: black; "              /* readable text */
-                                      "  padding: 2px 4px; "
-                                      "  border-radius: 2px; "
+                                      ".package-status { "
+                                      "  padding: 2px 8px; "
+                                      "  border-radius: 999px; "
+                                      "  border: 1px solid transparent; "
+                                      "  font-weight: 700; "
                                       "} "
-                                      ".pending-install { "
-                                      "  background-color: #cce0ff; " /* soft blue */
-                                      "  color: black; "
+                                      ".package-status-available { "
+                                      "  background-color: #dbe7f5; "
+                                      "  border-color: #8ea6c1; "
+                                      "  color: #16324f; "
                                       "} "
-                                      ".pending-remove { "
-                                      "  background-color: #ffd6cc; " /* soft red */
-                                      "  color: black; "
+                                      ".package-status-installed { "
+                                      "  background-color: #d7f0d1; "
+                                      "  border-color: #86b97c; "
+                                      "  color: #1f4f1c; "
+                                      "} "
+                                      ".package-status-pending-install { "
+                                      "  background-color: #d9e8ff; "
+                                      "  border-color: #7fa3d8; "
+                                      "  color: #163a69; "
+                                      "} "
+                                      ".package-status-pending-remove { "
+                                      "  background-color: #ffe0d9; "
+                                      "  border-color: #d99a8f; "
+                                      "  color: #6f2419; "
+                                      "} "
+                                      ".package-meta { "
+                                      "  color: #555555; "
+                                      "} "
+                                      ".package-summary { "
+                                      "  color: #333333; "
                                       "} "
                                       ".thin-line { "
                                       "  background-color: @borders; "
@@ -367,6 +385,7 @@ activate(GtkApplication *app, gpointer)
     g_object_unref(css);
   }
   set_status(widgets->status_label, "Ready.", "gray");
+  fill_package_view(widgets, {});
 
   // --- Connect signals ---
   g_signal_connect(list_button, "clicked", G_CALLBACK(on_list_button_clicked), widgets);
@@ -450,7 +469,7 @@ activate(GtkApplication *app, gpointer)
       nullptr);
 
   // ---------------------------------------------------------------------------
-  // Disable install/remove buttons when not running as root
+  // Disable install and remove buttons when not running as root
   // FIXME: Replace with Polkit:
   // ---------------------------------------------------------------------------
   if (geteuid() != 0) {

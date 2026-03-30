@@ -7,6 +7,8 @@
 
 #include <gtk/gtk.h>
 
+#include "dnf_backend.hpp"
+
 // -----------------------------------------------------------------------------
 // Pending actions for mark --> review --> apply workflow
 // -----------------------------------------------------------------------------
@@ -38,7 +40,9 @@ struct SearchWidgets {
   GtkLabel *deps_label;
   GtkLabel *changelog_label;
   std::vector<std::string> history;
+  std::vector<PackageRow> current_packages;
   std::vector<PendingAction> pending;
+  std::string selected_nevra;
   GtkListBox *pending_list;
 };
 
