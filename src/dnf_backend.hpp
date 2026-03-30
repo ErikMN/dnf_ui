@@ -1,12 +1,13 @@
 // src/dnf_backend.hpp
 #pragma once
 
+#include <functional>
 #include <memory>
+#include <atomic>
+#include <mutex>
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
-#include <mutex>
-#include <atomic>
 
 // -----------------------------------------------------------------------------
 // libdnf5 backend helpers
@@ -36,6 +37,8 @@ struct PackageRow {
   }
 };
 
+using TransactionProgressCallback = std::function<void(const std::string &)>;
+
 extern std::atomic<bool> g_search_in_description;
 extern std::atomic<bool> g_exact_match;
 extern std::mutex g_installed_mutex;
@@ -57,7 +60,8 @@ bool install_packages(const std::vector<std::string> &pkg_names, std::string &er
 bool remove_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
 bool apply_transaction(const std::vector<std::string> &install_nevras,
                        const std::vector<std::string> &remove_nevras,
-                       std::string &error_out);
+                       std::string &error_out,
+                       const TransactionProgressCallback &progress_cb = {});
 
 // -----------------------------------------------------------------------------
 // EOF

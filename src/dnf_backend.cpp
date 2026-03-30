@@ -16,7 +16,9 @@
 #include <ctime>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <mutex>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <unistd.h>
@@ -24,6 +26,8 @@
 #include <libdnf5/base/base.hpp>
 #include <libdnf5/base/goal.hpp>
 #include <libdnf5/base/transaction.hpp>
+#include <libdnf5/base/transaction_package.hpp>
+#include <libdnf5/repo/download_callbacks.hpp>
 #include <libdnf5/rpm/package_query.hpp>
 
 // -----------------------------------------------------------------------------
@@ -444,10 +448,300 @@ format_specs(const std::vector<std::string> &specs)
   return out.str();
 }
 
+// -----------------------------------------------------------------------------
+// Helper: Forward one progress line to the UI callback
+// -----------------------------------------------------------------------------
+static void
+emit_progress_line(const TransactionProgressCallback &progress_cb, const std::string &message)
+{
+  if (!progress_cb || message.empty()) {
+    return;
+  }
+
+  progress_cb(message);
+}
+
+// -----------------------------------------------------------------------------
+// Helper: Forward a multi-line message as individual progress lines
+// -----------------------------------------------------------------------------
+static void
+emit_progress_block(const TransactionProgressCallback &progress_cb, const std::string &message)
+{
+  if (!progress_cb || message.empty()) {
+    return;
+  }
+
+  std::istringstream stream(message);
+  std::string line;
+
+  while (std::getline(stream, line)) {
+    if (!line.empty()) {
+      progress_cb(line);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Helper: Human-friendly summary label for transaction package actions
+// -----------------------------------------------------------------------------
+static std::string
+transaction_action_label(libdnf5::base::TransactionPackage::Action action)
+{
+  using Action = libdnf5::base::TransactionPackage::Action;
+
+  switch (action) {
+  case Action::INSTALL:
+    return "Install";
+  case Action::UPGRADE:
+    return "Upgrade";
+  case Action::DOWNGRADE:
+    return "Downgrade";
+  case Action::REINSTALL:
+    return "Reinstall";
+  case Action::REMOVE:
+    return "Remove";
+  case Action::REPLACED:
+    return "Replace";
+  case Action::REASON_CHANGE:
+    return "Reason change";
+  default:
+    return "Process";
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Helper: Produce a readable package label for transaction logs
+// -----------------------------------------------------------------------------
+static std::string
+transaction_package_label(const libdnf5::base::TransactionPackage &item)
+{
+  return item.get_package().get_nevra();
+}
+
+// -----------------------------------------------------------------------------
+// libdnf5 download callbacks for the streaming transaction popup
+// -----------------------------------------------------------------------------
+class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks {
+  public:
+  explicit StreamingDownloadCallbacks(TransactionProgressCallback progress_cb)
+      : progress_cb(std::move(progress_cb))
+  {
+  }
+
+  void *add_new_download(void *, const char *description, double) override
+  {
+    auto *state = new DownloadState;
+    state->description = description ? description : "package";
+    emit_progress_line(progress_cb, "Downloading: " + state->description);
+    return state;
+  }
+
+  int progress(void *user_cb_data, double total_to_download, double downloaded) override
+  {
+    auto *state = static_cast<DownloadState *>(user_cb_data);
+    if (!state || total_to_download <= 0.0) {
+      return OK;
+    }
+
+    int percent = static_cast<int>((downloaded * 100.0) / total_to_download);
+    percent = std::clamp(percent, 0, 100);
+    int bucket = percent / 10;
+
+    if (bucket > state->last_reported_bucket) {
+      state->last_reported_bucket = bucket;
+      emit_progress_line(progress_cb,
+                         "Download progress: " + state->description + " (" + std::to_string(percent) + "%)");
+    }
+
+    return OK;
+  }
+
+  int end(void *user_cb_data, TransferStatus status, const char *msg) override
+  {
+    std::unique_ptr<DownloadState> state(static_cast<DownloadState *>(user_cb_data));
+    std::string description = state ? state->description : "package";
+
+    switch (status) {
+    case TransferStatus::SUCCESSFUL:
+    case TransferStatus::ALREADYEXISTS:
+      emit_progress_line(progress_cb, "Download ready: " + description);
+      break;
+    case TransferStatus::ERROR:
+      if (msg && *msg) {
+        emit_progress_line(progress_cb, "Download failed: " + description + " (" + std::string(msg) + ")");
+      } else {
+        emit_progress_line(progress_cb, "Download failed: " + description);
+      }
+      break;
+    }
+
+    return OK;
+  }
+
+  private:
+  struct DownloadState {
+    std::string description;
+    int last_reported_bucket = -1;
+  };
+
+  TransactionProgressCallback progress_cb;
+};
+
+// -----------------------------------------------------------------------------
+// libdnf5 rpm transaction callbacks for the streaming transaction popup
+// -----------------------------------------------------------------------------
+class StreamingTransactionCallbacks final : public libdnf5::rpm::TransactionCallbacks {
+  public:
+  explicit StreamingTransactionCallbacks(TransactionProgressCallback progress_cb)
+      : progress_cb(std::move(progress_cb))
+  {
+  }
+
+  void before_begin(uint64_t total) override
+  {
+    emit_progress_line(progress_cb,
+                       "Running RPM transaction for " + std::to_string(total) + " package item" +
+                           (total == 1 ? "." : "s."));
+  }
+
+  void after_complete(bool success) override
+  {
+    emit_progress_line(progress_cb, success ? "RPM transaction completed." : "RPM transaction reported an error.");
+  }
+
+  void transaction_start(uint64_t total) override
+  {
+    emit_progress_line(progress_cb,
+                       "Preparing transaction metadata for " + std::to_string(total) + " package item" +
+                           (total == 1 ? "." : "s."));
+  }
+
+  void transaction_stop(uint64_t) override
+  {
+    emit_progress_line(progress_cb, "Preparation phase finished.");
+  }
+
+  void verify_start(uint64_t total) override
+  {
+    emit_progress_line(progress_cb,
+                       "Verifying " + std::to_string(total) + " package signature" + (total == 1 ? "." : "s."));
+  }
+
+  void verify_stop(uint64_t) override
+  {
+    emit_progress_line(progress_cb, "Verification phase finished.");
+  }
+
+  void elem_progress(const libdnf5::base::TransactionPackage &item, uint64_t amount, uint64_t total) override
+  {
+    if (amount == last_reported_item) {
+      return;
+    }
+
+    last_reported_item = amount;
+    emit_progress_line(progress_cb,
+                       "Processing " + std::to_string(amount + 1) + " of " + std::to_string(total) + ": " +
+                           transaction_action_label(item.get_action()) + " " + transaction_package_label(item));
+  }
+
+  void install_start(const libdnf5::base::TransactionPackage &item, uint64_t) override
+  {
+    emit_progress_line(progress_cb, "Installing: " + transaction_package_label(item));
+  }
+
+  void install_stop(const libdnf5::base::TransactionPackage &item, uint64_t, uint64_t) override
+  {
+    emit_progress_line(progress_cb, "Installed: " + transaction_package_label(item));
+  }
+
+  void uninstall_start(const libdnf5::base::TransactionPackage &item, uint64_t) override
+  {
+    emit_progress_line(progress_cb, "Removing: " + transaction_package_label(item));
+  }
+
+  void uninstall_stop(const libdnf5::base::TransactionPackage &item, uint64_t, uint64_t) override
+  {
+    emit_progress_line(progress_cb, "Removed: " + transaction_package_label(item));
+  }
+
+  void unpack_error(const libdnf5::base::TransactionPackage &item) override
+  {
+    emit_progress_line(progress_cb, "Unpack failed: " + transaction_package_label(item));
+  }
+
+  void cpio_error(const libdnf5::base::TransactionPackage &item) override
+  {
+    emit_progress_line(progress_cb, "Payload extraction failed: " + transaction_package_label(item));
+  }
+
+  void script_start(const libdnf5::base::TransactionPackage *item, libdnf5::rpm::Nevra nevra, ScriptType type) override
+  {
+    emit_progress_line(progress_cb,
+                       "Running " + std::string(script_type_to_string(type)) + " for " + script_owner(item, nevra));
+  }
+
+  void script_stop(const libdnf5::base::TransactionPackage *item,
+                   libdnf5::rpm::Nevra nevra,
+                   ScriptType type,
+                   uint64_t return_code) override
+  {
+    if (return_code == 0) {
+      return;
+    }
+
+    emit_progress_line(progress_cb,
+                       std::string(script_type_to_string(type)) + " finished for " + script_owner(item, nevra) +
+                           " with exit code " + std::to_string(return_code) + ".");
+  }
+
+  void script_error(const libdnf5::base::TransactionPackage *item,
+                    libdnf5::rpm::Nevra nevra,
+                    ScriptType type,
+                    uint64_t return_code) override
+  {
+    emit_progress_line(progress_cb,
+                       "Script failed: " + std::string(script_type_to_string(type)) + " for " +
+                           script_owner(item, nevra) + " (exit code " + std::to_string(return_code) + ")");
+  }
+
+  private:
+  static std::string script_owner(const libdnf5::base::TransactionPackage *item, const libdnf5::rpm::Nevra &nevra)
+  {
+    if (item) {
+      return transaction_package_label(*item);
+    }
+
+    return libdnf5::rpm::to_nevra_string(nevra);
+  }
+
+  TransactionProgressCallback progress_cb;
+  uint64_t last_reported_item = std::numeric_limits<uint64_t>::max();
+};
+
+// -----------------------------------------------------------------------------
+// Helper: Reset Base download callbacks when leaving transaction apply scope
+// -----------------------------------------------------------------------------
+class DownloadCallbacksReset {
+  public:
+  explicit DownloadCallbacksReset(libdnf5::Base &base)
+      : base(base)
+  {
+  }
+
+  ~DownloadCallbacksReset()
+  {
+    base.set_download_callbacks(std::unique_ptr<libdnf5::repo::DownloadCallbacks>());
+  }
+
+  private:
+  libdnf5::Base &base;
+};
+
 bool
 apply_transaction(const std::vector<std::string> &install_nevras,
                   const std::vector<std::string> &remove_nevras,
-                  std::string &error_out)
+                  std::string &error_out,
+                  const TransactionProgressCallback &progress_cb)
 {
   error_out.clear();
 
@@ -467,6 +761,8 @@ apply_transaction(const std::vector<std::string> &install_nevras,
     auto [base, guard] = BaseManager::instance().acquire_write();
 
     libdnf5::Goal goal(base);
+
+    emit_progress_line(progress_cb, "Resolving dependency changes...");
 
     // NOTE: We pass package "specs" (currently NEVRA strings from the UI list).
 
@@ -490,6 +786,7 @@ apply_transaction(const std::vector<std::string> &install_nevras,
       }
 
       error_out = oss.str();
+      emit_progress_block(progress_cb, error_out);
       return false;
     }
 
@@ -499,10 +796,26 @@ apply_transaction(const std::vector<std::string> &install_nevras,
           << "Install specs: " << format_specs(install_nevras) << "\n"
           << "Remove specs: " << format_specs(remove_nevras) << "\n";
       error_out = oss.str();
+      emit_progress_block(progress_cb, error_out);
       return false;
     }
 
+    emit_progress_line(progress_cb,
+                       "Resolved " + std::to_string(transaction.get_transaction_packages_count()) + " package item" +
+                           (transaction.get_transaction_packages_count() == 1 ? "." : "s."));
+
+    for (const auto &item : transaction.get_transaction_packages()) {
+      emit_progress_line(progress_cb,
+                         transaction_action_label(item.get_action()) + ": " + transaction_package_label(item));
+    }
+
+    base.set_download_callbacks(std::make_unique<StreamingDownloadCallbacks>(progress_cb));
+    DownloadCallbacksReset download_callbacks_reset(base);
+    emit_progress_line(progress_cb, "Starting package downloads...");
     transaction.download();
+    emit_progress_line(progress_cb, "Package downloads finished.");
+
+    transaction.set_callbacks(std::make_unique<StreamingTransactionCallbacks>(progress_cb));
 
     auto run_result = transaction.run();
     if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
@@ -513,13 +826,29 @@ apply_transaction(const std::vector<std::string> &install_nevras,
         oss << "  " << msg << "\n";
       }
 
+      auto rpm_messages = transaction.get_rpm_messages();
+      if (!rpm_messages.empty()) {
+        oss << "RPM messages:\n";
+        for (const auto &msg : rpm_messages) {
+          oss << "  " << msg << "\n";
+        }
+      }
+
+      std::string script_output = transaction.get_last_script_output();
+      if (!script_output.empty()) {
+        oss << "Last script output:\n" << script_output << "\n";
+      }
+
       error_out = oss.str();
+      emit_progress_block(progress_cb, error_out);
       return false;
     }
 
+    emit_progress_line(progress_cb, "Transaction applied successfully.");
     return true;
   } catch (const std::exception &e) {
     error_out = e.what();
+    emit_progress_line(progress_cb, error_out);
     return false;
   }
 }
