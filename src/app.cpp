@@ -155,7 +155,7 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *remove_button = gtk_button_new_with_label("Mark for Removal");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
 
-  GtkWidget *apply_button = gtk_button_new_with_label("Apply Transaction");
+  GtkWidget *apply_button = gtk_button_new_with_label("Apply Transactions");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), apply_button);
 
   GtkWidget *clear_pending_button = gtk_button_new_with_label("Clear Transactions");

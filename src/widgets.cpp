@@ -74,7 +74,14 @@ update_apply_button(SearchWidgets *widgets)
     return;
   }
 
-  bool has_pending = !widgets->pending.empty();
+  size_t pending_count = widgets->pending.size();
+  bool has_pending = pending_count > 0;
+  std::string apply_label = "Apply Transactions";
+  if (has_pending) {
+    apply_label += " (" + std::to_string(pending_count) + ")";
+  }
+
+  gtk_button_set_label(widgets->apply_button, apply_label.c_str());
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), has_pending);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->clear_pending_button), has_pending);
 }
