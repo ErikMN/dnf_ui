@@ -134,7 +134,7 @@ column_text(SearchWidgets *widgets, const PackageRow &row, PackageColumnKind kin
     return row.summary;
   }
 
-  return { };
+  return {};
 }
 
 // -----------------------------------------------------------------------------
@@ -159,6 +159,7 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
         gtk_widget_set_margin_end(label, 6);
         gtk_widget_set_margin_top(label, 4);
         gtk_widget_set_margin_bottom(label, 4);
+        gtk_list_item_set_activatable(item, TRUE);
         gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
         gtk_label_set_xalign(GTK_LABEL(label), kind == PackageColumnKind::STATUS ? 0.5f : 0.0f);
 
@@ -479,8 +480,47 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
   GtkColumnView *view = GTK_COLUMN_VIEW(gtk_column_view_new(GTK_SELECTION_MODEL(sel)));
   gtk_widget_set_hexpand(GTK_WIDGET(view), TRUE);
   gtk_widget_set_vexpand(GTK_WIDGET(view), TRUE);
+  gtk_column_view_set_single_click_activate(view, FALSE);
   gtk_column_view_set_show_row_separators(view, TRUE);
   gtk_column_view_set_show_column_separators(view, TRUE);
+
+  g_signal_connect(view,
+                   "activate",
+                   G_CALLBACK(+[](GtkColumnView *self, guint position, gpointer user_data) {
+                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+                     GtkSelectionModel *model = gtk_column_view_get_model(self);
+                     if (!model || !GTK_IS_SINGLE_SELECTION(model)) {
+                       return;
+                     }
+
+                     GtkSingleSelection *sel = GTK_SINGLE_SELECTION(model);
+                     GListModel *items_model = gtk_single_selection_get_model(sel);
+                     if (!items_model) {
+                       return;
+                     }
+
+                     GObject *obj = G_OBJECT(g_list_model_get_item(items_model, position));
+                     if (!obj) {
+                       return;
+                     }
+
+                     const PackageRow *row = package_row_from_object(obj);
+                     if (!row) {
+                       g_object_unref(obj);
+                       return;
+                     }
+
+                     bool is_installed = package_is_installed(*row);
+                     gtk_single_selection_set_selected(sel, position);
+                     g_object_unref(obj);
+
+                     if (is_installed) {
+                       on_remove_button_clicked(nullptr, widgets);
+                     } else {
+                       on_install_button_clicked(nullptr, widgets);
+                     }
+                   }),
+                   widgets);
 
   gtk_column_view_append_column(view, create_text_column(widgets, "Status", PackageColumnKind::STATUS, 140, FALSE));
   gtk_column_view_append_column(view, create_text_column(widgets, "Package", PackageColumnKind::PACKAGE, 180, FALSE));
