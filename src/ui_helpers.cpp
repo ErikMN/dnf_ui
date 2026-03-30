@@ -134,7 +134,7 @@ column_text(SearchWidgets *widgets, const PackageRow &row, PackageColumnKind kin
     return row.summary;
   }
 
-  return {};
+  return { };
 }
 
 // -----------------------------------------------------------------------------
@@ -333,9 +333,11 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
     g_object_unref(obj);
   }
 
-  GtkSingleSelection *sel = gtk_single_selection_new(G_LIST_MODEL(store));
+  GtkSingleSelection *sel = gtk_single_selection_new(nullptr);
   gtk_single_selection_set_autoselect(sel, FALSE);
   gtk_single_selection_set_can_unselect(sel, TRUE);
+  gtk_single_selection_set_model(sel, G_LIST_MODEL(store));
+  gtk_single_selection_set_selected(sel, GTK_INVALID_LIST_POSITION);
 
   g_signal_connect(sel,
                    "selection-changed",
