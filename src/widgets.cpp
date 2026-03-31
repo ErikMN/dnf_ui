@@ -16,6 +16,7 @@
 // Forward declarations
 static void add_to_history(SearchWidgets *widgets, const std::string &term);
 static void perform_search(SearchWidgets *widgets, const std::string &term);
+static void refresh_current_package_view(SearchWidgets *widgets);
 
 // Global cache for previous search results
 static std::map<std::string, std::vector<PackageRow>> g_search_cache;
@@ -65,6 +66,56 @@ apply_task_data_free(gpointer p)
 {
   ApplyTaskData *d = static_cast<ApplyTaskData *>(p);
   delete d;
+}
+
+// -----------------------------------------------------------------------------
+// FIXME: HACK: Scroll position helpers
+// -----------------------------------------------------------------------------
+
+// Saved scroll position used to restore the package list viewport after a refresh.
+struct ScrollRestoreData {
+  GtkAdjustment *hadj;
+  GtkAdjustment *vadj;
+  double hvalue;
+  double vvalue;
+};
+
+// Release the adjustment references kept in the saved scroll-position snapshot.
+static void
+scroll_restore_data_free(gpointer p)
+{
+  ScrollRestoreData *d = static_cast<ScrollRestoreData *>(p);
+  if (!d) {
+    return;
+  }
+
+  if (d->hadj) {
+    g_object_unref(d->hadj);
+  }
+  if (d->vadj) {
+    g_object_unref(d->vadj);
+  }
+
+  delete d;
+}
+
+// Restore the saved scroll position once the refreshed view is back in place.
+static gboolean
+restore_scroll_position_idle(gpointer user_data)
+{
+  ScrollRestoreData *d = static_cast<ScrollRestoreData *>(user_data);
+  if (!d) {
+    return G_SOURCE_REMOVE;
+  }
+
+  if (d->hadj) {
+    gtk_adjustment_set_value(d->hadj, d->hvalue);
+  }
+  if (d->vadj) {
+    gtk_adjustment_set_value(d->vadj, d->vvalue);
+  }
+
+  return G_SOURCE_REMOVE;
 }
 
 // -----------------------------------------------------------------------------
@@ -406,6 +457,33 @@ spinner_release(GtkSpinner *spinner)
     gtk_widget_set_visible(GTK_WIDGET(spinner), FALSE);
     g_object_set_qdata(G_OBJECT(spinner), q, nullptr);
   }
+}
+
+// -----------------------------------------------------------------------------
+// FIXME: HACK: Refresh the visible package rows after pending-action state changes
+// Rebuilds the current package list presentation so status badges stay in sync
+// with the pending transaction state.
+// -----------------------------------------------------------------------------
+static void
+refresh_current_package_view(SearchWidgets *widgets)
+{
+  ScrollRestoreData *scroll = new ScrollRestoreData { nullptr, nullptr, 0.0, 0.0 };
+
+  GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(widgets->list_scroller);
+  if (hadj) {
+    scroll->hadj = GTK_ADJUSTMENT(g_object_ref(hadj));
+    scroll->hvalue = gtk_adjustment_get_value(hadj);
+  }
+
+  GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(widgets->list_scroller);
+  if (vadj) {
+    scroll->vadj = GTK_ADJUSTMENT(g_object_ref(vadj));
+    scroll->vvalue = gtk_adjustment_get_value(vadj);
+  }
+
+  fill_package_view(widgets, widgets->current_packages);
+
+  g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, restore_scroll_position_idle, scroll, scroll_restore_data_free);
 }
 
 // -----------------------------------------------------------------------------
@@ -850,7 +928,7 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
   refresh_installed_nevras();
 
   if (!widgets->current_packages.empty()) {
-    fill_package_view(widgets, widgets->current_packages);
+    refresh_current_package_view(widgets);
   }
 }
 
@@ -896,7 +974,7 @@ on_install_button_clicked(GtkButton *, gpointer user_data)
   update_action_button_labels(widgets, pkg.nevra);
 
   // Refresh the package table to apply pending-state badges.
-  fill_package_view(widgets, widgets->current_packages);
+  refresh_current_package_view(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -931,7 +1009,7 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
   update_action_button_labels(widgets, pkg.nevra);
 
   // Refresh the package table to apply pending-state badges.
-  fill_package_view(widgets, widgets->current_packages);
+  refresh_current_package_view(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -952,7 +1030,7 @@ on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
   refresh_pending_tab(widgets);
 
   // Refresh the package table to remove pending-state badges.
-  fill_package_view(widgets, widgets->current_packages);
+  refresh_current_package_view(widgets);
 
   char msg[256];
   snprintf(msg, sizeof(msg), "Cleared %zu pending action%s.", count, count == 1 ? "" : "s");
