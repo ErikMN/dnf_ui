@@ -221,7 +221,8 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_wrap(GTK_LABEL(details_label), TRUE);
   gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
   gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
-  gtk_widget_set_focusable(details_label, TRUE);
+  // Keep package text copyable without stealing focus when switching tabs.
+  gtk_widget_set_focusable(details_label, FALSE);
   gtk_box_append(GTK_BOX(details_box), details_label);
 
   GtkWidget *tab_label_info = gtk_label_new("Info");
@@ -236,7 +237,7 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_xalign(GTK_LABEL(files_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(files_label), TRUE);
   gtk_label_set_selectable(GTK_LABEL(files_label), TRUE);
-  gtk_widget_set_focusable(files_label, TRUE);
+  gtk_widget_set_focusable(files_label, FALSE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_files), files_label);
   gtk_widget_set_valign(files_label, GTK_ALIGN_START);
   gtk_widget_set_margin_start(files_label, 10);
@@ -256,7 +257,7 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_xalign(GTK_LABEL(deps_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(deps_label), TRUE);
   gtk_label_set_selectable(GTK_LABEL(deps_label), TRUE);
-  gtk_widget_set_focusable(deps_label, TRUE);
+  gtk_widget_set_focusable(deps_label, FALSE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_deps), deps_label);
   gtk_widget_set_valign(deps_label, GTK_ALIGN_START);
   gtk_widget_set_margin_start(deps_label, 10);
@@ -276,7 +277,7 @@ activate(GtkApplication *app, gpointer)
   gtk_label_set_xalign(GTK_LABEL(changelog_label), 0.0);
   gtk_label_set_wrap(GTK_LABEL(changelog_label), TRUE);
   gtk_label_set_selectable(GTK_LABEL(changelog_label), TRUE);
-  gtk_widget_set_focusable(changelog_label, TRUE);
+  gtk_widget_set_focusable(changelog_label, FALSE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_changelog), changelog_label);
   gtk_widget_set_valign(changelog_label, GTK_ALIGN_START);
   gtk_widget_set_margin_start(changelog_label, 10);
