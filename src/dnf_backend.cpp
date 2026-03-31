@@ -418,13 +418,19 @@ get_package_changelog(const std::string &pkg_nevra)
 bool
 install_packages(const std::vector<std::string> &pkg_specs, std::string &error_out)
 {
-  return apply_transaction(pkg_specs, {}, error_out);
+  return apply_transaction(pkg_specs, {}, {}, error_out);
 }
 
 bool
 remove_packages(const std::vector<std::string> &pkg_specs, std::string &error_out)
 {
-  return apply_transaction({}, pkg_specs, error_out);
+  return apply_transaction({}, pkg_specs, {}, error_out);
+}
+
+bool
+reinstall_packages(const std::vector<std::string> &pkg_specs, std::string &error_out)
+{
+  return apply_transaction({}, {}, pkg_specs, error_out);
 }
 
 // -----------------------------------------------------------------------------
@@ -764,6 +770,7 @@ class DownloadCallbacksReset {
 bool
 apply_transaction(const std::vector<std::string> &install_nevras,
                   const std::vector<std::string> &remove_nevras,
+                  const std::vector<std::string> &reinstall_nevras,
                   std::string &error_out,
                   const TransactionProgressCallback &progress_cb)
 {
@@ -775,7 +782,7 @@ apply_transaction(const std::vector<std::string> &install_nevras,
     return false;
   }
 
-  if (install_nevras.empty() && remove_nevras.empty()) {
+  if (install_nevras.empty() && remove_nevras.empty() && reinstall_nevras.empty()) {
     error_out = "No packages specified in transaction.";
     return false;
   }
@@ -798,6 +805,10 @@ apply_transaction(const std::vector<std::string> &install_nevras,
       goal.add_rpm_remove(spec);
     }
 
+    for (const auto &spec : reinstall_nevras) {
+      goal.add_rpm_reinstall(spec);
+    }
+
     auto transaction = goal.resolve();
 
     auto goal_problem = transaction.get_problems();
@@ -818,7 +829,8 @@ apply_transaction(const std::vector<std::string> &install_nevras,
       std::ostringstream oss;
       oss << "No packages in transaction (nothing to do).\n"
           << "Install specs: " << format_specs(install_nevras) << "\n"
-          << "Remove specs: " << format_specs(remove_nevras) << "\n";
+          << "Remove specs: " << format_specs(remove_nevras) << "\n"
+          << "Reinstall specs: " << format_specs(reinstall_nevras) << "\n";
       error_out = oss.str();
       emit_progress_block(progress_cb, error_out);
       return false;

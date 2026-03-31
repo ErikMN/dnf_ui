@@ -12,7 +12,7 @@
 // Pending actions for mark --> review --> apply workflow
 // -----------------------------------------------------------------------------
 struct PendingAction {
-  enum Type { INSTALL, REMOVE } type;
+  enum Type { INSTALL, REMOVE, REINSTALL } type;
   std::string nevra;
 };
 
@@ -28,6 +28,7 @@ struct SearchWidgets {
   GtkButton *search_button;
   GtkButton *install_button;
   GtkButton *remove_button;
+  GtkButton *reinstall_button;
   GtkButton *apply_button;
   GtkButton *clear_pending_button;
   GtkLabel *status_label;
@@ -59,6 +60,7 @@ void on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *);
 void on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data);
 void on_install_button_clicked(GtkButton *, gpointer user_data);
 void on_remove_button_clicked(GtkButton *, gpointer user_data);
+void on_reinstall_button_clicked(GtkButton *, gpointer user_data);
 void on_apply_button_clicked(GtkButton *, gpointer user_data);
 void on_clear_pending_button_clicked(GtkButton *, gpointer user_data);
 void clear_search_cache();

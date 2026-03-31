@@ -151,12 +151,15 @@ activate(GtkApplication *app, gpointer)
   GtkWidget *toggle_info_button = gtk_button_new_with_label("Hide Info");
   gtk_box_append(GTK_BOX(hbox_buttons), toggle_info_button);
 
-  // --- Transaction buttons row (Install / Remove / Apply) ---
+  // --- Transaction buttons row (Install / Reinstall / Remove / Apply) ---
   GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_main), hbox_tx_buttons);
 
   GtkWidget *install_button = gtk_button_new_with_label("Mark for Install");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), install_button);
+
+  GtkWidget *reinstall_button = gtk_button_new_with_label("Mark for Reinstall");
+  gtk_box_append(GTK_BOX(hbox_tx_buttons), reinstall_button);
 
   GtkWidget *remove_button = gtk_button_new_with_label("Mark for Removal");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
@@ -325,6 +328,7 @@ activate(GtkApplication *app, gpointer)
   widgets->search_button = GTK_BUTTON(search_button);
   widgets->install_button = GTK_BUTTON(install_button);
   widgets->remove_button = GTK_BUTTON(remove_button);
+  widgets->reinstall_button = GTK_BUTTON(reinstall_button);
   widgets->apply_button = GTK_BUTTON(apply_button);
   widgets->clear_pending_button = GTK_BUTTON(clear_pending_button);
   widgets->status_label = GTK_LABEL(status_label);
@@ -372,6 +376,11 @@ activate(GtkApplication *app, gpointer)
                                       "  border-color: #163d74; "
                                       "  color: #ffffff; "
                                       "} "
+                                      ".package-status-pending-reinstall { "
+                                      "  background-color: #d89a19; "
+                                      "  border-color: #8c5f00; "
+                                      "  color: #2d1a00; "
+                                      "} "
                                       ".package-status-pending-remove { "
                                       "  background-color: #bf4a33; "
                                       "  border-color: #7c281b; "
@@ -395,12 +404,14 @@ activate(GtkApplication *app, gpointer)
     g_object_unref(css);
   }
   set_status(widgets->status_label, "Ready.", "gray");
-  fill_package_view(widgets, { });
+  fill_package_view(widgets, {});
 
   // --- Connect signals ---
   g_signal_connect(list_button, "clicked", G_CALLBACK(on_list_button_clicked), widgets);
 
   g_signal_connect(install_button, "clicked", G_CALLBACK(on_install_button_clicked), widgets);
+
+  g_signal_connect(reinstall_button, "clicked", G_CALLBACK(on_reinstall_button_clicked), widgets);
 
   g_signal_connect(remove_button, "clicked", G_CALLBACK(on_remove_button_clicked), widgets);
 
@@ -503,12 +514,13 @@ activate(GtkApplication *app, gpointer)
       nullptr);
 
   // ---------------------------------------------------------------------------
-  // Disable install and remove buttons when not running as root
+  // Disable transaction buttons when not running as root
   // FIXME: Replace with Polkit:
   // ---------------------------------------------------------------------------
   if (geteuid() != 0) {
     printf("*** Not running as root ***\n");
     gtk_widget_set_sensitive(install_button, FALSE);
+    gtk_widget_set_sensitive(reinstall_button, FALSE);
     gtk_widget_set_sensitive(remove_button, FALSE);
     gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), FALSE);
   }

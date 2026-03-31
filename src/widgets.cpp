@@ -62,6 +62,7 @@ make_task_cancellable_for(GtkWidget *w)
 struct ApplyTaskData {
   std::vector<std::string> install;
   std::vector<std::string> remove;
+  std::vector<std::string> reinstall;
   struct TransactionProgressWindow *progress_window;
 };
 
@@ -372,7 +373,19 @@ refresh_pending_tab(SearchWidgets *widgets)
 
   // Re-add actions
   for (const auto &a : widgets->pending) {
-    std::string line = (a.type == PendingAction::INSTALL ? "Install: " : "Remove: ") + a.nevra;
+    std::string prefix;
+    switch (a.type) {
+    case PendingAction::INSTALL:
+      prefix = "Install: ";
+      break;
+    case PendingAction::REINSTALL:
+      prefix = "Reinstall: ";
+      break;
+    case PendingAction::REMOVE:
+      prefix = "Remove: ";
+      break;
+    }
+    std::string line = prefix + a.nevra;
     GtkWidget *row = gtk_label_new(line.c_str());
     gtk_label_set_xalign(GTK_LABEL(row), 0.0);
     gtk_list_box_append(widgets->pending_list, row);
@@ -1100,7 +1113,38 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Clears all pending install and remove actions without applying them
+// Async: Reinstall selected package
+// -----------------------------------------------------------------------------
+void
+on_reinstall_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  PackageRow pkg;
+  if (!get_selected_package_row(widgets, pkg)) {
+    set_status(widgets->status_label, "No package selected.", "gray");
+    return;
+  }
+
+  PendingAction::Type existing_type;
+  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
+  if (has_existing && existing_type == PendingAction::REINSTALL) {
+    remove_pending_action(widgets, pkg.nevra);
+    refresh_pending_tab(widgets);
+    set_status(widgets->status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
+  } else {
+    remove_pending_action(widgets, pkg.nevra);
+    widgets->pending.push_back({ PendingAction::REINSTALL, pkg.nevra });
+    refresh_pending_tab(widgets);
+    set_status(widgets->status_label, ("Marked for reinstall: " + pkg.name).c_str(), "blue");
+  }
+  update_action_button_labels(widgets, pkg.nevra);
+
+  refresh_current_package_view(widgets);
+}
+
+// -----------------------------------------------------------------------------
+// Clears all pending install, remove, and reinstall actions without applying them
 // -----------------------------------------------------------------------------
 void
 on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
@@ -1137,15 +1181,18 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  // Build install and remove lists from pending actions
+  // Build install, remove, and reinstall lists from pending actions
   ApplyTaskData *td = new ApplyTaskData;
   td->install.reserve(widgets->pending.size());
   td->remove.reserve(widgets->pending.size());
+  td->reinstall.reserve(widgets->pending.size());
   td->progress_window = create_transaction_progress_window(widgets, widgets->pending.size());
 
   for (const auto &a : widgets->pending) {
     if (a.type == PendingAction::INSTALL) {
       td->install.push_back(a.nevra);
+    } else if (a.type == PendingAction::REINSTALL) {
+      td->reinstall.push_back(a.nevra);
     } else {
       td->remove.push_back(a.nevra);
     }
@@ -1200,7 +1247,7 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
       task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
         ApplyTaskData *td = static_cast<ApplyTaskData *>(task_data);
         std::string err;
-        bool ok = apply_transaction(td->install, td->remove, err, [td](const std::string &message) {
+        bool ok = apply_transaction(td->install, td->remove, td->reinstall, err, [td](const std::string &message) {
           append_transaction_progress(td->progress_window, message);
         });
         if (ok) {

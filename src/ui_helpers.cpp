@@ -75,8 +75,20 @@ fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
 {
   for (const auto &a : widgets->pending) {
     if (a.nevra == item.row.nevra) {
-      item.status_text = (a.type == PendingAction::INSTALL) ? "Pending Install" : "Pending Removal";
-      item.status_rank = (a.type == PendingAction::INSTALL) ? 2 : 3;
+      switch (a.type) {
+      case PendingAction::INSTALL:
+        item.status_text = "Pending Install";
+        item.status_rank = 2;
+        break;
+      case PendingAction::REINSTALL:
+        item.status_text = "Pending Reinstall";
+        item.status_rank = 3;
+        break;
+      case PendingAction::REMOVE:
+        item.status_text = "Pending Removal";
+        item.status_rank = 4;
+        break;
+      }
       return;
     }
   }
@@ -133,7 +145,14 @@ pending_css_class(SearchWidgets *widgets, const std::string &nevra)
 {
   for (const auto &a : widgets->pending) {
     if (a.nevra == nevra) {
-      return (a.type == PendingAction::INSTALL) ? "package-status-pending-install" : "package-status-pending-remove";
+      switch (a.type) {
+      case PendingAction::INSTALL:
+        return "package-status-pending-install";
+      case PendingAction::REINSTALL:
+        return "package-status-pending-reinstall";
+      case PendingAction::REMOVE:
+        return "package-status-pending-remove";
+      }
     }
   }
   return nullptr;
@@ -144,7 +163,14 @@ status_text(SearchWidgets *widgets, const PackageRow &row)
 {
   for (const auto &a : widgets->pending) {
     if (a.nevra == row.nevra) {
-      return (a.type == PendingAction::INSTALL) ? "Pending Install" : "Pending Removal";
+      switch (a.type) {
+      case PendingAction::INSTALL:
+        return "Pending Install";
+      case PendingAction::REINSTALL:
+        return "Pending Reinstall";
+      case PendingAction::REMOVE:
+        return "Pending Removal";
+      }
     }
   }
 
@@ -157,6 +183,7 @@ clear_status_css(GtkWidget *label)
   gtk_widget_remove_css_class(label, "package-status-available");
   gtk_widget_remove_css_class(label, "package-status-installed");
   gtk_widget_remove_css_class(label, "package-status-pending-install");
+  gtk_widget_remove_css_class(label, "package-status-pending-reinstall");
   gtk_widget_remove_css_class(label, "package-status-pending-remove");
 }
 
@@ -419,18 +446,20 @@ get_selected_package_row(SearchWidgets *widgets, PackageRow &out_pkg)
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Update install and remove button labels based on pending actions
+// Helper: Update transaction action button labels based on pending actions
 // -----------------------------------------------------------------------------
 void
 update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
 {
   bool pending_install = false;
   bool pending_remove = false;
+  bool pending_reinstall = false;
 
   for (const auto &a : widgets->pending) {
     if (a.nevra == pkg) {
       pending_install = (a.type == PendingAction::INSTALL);
       pending_remove = (a.type == PendingAction::REMOVE);
+      pending_reinstall = (a.type == PendingAction::REINSTALL);
       break;
     }
   }
@@ -438,12 +467,19 @@ update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
   if (pending_install) {
     gtk_button_set_label(widgets->install_button, "Unmark Install");
     gtk_button_set_label(widgets->remove_button, "Mark for Removal");
+    gtk_button_set_label(widgets->reinstall_button, "Mark for Reinstall");
+  } else if (pending_reinstall) {
+    gtk_button_set_label(widgets->install_button, "Mark for Install");
+    gtk_button_set_label(widgets->remove_button, "Mark for Removal");
+    gtk_button_set_label(widgets->reinstall_button, "Unmark Reinstall");
   } else if (pending_remove) {
     gtk_button_set_label(widgets->install_button, "Mark for Install");
     gtk_button_set_label(widgets->remove_button, "Unmark Removal");
+    gtk_button_set_label(widgets->reinstall_button, "Mark for Reinstall");
   } else {
     gtk_button_set_label(widgets->install_button, "Mark for Install");
     gtk_button_set_label(widgets->remove_button, "Mark for Removal");
+    gtk_button_set_label(widgets->reinstall_button, "Mark for Reinstall");
   }
 }
 
@@ -471,7 +507,7 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
   gtk_column_view_set_show_row_separators(view, TRUE);
   gtk_column_view_set_show_column_separators(view, TRUE);
 
-  gtk_column_view_append_column(view, create_text_column(widgets, "Status", PackageColumnKind::STATUS, 140, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, "Status", PackageColumnKind::STATUS, 160, FALSE));
   gtk_column_view_append_column(view, create_text_column(widgets, "Package", PackageColumnKind::PACKAGE, 180, FALSE));
   gtk_column_view_append_column(view, create_text_column(widgets, "Version", PackageColumnKind::VERSION, 150, FALSE));
   gtk_column_view_append_column(view, create_text_column(widgets, "Arch", PackageColumnKind::ARCH, 95, FALSE));
@@ -497,6 +533,7 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                        widgets->selected_nevra.clear();
                        gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), FALSE);
                        gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), FALSE);
+                       gtk_widget_set_sensitive(GTK_WIDGET(widgets->reinstall_button), FALSE);
                        update_action_button_labels(widgets, "");
                        return;
                      }
@@ -523,6 +560,7 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
 
                      gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), is_root && !is_installed);
                      gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), is_root && is_installed);
+                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->reinstall_button), is_root && is_installed);
                      update_action_button_labels(widgets, selected.nevra);
 
                      // --- Async task: Fetch and display package info + file list ---
@@ -699,6 +737,7 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
   if (!restored) {
     gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), FALSE);
     gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->reinstall_button), FALSE);
     update_action_button_labels(widgets, "");
   }
 
