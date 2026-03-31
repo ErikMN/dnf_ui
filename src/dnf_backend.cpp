@@ -23,6 +23,8 @@
 #include <sstream>
 #include <unistd.h>
 
+#include <gio/gio.h>
+
 #include <libdnf5/base/base.hpp>
 #include <libdnf5/base/goal.hpp>
 #include <libdnf5/base/transaction.hpp>
@@ -59,6 +61,69 @@ make_package_row(const libdnf5::rpm::Package &pkg)
   }
 
   return row;
+}
+
+// Return true when the active search task was cancelled by the UI.
+static bool
+search_request_cancelled(GCancellable *cancellable)
+{
+  return cancellable && g_cancellable_is_cancelled(cancellable);
+}
+
+// Search available packages and stop early when the task cancellable is set.
+std::vector<PackageRow>
+search_available_package_rows_interruptible(const std::string &pattern, GCancellable *cancellable)
+{
+  std::vector<PackageRow> packages;
+
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_available();
+
+  if (g_search_in_description.load()) {
+    // Manually match pattern in description (case-insensitive)
+    std::string pattern_lower = pattern;
+    std::transform(pattern_lower.begin(), pattern_lower.end(), pattern_lower.begin(), ::tolower);
+
+    for (auto pkg : query) {
+      if (search_request_cancelled(cancellable)) {
+        return packages;
+      }
+
+      std::string desc = pkg.get_description();
+      std::string name = pkg.get_name();
+
+      std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
+      std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+      if (g_exact_match.load()) {
+        if (name == pattern_lower) {
+          packages.push_back(make_package_row(pkg));
+        }
+      } else {
+        if (desc.find(pattern_lower) != std::string::npos || name.find(pattern_lower) != std::string::npos) {
+          packages.push_back(make_package_row(pkg));
+        }
+      }
+    }
+  } else {
+    // Efficient name-based filtering using libdnf5 QueryCmp
+    if (g_exact_match.load()) {
+      query.filter_name(pattern, libdnf5::sack::QueryCmp::EQ);
+    } else {
+      query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
+    }
+
+    for (auto pkg : query) {
+      if (search_request_cancelled(cancellable)) {
+        return packages;
+      }
+
+      packages.push_back(make_package_row(pkg));
+    }
+  }
+
+  return packages;
 }
 
 // -----------------------------------------------------------------------------
@@ -162,48 +227,7 @@ get_installed_packages()
 std::vector<PackageRow>
 search_available_package_rows(const std::string &pattern)
 {
-  std::vector<PackageRow> packages;
-
-  auto [base, guard, generation] = BaseManager::instance().acquire_read();
-  libdnf5::rpm::PackageQuery query(base);
-  query.filter_available();
-
-  if (g_search_in_description.load()) {
-    // Manually match pattern in description (case-insensitive)
-    std::string pattern_lower = pattern;
-    std::transform(pattern_lower.begin(), pattern_lower.end(), pattern_lower.begin(), ::tolower);
-
-    for (auto pkg : query) {
-      std::string desc = pkg.get_description();
-      std::string name = pkg.get_name();
-
-      std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
-      std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-
-      if (g_exact_match.load()) {
-        if (name == pattern_lower) {
-          packages.push_back(make_package_row(pkg));
-        }
-      } else {
-        if (desc.find(pattern_lower) != std::string::npos || name.find(pattern_lower) != std::string::npos) {
-          packages.push_back(make_package_row(pkg));
-        }
-      }
-    }
-  } else {
-    // Efficient name-based filtering using libdnf5 QueryCmp
-    if (g_exact_match.load()) {
-      query.filter_name(pattern, libdnf5::sack::QueryCmp::EQ);
-    } else {
-      query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
-    }
-
-    for (auto pkg : query) {
-      packages.push_back(make_package_row(pkg));
-    }
-  }
-
-  return packages;
+  return search_available_package_rows_interruptible(pattern, nullptr);
 }
 
 // -----------------------------------------------------------------------------

@@ -17,6 +17,9 @@
 static void add_to_history(SearchWidgets *widgets, const std::string &term);
 static void perform_search(SearchWidgets *widgets, const std::string &term);
 static void refresh_current_package_view(SearchWidgets *widgets);
+static void cancel_active_search(SearchWidgets *widgets);
+std::vector<PackageRow> search_available_package_rows_interruptible(const std::string &pattern,
+                                                                    GCancellable *cancellable);
 
 // Global cache for previous search results
 static std::map<std::string, std::vector<PackageRow>> g_search_cache;
@@ -28,6 +31,7 @@ static std::mutex g_cache_mutex; // Protects g_search_cache
 struct SearchTaskData {
   char *term;
   char *cache_key;
+  uint64_t request_id;
   // Snapshot of BaseManager generation at dispatch time.
   // Used to drop stale results if the backend Base is rebuilt while this task runs.
   uint64_t generation;
@@ -459,6 +463,91 @@ spinner_release(GtkSpinner *spinner)
   }
 }
 
+// Stop and hide the spinner immediately after the current search is cancelled.
+static void
+spinner_reset(GtkSpinner *spinner)
+{
+  if (!spinner) {
+    return;
+  }
+
+  gtk_spinner_stop(spinner);
+  gtk_widget_set_visible(GTK_WIDGET(spinner), FALSE);
+  g_object_set_qdata(G_OBJECT(spinner), spinner_quark(), nullptr);
+}
+
+// Track the active background search and switch the search button to Stop.
+static void
+begin_search_request(SearchWidgets *widgets, GCancellable *c, uint64_t request_id)
+{
+  if (!widgets || !c) {
+    return;
+  }
+
+  if (widgets->search_cancellable) {
+    g_object_unref(widgets->search_cancellable);
+  }
+
+  widgets->search_cancellable = G_CANCELLABLE(g_object_ref(c));
+  widgets->current_search_request_id = request_id;
+  gtk_button_set_label(widgets->search_button, "Stop");
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->desc_checkbox), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->exact_checkbox), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->history_list), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+}
+
+// Restore the normal search controls after a running search is stopped or finished.
+static void
+restore_search_controls(SearchWidgets *widgets)
+{
+  if (!widgets) {
+    return;
+  }
+
+  gtk_button_set_label(widgets->search_button, "Search");
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->desc_checkbox), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->exact_checkbox), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->history_list), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+}
+
+// Restore the normal search UI when the active background search is done.
+static void
+end_search_request(SearchWidgets *widgets, uint64_t request_id)
+{
+  if (!widgets || widgets->current_search_request_id != request_id) {
+    return;
+  }
+
+  if (widgets->search_cancellable) {
+    g_object_unref(widgets->search_cancellable);
+    widgets->search_cancellable = nullptr;
+  }
+  widgets->current_search_request_id = 0;
+  restore_search_controls(widgets);
+}
+
+// Cancel the active search and immediately unlock the search controls.
+static void
+cancel_active_search(SearchWidgets *widgets)
+{
+  if (!widgets || !widgets->search_cancellable) {
+    return;
+  }
+
+  GCancellable *c = widgets->search_cancellable;
+  if (!g_cancellable_is_cancelled(c)) {
+    g_cancellable_cancel(c);
+  }
+
+  spinner_reset(widgets->spinner);
+  restore_search_controls(widgets);
+  set_status(widgets->status_label, "Search cancelled.", "gray");
+}
+
 // -----------------------------------------------------------------------------
 // FIXME: HACK: Refresh the visible package rows after pending-action state changes
 // Rebuilds the current package list presentation so status badges stay in sync
@@ -611,12 +700,12 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 // Returns a std::vector<PackageRow> of matching package metadata.
 // -----------------------------------------------------------------------------
 static void
-on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
+on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancellable)
 {
   const SearchTaskData *td = static_cast<const SearchTaskData *>(task_data);
   const char *pattern = td ? td->term : "";
   try {
-    auto *results = new std::vector<PackageRow>(search_available_package_rows(pattern));
+    auto *results = new std::vector<PackageRow>(search_available_package_rows_interruptible(pattern, cancellable));
     // Ensure results are freed if never propagated (stale/cancel path).
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
@@ -633,21 +722,22 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
   SearchWidgets *widgets = (SearchWidgets *)user_data;
+  GCancellable *c = g_task_get_cancellable(task);
+  const SearchTaskData *td = static_cast<const SearchTaskData *>(g_task_get_task_data(task));
 
-  if (GCancellable *c = g_task_get_cancellable(task)) {
-    if (g_cancellable_is_cancelled(c)) {
-      spinner_release(widgets->spinner);
-      gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-      gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
-      return;
+  if (c && g_cancellable_is_cancelled(c)) {
+    if (td && widgets->current_search_request_id == td->request_id) {
+      end_search_request(widgets, td->request_id);
+      set_status(widgets->status_label, "Search cancelled.", "gray");
     }
+    return;
   }
 
-  const SearchTaskData *td = static_cast<const SearchTaskData *>(g_task_get_task_data(task));
   if (td && td->generation != BaseManager::instance().current_generation()) {
     spinner_release(widgets->spinner);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+    if (widgets->current_search_request_id == td->request_id) {
+      end_search_request(widgets, td->request_id);
+    }
     return;
   }
 
@@ -657,9 +747,9 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   // Stop spinner (ref-counted)
   spinner_release(widgets->spinner);
 
-  // Re-enable UI
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+  if (td) {
+    end_search_request(widgets, td->request_id);
+  }
 
   if (packages) {
     // Cache results for faster re-display next time (use dispatch-time key)
@@ -724,6 +814,11 @@ void
 on_search_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
+  if (widgets->search_cancellable && !g_cancellable_is_cancelled(widgets->search_cancellable)) {
+    cancel_active_search(widgets);
+    return;
+  }
+
   g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->desc_checkbox));
   g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->exact_checkbox));
 
@@ -818,42 +913,34 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   set_status(widgets->status_label, ("Searching for '" + term + "'...").c_str(), "blue");
   widgets->selected_nevra.clear();
 
-  // Show spinner (ref-counted)
-  spinner_acquire(widgets->spinner);
-
-  // Disable search input and button during search
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
-
   // Check cache first
   {
     std::lock_guard<std::mutex> lock(g_cache_mutex);
     auto it = g_search_cache.find(cache_key_for(term));
     if (it != g_search_cache.end()) {
       // Use cached results and skip background thread
-      spinner_release(widgets->spinner);
       fill_package_view(widgets, it->second);
 
       char msg[256];
       snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
       set_status(widgets->status_label, msg, "gray");
 
-      // Re-enable search controls
-      gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-      gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
-
       return;
     }
   }
 
   // Otherwise perform real background search
+  spinner_acquire(widgets->spinner);
+
   const std::string key = cache_key_for(term);
   SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
   td->term = g_strdup(term.c_str());
   td->cache_key = g_strdup(key.c_str());
+  td->request_id = widgets->next_search_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
   GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
+  begin_search_request(widgets, c, td->request_id);
   GTask *task = g_task_new(nullptr, c, on_search_task_finished, widgets);
   g_task_set_task_data(task, td, search_task_data_free);
   g_task_run_in_thread(task, on_search_task);

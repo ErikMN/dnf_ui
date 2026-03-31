@@ -3,7 +3,6 @@
 
 #include <string>
 #include <vector>
-#include <mutex>
 
 #include <gtk/gtk.h>
 
@@ -39,6 +38,12 @@ struct SearchWidgets {
   GtkLabel *files_label;
   GtkLabel *deps_label;
   GtkLabel *changelog_label;
+  // Active cancellable for the current background search, if any.
+  GCancellable *search_cancellable;
+  // Next search request id used to distinguish overlapping search tasks.
+  uint64_t next_search_request_id;
+  // Current search request id owned by the search UI state.
+  uint64_t current_search_request_id;
   std::vector<std::string> history;
   std::vector<PackageRow> current_packages;
   std::vector<PendingAction> pending;

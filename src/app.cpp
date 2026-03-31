@@ -330,6 +330,9 @@ activate(GtkApplication *app, gpointer)
   widgets->count_label = GTK_LABEL(count_label);
   widgets->changelog_label = GTK_LABEL(changelog_label);
   widgets->pending_list = GTK_LIST_BOX(pending_list);
+  widgets->search_cancellable = nullptr;
+  widgets->next_search_request_id = 1;
+  widgets->current_search_request_id = 0;
 
   // Apply and Clear Transactions are meaningful only when there are pending actions
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), FALSE);
@@ -430,7 +433,13 @@ activate(GtkApplication *app, gpointer)
 
   g_signal_connect(window,
                    "destroy",
-                   G_CALLBACK(+[](GtkWidget *, gpointer data) { delete static_cast<SearchWidgets *>(data); }),
+                   G_CALLBACK(+[](GtkWidget *, gpointer data) {
+                     SearchWidgets *widgets = static_cast<SearchWidgets *>(data);
+                     if (widgets->search_cancellable) {
+                       g_object_unref(widgets->search_cancellable);
+                     }
+                     delete widgets;
+                   }),
                    widgets);
 
   // TODO: FIXME: This is broken
