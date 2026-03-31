@@ -145,6 +145,12 @@ activate(GtkApplication *app, gpointer)
   g_signal_connect(
       clear_cache_button, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) { clear_search_cache(); }), NULL);
 
+  GtkWidget *toggle_history_button = gtk_button_new_with_label("Hide History");
+  gtk_box_append(GTK_BOX(hbox_buttons), toggle_history_button);
+
+  GtkWidget *toggle_info_button = gtk_button_new_with_label("Hide Info");
+  gtk_box_append(GTK_BOX(hbox_buttons), toggle_info_button);
+
   // --- Transaction buttons row (Install / Remove / Apply) ---
   GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_main), hbox_tx_buttons);
@@ -404,6 +410,24 @@ activate(GtkApplication *app, gpointer)
 
   g_signal_connect(entry, "activate", G_CALLBACK(on_search_button_clicked), widgets);
   g_signal_connect(history_list, "row-selected", G_CALLBACK(on_history_row_selected), widgets);
+  g_signal_connect(toggle_history_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+                     GtkWidget *pane = GTK_WIDGET(user_data);
+                     gboolean visible = gtk_widget_get_visible(pane);
+                     gtk_widget_set_visible(pane, !visible);
+                     gtk_button_set_label(button, visible ? "Show History" : "Hide History");
+                   }),
+                   vbox_history);
+  g_signal_connect(toggle_info_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+                     GtkWidget *pane = GTK_WIDGET(user_data);
+                     gboolean visible = gtk_widget_get_visible(pane);
+                     gtk_widget_set_visible(pane, !visible);
+                     gtk_button_set_label(button, visible ? "Show Info" : "Hide Info");
+                   }),
+                   notebook);
 
   g_signal_connect(apply_button, "clicked", G_CALLBACK(on_apply_button_clicked), widgets);
   g_signal_connect(clear_pending_button, "clicked", G_CALLBACK(on_clear_pending_button_clicked), widgets);
