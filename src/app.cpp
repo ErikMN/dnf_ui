@@ -352,30 +352,30 @@ activate(GtkApplication *app, gpointer)
                                       "label.status-bar { padding: 4px; border-radius: 4px; } "
                                       ".bottom-bar { padding: 5px; border-top: 1px solid #666; } "
                                       ".package-status { "
-                                      "  padding: 2px 8px; "
+                                      "  padding: 3px 10px; "
                                       "  border-radius: 999px; "
                                       "  border: 1px solid transparent; "
-                                      "  font-weight: 700; "
+                                      "  font-weight: 800; "
                                       "} "
                                       ".package-status-available { "
-                                      "  background-color: #dbe7f5; "
-                                      "  border-color: #8ea6c1; "
-                                      "  color: #16324f; "
+                                      "  background-color: #cbd8e8; "
+                                      "  border-color: #6f89a8; "
+                                      "  color: #10263f; "
                                       "} "
                                       ".package-status-installed { "
-                                      "  background-color: #d7f0d1; "
-                                      "  border-color: #86b97c; "
-                                      "  color: #1f4f1c; "
+                                      "  background-color: #cfe6c2; "
+                                      "  border-color: #668f58; "
+                                      "  color: #173915; "
                                       "} "
                                       ".package-status-pending-install { "
-                                      "  background-color: #d9e8ff; "
-                                      "  border-color: #7fa3d8; "
-                                      "  color: #163a69; "
+                                      "  background-color: #2b64b5; "
+                                      "  border-color: #163d74; "
+                                      "  color: #ffffff; "
                                       "} "
                                       ".package-status-pending-remove { "
-                                      "  background-color: #ffe0d9; "
-                                      "  border-color: #d99a8f; "
-                                      "  color: #6f2419; "
+                                      "  background-color: #bf4a33; "
+                                      "  border-color: #7c281b; "
+                                      "  color: #ffffff; "
                                       "} "
                                       ".package-meta { "
                                       "  color: #555555; "
@@ -395,7 +395,7 @@ activate(GtkApplication *app, gpointer)
     g_object_unref(css);
   }
   set_status(widgets->status_label, "Ready.", "gray");
-  fill_package_view(widgets, {});
+  fill_package_view(widgets, { });
 
   // --- Connect signals ---
   g_signal_connect(list_button, "clicked", G_CALLBACK(on_list_button_clicked), widgets);
