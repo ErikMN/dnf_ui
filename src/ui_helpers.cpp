@@ -55,30 +55,74 @@ package_row_quark()
   return q;
 }
 
-static GObject *
-make_package_object(const PackageRow &row)
-{
-  GObject *obj = G_OBJECT(g_object_new(G_TYPE_OBJECT, nullptr));
-  g_object_set_qdata_full(
-      obj, package_row_quark(), new PackageRow(row), +[](gpointer p) { delete static_cast<PackageRow *>(p); });
-  return obj;
-}
-
-static const PackageRow *
-package_row_from_object(GObject *obj)
-{
-  if (!obj) {
-    return nullptr;
-  }
-
-  return static_cast<const PackageRow *>(g_object_get_qdata(obj, package_row_quark()));
-}
+// Package row wrapper used by the sortable GTK model.
+struct PackageItem {
+  PackageRow row;
+  std::string status_text;
+  int status_rank;
+};
 
 static bool
 package_is_installed(const PackageRow &row)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   return g_installed_nevras.count(row.nevra) > 0;
+}
+
+// Snapshot the visible status text and its sort order for one package row.
+static void
+fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
+{
+  for (const auto &a : widgets->pending) {
+    if (a.nevra == item.row.nevra) {
+      item.status_text = (a.type == PendingAction::INSTALL) ? "Pending Install" : "Pending Removal";
+      item.status_rank = (a.type == PendingAction::INSTALL) ? 2 : 3;
+      return;
+    }
+  }
+
+  if (package_is_installed(item.row)) {
+    item.status_text = "Installed";
+    item.status_rank = 1;
+    return;
+  }
+
+  item.status_text = "Available";
+  item.status_rank = 0;
+}
+
+// Wrap one package row in a GObject so GTK list models can sort and select it.
+static GObject *
+make_package_object(SearchWidgets *widgets, const PackageRow &row)
+{
+  GObject *obj = G_OBJECT(g_object_new(G_TYPE_OBJECT, nullptr));
+  auto *item = new PackageItem { row, {}, 0 };
+  fill_package_item_status(widgets, *item);
+  g_object_set_qdata_full(obj, package_row_quark(), item, +[](gpointer p) { delete static_cast<PackageItem *>(p); });
+  return obj;
+}
+
+// Read the sortable package wrapper stored on a GTK list item.
+static const PackageItem *
+package_item_from_object(GObject *obj)
+{
+  if (!obj) {
+    return nullptr;
+  }
+
+  return static_cast<const PackageItem *>(g_object_get_qdata(obj, package_row_quark()));
+}
+
+// Map a package wrapper back to the package row used elsewhere in the UI.
+static const PackageRow *
+package_row_from_object(GObject *obj)
+{
+  const PackageItem *item = package_item_from_object(obj);
+  if (!item) {
+    return nullptr;
+  }
+
+  return &item->row;
 }
 
 // -----------------------------------------------------------------------------
@@ -116,25 +160,107 @@ clear_status_css(GtkWidget *label)
   gtk_widget_remove_css_class(label, "package-status-pending-remove");
 }
 
+// Return the visible text for one package table cell.
 static std::string
-column_text(SearchWidgets *widgets, const PackageRow &row, PackageColumnKind kind)
+column_text(const PackageItem &item, PackageColumnKind kind)
 {
   switch (kind) {
   case PackageColumnKind::STATUS:
-    return status_text(widgets, row);
+    return item.status_text;
   case PackageColumnKind::PACKAGE:
-    return row.name;
+    return item.row.name;
   case PackageColumnKind::VERSION:
-    return row.display_version();
+    return item.row.display_version();
   case PackageColumnKind::ARCH:
-    return row.arch;
+    return item.row.arch;
   case PackageColumnKind::REPO:
-    return row.repo;
+    return item.row.repo;
   case PackageColumnKind::SUMMARY:
-    return row.summary;
+    return item.row.summary;
   }
 
   return {};
+}
+
+// Per-column data carried by the custom GTK sorter.
+struct ColumnSorterData {
+  PackageColumnKind kind;
+};
+
+static void
+column_sorter_data_free(gpointer p)
+{
+  delete static_cast<ColumnSorterData *>(p);
+}
+
+// Compare two strings case-insensitively while keeping a stable fallback order.
+static int
+compare_text(const std::string &lhs, const std::string &rhs)
+{
+  char *lhs_folded = g_utf8_casefold(lhs.c_str(), -1);
+  char *rhs_folded = g_utf8_casefold(rhs.c_str(), -1);
+
+  int result = g_utf8_collate(lhs_folded, rhs_folded);
+  if (result == 0) {
+    result = g_utf8_collate(lhs.c_str(), rhs.c_str());
+  }
+
+  g_free(lhs_folded);
+  g_free(rhs_folded);
+  return result;
+}
+
+// Compare two package items for the active package table column.
+static int
+compare_package_items(const PackageItem &lhs, const PackageItem &rhs, PackageColumnKind kind)
+{
+  int result = 0;
+
+  switch (kind) {
+  case PackageColumnKind::STATUS:
+    result = lhs.status_rank - rhs.status_rank;
+    break;
+  case PackageColumnKind::PACKAGE:
+    result = compare_text(lhs.row.name, rhs.row.name);
+    break;
+  case PackageColumnKind::VERSION:
+    result = compare_text(lhs.row.display_version(), rhs.row.display_version());
+    break;
+  case PackageColumnKind::ARCH:
+    result = compare_text(lhs.row.arch, rhs.row.arch);
+    break;
+  case PackageColumnKind::REPO:
+    result = compare_text(lhs.row.repo, rhs.row.repo);
+    break;
+  case PackageColumnKind::SUMMARY:
+    result = compare_text(lhs.row.summary, rhs.row.summary);
+    break;
+  }
+
+  if (result != 0) {
+    return result;
+  }
+
+  result = compare_text(lhs.row.name, rhs.row.name);
+  if (result != 0) {
+    return result;
+  }
+
+  return compare_text(lhs.row.nevra, rhs.row.nevra);
+}
+
+// Adapter from GTK's custom sorter callback to the package item comparator.
+static int
+column_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_data)
+{
+  const auto *data = static_cast<const ColumnSorterData *>(user_data);
+  const PackageItem *lhs = package_item_from_object(G_OBJECT(const_cast<gpointer>(item1)));
+  const PackageItem *rhs = package_item_from_object(G_OBJECT(const_cast<gpointer>(item2)));
+  if (!data || !lhs || !rhs) {
+    return 0;
+  }
+
+  return compare_package_items(*lhs, *rhs, data->kind);
 }
 
 // -----------------------------------------------------------------------------
@@ -187,23 +313,24 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
 
                      GtkWidget *label = gtk_list_item_get_child(item);
                      GObject *obj = G_OBJECT(gtk_list_item_get_item(item));
-                     const PackageRow *row = package_row_from_object(obj);
+                     const PackageItem *package_item = package_item_from_object(obj);
 
-                     if (!row) {
+                     if (!package_item) {
                        gtk_label_set_text(GTK_LABEL(label), "");
                        clear_status_css(label);
                        return;
                      }
 
-                     std::string text = column_text(widgets, *row, kind);
+                     std::string text = column_text(*package_item, kind);
                      gtk_label_set_text(GTK_LABEL(label), text.c_str());
 
                      if (kind == PackageColumnKind::STATUS) {
                        clear_status_css(label);
 
-                       if (const char *pending_class = pending_css_class(widgets, row->nevra)) {
+                       const PackageRow &row = package_item->row;
+                       if (const char *pending_class = pending_css_class(widgets, row.nevra)) {
                          gtk_widget_add_css_class(label, pending_class);
-                       } else if (package_is_installed(*row)) {
+                       } else if (package_is_installed(row)) {
                          gtk_widget_add_css_class(label, "package-status-installed");
                        } else {
                          gtk_widget_add_css_class(label, "package-status-available");
@@ -215,6 +342,9 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
   GtkColumnViewColumn *column = gtk_column_view_column_new(title, factory);
   gtk_column_view_column_set_resizable(column, TRUE);
   gtk_column_view_column_set_expand(column, expand);
+  gtk_column_view_column_set_sorter(
+      column,
+      GTK_SORTER(gtk_custom_sorter_new(column_sorter_compare, new ColumnSorterData { kind }, column_sorter_data_free)));
 
   if (fixed_width > 0) {
     gtk_column_view_column_set_fixed_width(column, fixed_width);
@@ -329,15 +459,32 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
 
   GListStore *store = g_list_store_new(G_TYPE_OBJECT);
   for (const auto &row : items) {
-    GObject *obj = make_package_object(row);
+    GObject *obj = make_package_object(widgets, row);
     g_list_store_append(store, obj);
     g_object_unref(obj);
   }
 
+  GtkColumnView *view = GTK_COLUMN_VIEW(gtk_column_view_new(nullptr));
+  gtk_widget_set_hexpand(GTK_WIDGET(view), TRUE);
+  gtk_widget_set_vexpand(GTK_WIDGET(view), TRUE);
+  gtk_column_view_set_single_click_activate(view, FALSE);
+  gtk_column_view_set_show_row_separators(view, TRUE);
+  gtk_column_view_set_show_column_separators(view, TRUE);
+
+  gtk_column_view_append_column(view, create_text_column(widgets, "Status", PackageColumnKind::STATUS, 140, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, "Package", PackageColumnKind::PACKAGE, 180, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, "Version", PackageColumnKind::VERSION, 150, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, "Arch", PackageColumnKind::ARCH, 95, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, "Repo", PackageColumnKind::REPO, 130, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, "Summary", PackageColumnKind::SUMMARY, 0, TRUE));
+
+  // Wrap the package list in a GTK sort model so column header clicks reorder it.
+  GtkSortListModel *sort_model = gtk_sort_list_model_new(G_LIST_MODEL(store), gtk_column_view_get_sorter(view));
+
   GtkSingleSelection *sel = gtk_single_selection_new(nullptr);
   gtk_single_selection_set_autoselect(sel, FALSE);
   gtk_single_selection_set_can_unselect(sel, TRUE);
-  gtk_single_selection_set_model(sel, G_LIST_MODEL(store));
+  gtk_single_selection_set_model(sel, G_LIST_MODEL(sort_model));
   gtk_single_selection_set_selected(sel, GTK_INVALID_LIST_POSITION);
 
   g_signal_connect(sel,
@@ -477,12 +624,7 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                    }),
                    widgets);
 
-  GtkColumnView *view = GTK_COLUMN_VIEW(gtk_column_view_new(GTK_SELECTION_MODEL(sel)));
-  gtk_widget_set_hexpand(GTK_WIDGET(view), TRUE);
-  gtk_widget_set_vexpand(GTK_WIDGET(view), TRUE);
-  gtk_column_view_set_single_click_activate(view, FALSE);
-  gtk_column_view_set_show_row_separators(view, TRUE);
-  gtk_column_view_set_show_column_separators(view, TRUE);
+  gtk_column_view_set_model(view, GTK_SELECTION_MODEL(sel));
 
   g_signal_connect(view,
                    "activate",
@@ -522,13 +664,6 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                    }),
                    widgets);
 
-  gtk_column_view_append_column(view, create_text_column(widgets, "Status", PackageColumnKind::STATUS, 140, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Package", PackageColumnKind::PACKAGE, 180, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Version", PackageColumnKind::VERSION, 150, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Arch", PackageColumnKind::ARCH, 95, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Repo", PackageColumnKind::REPO, 130, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Summary", PackageColumnKind::SUMMARY, 0, TRUE));
-
   gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(view));
   widgets->listbox = nullptr;
 
@@ -540,8 +675,16 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
   // Restore selection when the same package is still present after a refresh.
   bool restored = false;
   if (!widgets->selected_nevra.empty()) {
-    for (guint i = 0; i < items.size(); ++i) {
-      if (items[i].nevra == widgets->selected_nevra) {
+    GListModel *selected_model = gtk_single_selection_get_model(sel);
+    guint n_items = g_list_model_get_n_items(selected_model);
+
+    for (guint i = 0; i < n_items; ++i) {
+      GObject *obj = G_OBJECT(g_list_model_get_item(selected_model, i));
+      const PackageRow *row = package_row_from_object(obj);
+      bool match = row && row->nevra == widgets->selected_nevra;
+      g_object_unref(obj);
+
+      if (match) {
         gtk_single_selection_set_selected(sel, i);
         restored = true;
         break;
@@ -558,6 +701,8 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
     gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), FALSE);
     update_action_button_labels(widgets, "");
   }
+
+  g_object_unref(sort_model);
 }
 
 // -----------------------------------------------------------------------------
