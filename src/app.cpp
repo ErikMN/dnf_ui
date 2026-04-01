@@ -69,7 +69,7 @@ struct AppWidgets {
 static void activate(GtkApplication *app, gpointer user_data);
 static GtkWidget *create_window(GtkApplication *app);
 static GtkWidget *create_thin_separator(void);
-static GtkWidget *create_scrolled_text_label(const char *text);
+static GtkWidget *create_scrolled_text_label(const char *text, GtkWidget **out_label);
 static void setup_shortcuts(GtkWidget *window, GtkWidget *entry);
 static void build_main_ui(AppWidgets *ui);
 static SearchWidgets *create_search_widgets(const AppWidgets *ui);
@@ -127,7 +127,7 @@ create_thin_separator(void)
 // Create selectable top-aligned text label inside a scrolled window
 // -----------------------------------------------------------------------------
 static GtkWidget *
-create_scrolled_text_label(const char *text)
+create_scrolled_text_label(const char *text, GtkWidget **out_label)
 {
   GtkWidget *scrolled = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scrolled, TRUE);
@@ -144,6 +144,10 @@ create_scrolled_text_label(const char *text)
   gtk_widget_set_margin_end(label, 10);
   gtk_widget_set_margin_top(label, 10);
   gtk_widget_set_margin_bottom(label, 10);
+
+  if (out_label) {
+    *out_label = label;
+  }
 
   return scrolled;
 }
@@ -386,24 +390,26 @@ build_main_ui(AppWidgets *ui)
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_details, tab_label_info);
 
   // --- Tab 2: File List ---
-  GtkWidget *scrolled_files = create_scrolled_text_label("Select an installed package to view its file list.");
-  GtkWidget *files_label = gtk_scrolled_window_get_child(GTK_SCROLLED_WINDOW(scrolled_files));
+  GtkWidget *files_label = NULL;
+  GtkWidget *scrolled_files =
+      create_scrolled_text_label("Select an installed package to view its file list.", &files_label);
   ui->files_label = files_label;
 
   GtkWidget *tab_label_files = gtk_label_new("Files");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_files, tab_label_files);
 
   // --- Tab 3: Dependencies ---
-  GtkWidget *scrolled_deps = create_scrolled_text_label("Select a package to view dependencies.");
-  GtkWidget *deps_label = gtk_scrolled_window_get_child(GTK_SCROLLED_WINDOW(scrolled_deps));
+  GtkWidget *deps_label = NULL;
+  GtkWidget *scrolled_deps = create_scrolled_text_label("Select a package to view dependencies.", &deps_label);
   ui->deps_label = deps_label;
 
   GtkWidget *tab_label_deps = gtk_label_new("Dependencies");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_deps, tab_label_deps);
 
   // --- Tab 4: Changelog ---
-  GtkWidget *scrolled_changelog = create_scrolled_text_label("Select a package to view its changelog.");
-  GtkWidget *changelog_label = gtk_scrolled_window_get_child(GTK_SCROLLED_WINDOW(scrolled_changelog));
+  GtkWidget *changelog_label = NULL;
+  GtkWidget *scrolled_changelog =
+      create_scrolled_text_label("Select a package to view its changelog.", &changelog_label);
   ui->changelog_label = changelog_label;
 
   GtkWidget *tab_label_changelog = gtk_label_new("Changelog");
