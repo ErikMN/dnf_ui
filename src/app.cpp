@@ -78,6 +78,8 @@ static void connect_signals(const AppWidgets *ui, SearchWidgets *widgets);
 static void connect_cleanup(GtkWidget *window, SearchWidgets *widgets);
 static void setup_periodic_tasks(void);
 static void apply_root_state(const AppWidgets *ui, SearchWidgets *widgets);
+static void show_pending_quit_dialog(SearchWidgets *widgets);
+static gboolean on_main_window_close_request(GtkWindow *window, gpointer user_data);
 
 // -----------------------------------------------------------------------------
 // Run GTK application and return process exit status
@@ -437,6 +439,7 @@ create_search_widgets(const AppWidgets *ui)
   widgets->entry = GTK_ENTRY(ui->entry);
   widgets->listbox = GTK_LIST_BOX(ui->listbox);
   widgets->list_scroller = GTK_SCROLLED_WINDOW(ui->scrolled_list);
+  widgets->inner_paned = GTK_PANED(ui->inner_paned);
   widgets->history_list = GTK_LIST_BOX(ui->history_list);
   widgets->spinner = GTK_SPINNER(ui->spinner);
   widgets->search_button = GTK_BUTTON(ui->search_button);
@@ -457,6 +460,8 @@ create_search_widgets(const AppWidgets *ui)
   widgets->search_cancellable = nullptr;
   widgets->next_search_request_id = 1;
   widgets->current_search_request_id = 0;
+  widgets->allow_close_with_pending = false;
+  widgets->pending_quit_dialog_open = false;
 
   return widgets;
 }
@@ -600,16 +605,8 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
                    }),
                    widgets);
 
-  // TODO: FIXME: This is broken
-  // Save paned position on close
-  g_signal_connect(ui->window,
-                   "close-request",
-                   G_CALLBACK(+[](GtkWindow *w, gpointer user_data) -> gboolean {
-                     save_window_geometry(w);
-                     save_paned_position(GTK_PANED(user_data));
-                     return FALSE;
-                   }),
-                   ui->inner_paned);
+  // Intercept window close so unapplied marked changes can be confirmed first.
+  g_signal_connect(ui->window, "close-request", G_CALLBACK(on_main_window_close_request), widgets);
 
   // Save window geometry and paned position when window is unrealized (destroyed)
   g_signal_connect(ui->window,
@@ -626,6 +623,130 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
                    "notify::position",
                    G_CALLBACK(+[](GtkPaned *paned, GParamSpec *, gpointer) { save_paned_position(paned); }),
                    NULL);
+}
+
+// -----------------------------------------------------------------------------
+// Show a confirmation dialog before closing the app with unapplied changes.
+// -----------------------------------------------------------------------------
+static void
+show_pending_quit_dialog(SearchWidgets *widgets)
+{
+  if (!widgets) {
+    return;
+  }
+
+  widgets->pending_quit_dialog_open = true;
+
+  GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
+  gtk_window_set_title(dialog, "Quit and discard marked changes?");
+  gtk_window_set_default_size(dialog, 520, 180);
+  gtk_window_set_modal(dialog, TRUE);
+
+  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->entry));
+  if (root && GTK_IS_WINDOW(root)) {
+    GtkWindow *parent = GTK_WINDOW(root);
+    if (GtkApplication *app = gtk_window_get_application(parent)) {
+      gtk_window_set_application(dialog, app);
+    }
+    gtk_window_set_transient_for(dialog, parent);
+  }
+
+  GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_start(outer, 12);
+  gtk_widget_set_margin_end(outer, 12);
+  gtk_widget_set_margin_top(outer, 12);
+  gtk_widget_set_margin_bottom(outer, 12);
+  gtk_window_set_child(dialog, outer);
+
+  GtkWidget *title = gtk_label_new(nullptr);
+  gtk_label_set_markup(GTK_LABEL(title), "<b>Quit and discard marked changes?</b>");
+  gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
+  gtk_box_append(GTK_BOX(outer), title);
+
+  GtkWidget *message = gtk_label_new(
+      "There are still marked changes that have not yet been applied. They will get lost if you choose to quit.");
+  gtk_label_set_xalign(GTK_LABEL(message), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(message), TRUE);
+  gtk_box_append(GTK_BOX(outer), message);
+
+  GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(button_box, GTK_ALIGN_END);
+  gtk_box_append(GTK_BOX(outer), button_box);
+
+  GtkWidget *cancel_button = gtk_button_new_with_label("Cancel");
+  gtk_box_append(GTK_BOX(button_box), cancel_button);
+
+  GtkWidget *quit_button = gtk_button_new_with_label("Quit");
+  gtk_widget_add_css_class(quit_button, "destructive-action");
+  gtk_box_append(GTK_BOX(button_box), quit_button);
+
+  g_signal_connect(cancel_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer) {
+                     GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(button));
+                     if (root && GTK_IS_WINDOW(root)) {
+                       gtk_window_destroy(GTK_WINDOW(root));
+                     }
+                   }),
+                   nullptr);
+
+  g_signal_connect(quit_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+                     widgets->allow_close_with_pending = true;
+
+                     GtkRoot *dialog_root = gtk_widget_get_root(GTK_WIDGET(button));
+                     if (dialog_root && GTK_IS_WINDOW(dialog_root)) {
+                       gtk_window_destroy(GTK_WINDOW(dialog_root));
+                     }
+
+                     GtkRoot *parent_root = gtk_widget_get_root(GTK_WIDGET(widgets->entry));
+                     if (parent_root && GTK_IS_WINDOW(parent_root)) {
+                       gtk_window_close(GTK_WINDOW(parent_root));
+                     }
+                   }),
+                   widgets);
+
+  g_signal_connect(dialog,
+                   "destroy",
+                   G_CALLBACK(+[](GtkWidget *, gpointer user_data) {
+                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+                     widgets->pending_quit_dialog_open = false;
+                   }),
+                   widgets);
+
+  gtk_window_present(dialog);
+}
+
+// -----------------------------------------------------------------------------
+// Confirm before closing the app when there are unapplied pending changes.
+// -----------------------------------------------------------------------------
+static gboolean
+on_main_window_close_request(GtkWindow *window, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  // TODO: FIXME: This is broken
+  // Save paned position on close
+  save_window_geometry(window);
+  if (widgets && widgets->inner_paned) {
+    save_paned_position(widgets->inner_paned);
+  }
+
+  if (!widgets || widgets->allow_close_with_pending) {
+    return FALSE;
+  }
+
+  if (widgets->pending.empty()) {
+    return FALSE;
+  }
+
+  if (!widgets->pending_quit_dialog_open) {
+    show_pending_quit_dialog(widgets);
+  }
+
+  return TRUE;
 }
 
 // -----------------------------------------------------------------------------
