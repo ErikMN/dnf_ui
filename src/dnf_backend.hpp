@@ -37,6 +37,16 @@ struct PackageRow {
   }
 };
 
+// Resolved transaction preview used by the confirmation dialog before apply.
+struct TransactionPreview {
+  std::vector<std::string> install;
+  std::vector<std::string> upgrade;
+  std::vector<std::string> downgrade;
+  std::vector<std::string> reinstall;
+  std::vector<std::string> remove;
+  long long disk_space_delta = 0;
+};
+
 using TransactionProgressCallback = std::function<void(const std::string &)>;
 
 extern std::atomic<bool> g_search_in_description;
@@ -59,6 +69,12 @@ std::string get_package_changelog(const std::string &pkg_nevra);
 bool install_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
 bool remove_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
 bool reinstall_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
+// Resolve the pending transaction and summarize the final package changes for UI review.
+bool preview_transaction(const std::vector<std::string> &install_nevras,
+                         const std::vector<std::string> &remove_nevras,
+                         const std::vector<std::string> &reinstall_nevras,
+                         TransactionPreview &preview,
+                         std::string &error_out);
 bool apply_transaction(const std::vector<std::string> &install_nevras,
                        const std::vector<std::string> &remove_nevras,
                        const std::vector<std::string> &reinstall_nevras,

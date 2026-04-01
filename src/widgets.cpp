@@ -18,6 +18,7 @@ static void add_to_history(SearchWidgets *widgets, const std::string &term);
 static void perform_search(SearchWidgets *widgets, const std::string &term);
 static void refresh_current_package_view(SearchWidgets *widgets);
 static void cancel_active_search(SearchWidgets *widgets);
+static void start_apply_transaction(SearchWidgets *widgets);
 std::vector<PackageRow> search_available_package_rows_interruptible(const std::string &pattern,
                                                                     GCancellable *cancellable);
 
@@ -71,6 +72,59 @@ apply_task_data_free(gpointer p)
 {
   ApplyTaskData *d = static_cast<ApplyTaskData *>(p);
   delete d;
+}
+
+// Split the pending queue into install, remove, and reinstall transaction specs.
+static void
+build_pending_transaction_specs(const SearchWidgets *widgets,
+                                std::vector<std::string> &install,
+                                std::vector<std::string> &remove,
+                                std::vector<std::string> &reinstall)
+{
+  install.clear();
+  remove.clear();
+  reinstall.clear();
+
+  if (!widgets) {
+    return;
+  }
+
+  install.reserve(widgets->pending.size());
+  remove.reserve(widgets->pending.size());
+  reinstall.reserve(widgets->pending.size());
+
+  for (const auto &action : widgets->pending) {
+    if (action.type == PendingAction::INSTALL) {
+      install.push_back(action.nevra);
+    } else if (action.type == PendingAction::REINSTALL) {
+      reinstall.push_back(action.nevra);
+    } else {
+      remove.push_back(action.nevra);
+    }
+  }
+}
+
+// Format the resolved disk-space change for the transaction summary dialog.
+static std::string
+format_transaction_space_change(long long delta_bytes)
+{
+  if (delta_bytes == 0) {
+    return "Disk space usage will be unchanged.";
+  }
+
+  unsigned long long abs_bytes =
+      delta_bytes > 0 ? static_cast<unsigned long long>(delta_bytes) : static_cast<unsigned long long>(-delta_bytes);
+  char *formatted = g_format_size(abs_bytes);
+  std::string line;
+
+  if (delta_bytes > 0) {
+    line = std::string(formatted) + " extra disk space will be used.";
+  } else {
+    line = std::string(formatted) + " of disk space will be freed.";
+  }
+
+  g_free(formatted);
+  return line;
 }
 
 // -----------------------------------------------------------------------------
@@ -336,6 +390,160 @@ finish_transaction_progress(TransactionProgressWindow *progress, bool success, c
   gtk_label_set_text(progress->stage_label,
                      success ? "Transaction finished successfully." : "Transaction finished with errors.");
   gtk_window_set_title(progress->window, success ? "Transaction Complete" : "Transaction Failed");
+}
+
+// Append one resolved transaction section to the confirmation dialog.
+static void
+append_transaction_summary_section(GtkBox *parent, const char *title, const std::vector<std::string> &items)
+{
+  if (!parent || !title || items.empty()) {
+    return;
+  }
+
+  GtkWidget *section = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  gtk_box_append(parent, section);
+
+  GtkWidget *heading = gtk_label_new(nullptr);
+  gchar *markup = g_markup_printf_escaped("<b>%s</b>", title);
+  gtk_label_set_markup(GTK_LABEL(heading), markup);
+  g_free(markup);
+  gtk_label_set_xalign(GTK_LABEL(heading), 0.0f);
+  gtk_box_append(GTK_BOX(section), heading);
+
+  for (const auto &item : items) {
+    GtkWidget *label = gtk_label_new(item.c_str());
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
+    gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+    gtk_box_append(GTK_BOX(section), label);
+  }
+}
+
+// Show the final confirmation dialog before starting the package transaction.
+static void
+show_transaction_summary_dialog(SearchWidgets *widgets, const TransactionPreview &preview)
+{
+  GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
+  gtk_window_set_title(dialog, "Summary");
+  gtk_window_set_default_size(dialog, 760, 520);
+  gtk_window_set_modal(dialog, TRUE);
+
+  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->entry));
+  if (root && GTK_IS_WINDOW(root)) {
+    GtkWindow *parent = GTK_WINDOW(root);
+    if (GtkApplication *app = gtk_window_get_application(parent)) {
+      gtk_window_set_application(dialog, app);
+    }
+    gtk_window_set_transient_for(dialog, parent);
+  }
+
+  GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_start(outer, 12);
+  gtk_widget_set_margin_end(outer, 12);
+  gtk_widget_set_margin_top(outer, 12);
+  gtk_widget_set_margin_bottom(outer, 12);
+  gtk_window_set_child(dialog, outer);
+
+  GtkWidget *title = gtk_label_new(nullptr);
+  gtk_label_set_markup(GTK_LABEL(title), "<b>Summary</b>");
+  gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
+  gtk_box_append(GTK_BOX(outer), title);
+
+  GtkWidget *question = gtk_label_new("Apply the following changes?");
+  gtk_label_set_xalign(GTK_LABEL(question), 0.0f);
+  gtk_box_append(GTK_BOX(outer), question);
+
+  GtkWidget *intro = gtk_label_new(
+      "This is your last opportunity to look through the list of marked changes before they are applied.");
+  gtk_label_set_xalign(GTK_LABEL(intro), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(intro), TRUE);
+  gtk_box_append(GTK_BOX(outer), intro);
+
+  GtkWidget *scroller = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(scroller, TRUE);
+  gtk_widget_set_vexpand(scroller, TRUE);
+  gtk_box_append(GTK_BOX(outer), scroller);
+
+  GtkWidget *contents = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_start(contents, 6);
+  gtk_widget_set_margin_end(contents, 6);
+  gtk_widget_set_margin_top(contents, 6);
+  gtk_widget_set_margin_bottom(contents, 6);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroller), contents);
+
+  // Show the resolved backend changes, not only the packages the user marked manually.
+  append_transaction_summary_section(GTK_BOX(contents), "To be installed", preview.install);
+  append_transaction_summary_section(GTK_BOX(contents), "To be upgraded", preview.upgrade);
+  append_transaction_summary_section(GTK_BOX(contents), "To be downgraded", preview.downgrade);
+  append_transaction_summary_section(GTK_BOX(contents), "To be reinstalled", preview.reinstall);
+  append_transaction_summary_section(GTK_BOX(contents), "To be removed", preview.remove);
+
+  GtkWidget *summary_heading = gtk_label_new(nullptr);
+  gtk_label_set_markup(GTK_LABEL(summary_heading), "<b>Summary</b>");
+  gtk_label_set_xalign(GTK_LABEL(summary_heading), 0.0f);
+  gtk_box_append(GTK_BOX(outer), summary_heading);
+
+  GtkWidget *summary_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  gtk_box_append(GTK_BOX(outer), summary_box);
+
+  auto append_summary_line = [&](const std::string &line) {
+    GtkWidget *label = gtk_label_new(line.c_str());
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
+    gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+    gtk_box_append(GTK_BOX(summary_box), label);
+  };
+
+  auto append_count_line = [&](size_t count, const char *verb) {
+    if (count == 0) {
+      return;
+    }
+
+    char line[256];
+    snprintf(line, sizeof(line), "%zu package%s will be %s.", count, count == 1 ? "" : "s", verb);
+    append_summary_line(line);
+  };
+
+  append_count_line(preview.install.size(), "installed");
+  append_count_line(preview.upgrade.size(), "upgraded");
+  append_count_line(preview.downgrade.size(), "downgraded");
+  append_count_line(preview.reinstall.size(), "reinstalled");
+  append_count_line(preview.remove.size(), "removed");
+  append_summary_line(format_transaction_space_change(preview.disk_space_delta));
+
+  GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(button_box, GTK_ALIGN_END);
+  gtk_box_append(GTK_BOX(outer), button_box);
+
+  GtkWidget *cancel_button = gtk_button_new_with_label("Cancel");
+  gtk_box_append(GTK_BOX(button_box), cancel_button);
+
+  GtkWidget *apply_button = gtk_button_new_with_label("Apply");
+  gtk_widget_add_css_class(apply_button, "suggested-action");
+  gtk_box_append(GTK_BOX(button_box), apply_button);
+
+  g_signal_connect(cancel_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer) {
+                     GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(button));
+                     if (root && GTK_IS_WINDOW(root)) {
+                       gtk_window_destroy(GTK_WINDOW(root));
+                     }
+                   }),
+                   nullptr);
+
+  g_signal_connect(apply_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+                     GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(button));
+                     if (root && GTK_IS_WINDOW(root)) {
+                       gtk_window_destroy(GTK_WINDOW(root));
+                     }
+                     start_apply_transaction(widgets);
+                   }),
+                   widgets);
+
+  gtk_window_present(dialog);
 }
 
 // -----------------------------------------------------------------------------
@@ -1169,34 +1377,13 @@ on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Apply pending actions in a single libdnf5 transaction (async via backend)
-// -----------------------------------------------------------------------------
-void
-on_apply_button_clicked(GtkButton *, gpointer user_data)
+// Start the async apply flow after the user confirms the transaction summary.
+static void
+start_apply_transaction(SearchWidgets *widgets)
 {
-  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-
-  if (widgets->pending.empty()) {
-    set_status(widgets->status_label, "No pending changes.", "gray");
-    return;
-  }
-
-  // Build install, remove, and reinstall lists from pending actions
   ApplyTaskData *td = new ApplyTaskData;
-  td->install.reserve(widgets->pending.size());
-  td->remove.reserve(widgets->pending.size());
-  td->reinstall.reserve(widgets->pending.size());
+  build_pending_transaction_specs(widgets, td->install, td->remove, td->reinstall);
   td->progress_window = create_transaction_progress_window(widgets, widgets->pending.size());
-
-  for (const auto &a : widgets->pending) {
-    if (a.type == PendingAction::INSTALL) {
-      td->install.push_back(a.nevra);
-    } else if (a.type == PendingAction::REINSTALL) {
-      td->reinstall.push_back(a.nevra);
-    } else {
-      td->remove.push_back(a.nevra);
-    }
-  }
 
   append_transaction_progress(td->progress_window, "Queued transaction request.");
   set_status(widgets->status_label, "Applying pending changes. See transaction window for details.", "blue");
@@ -1259,6 +1446,35 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
 
   g_object_unref(task);
   g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
+// Apply pending actions in a single libdnf5 transaction (async via backend)
+// -----------------------------------------------------------------------------
+void
+on_apply_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  if (widgets->pending.empty()) {
+    set_status(widgets->status_label, "No pending changes.", "gray");
+    return;
+  }
+
+  std::vector<std::string> install;
+  std::vector<std::string> remove;
+  std::vector<std::string> reinstall;
+  build_pending_transaction_specs(widgets, install, remove, reinstall);
+
+  // Resolve the full transaction first so the summary includes dependency-driven changes too.
+  TransactionPreview preview;
+  std::string error;
+  if (!preview_transaction(install, remove, reinstall, preview, error)) {
+    set_status(widgets->status_label, error.empty() ? "Unable to prepare transaction preview." : error.c_str(), "red");
+    return;
+  }
+
+  show_transaction_summary_dialog(widgets, preview);
 }
 
 // -----------------------------------------------------------------------------

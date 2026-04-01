@@ -31,6 +31,7 @@
 #include <libdnf5/base/transaction_package.hpp>
 #include <libdnf5/repo/download_callbacks.hpp>
 #include <libdnf5/rpm/package_query.hpp>
+#include <libdnf5/transaction/transaction_item_action.hpp>
 
 // -----------------------------------------------------------------------------
 // Global state used by UI highlighting and query filters
@@ -767,6 +768,138 @@ class DownloadCallbacksReset {
   libdnf5::Base &base;
 };
 
+// Resolve the requested transaction once so preview and apply stay in sync.
+static bool
+resolve_transaction_plan(libdnf5::Base &base,
+                         const std::vector<std::string> &install_nevras,
+                         const std::vector<std::string> &remove_nevras,
+                         const std::vector<std::string> &reinstall_nevras,
+                         std::string &error_out,
+                         const TransactionProgressCallback &progress_cb,
+                         std::unique_ptr<libdnf5::base::Transaction> &transaction_out)
+{
+  transaction_out.reset();
+
+  if (install_nevras.empty() && remove_nevras.empty() && reinstall_nevras.empty()) {
+    error_out = "No packages specified in transaction.";
+    return false;
+  }
+
+  libdnf5::Goal goal(base);
+
+  emit_progress_line(progress_cb, "Resolving dependency changes...");
+
+  // NOTE: We pass package "specs" (currently NEVRA strings from the UI list).
+  for (const auto &spec : install_nevras) {
+    goal.add_rpm_install(spec);
+  }
+
+  for (const auto &spec : remove_nevras) {
+    goal.add_rpm_remove(spec);
+  }
+
+  for (const auto &spec : reinstall_nevras) {
+    goal.add_rpm_reinstall(spec);
+  }
+
+  auto transaction = goal.resolve();
+
+  auto goal_problem = transaction.get_problems();
+  if (goal_problem != libdnf5::GoalProblem::NO_PROBLEM) {
+    std::ostringstream oss;
+    oss << "Unable to resolve transaction.\n";
+
+    for (const auto &log : transaction.get_resolve_logs_as_strings()) {
+      oss << "  " << log << "\n";
+    }
+
+    error_out = oss.str();
+    emit_progress_block(progress_cb, error_out);
+    return false;
+  }
+
+  if (transaction.get_transaction_packages().empty()) {
+    std::ostringstream oss;
+    oss << "No packages in transaction (nothing to do).\n"
+        << "Install specs: " << format_specs(install_nevras) << "\n"
+        << "Remove specs: " << format_specs(remove_nevras) << "\n"
+        << "Reinstall specs: " << format_specs(reinstall_nevras) << "\n";
+    error_out = oss.str();
+    emit_progress_block(progress_cb, error_out);
+    return false;
+  }
+
+  transaction_out = std::make_unique<libdnf5::base::Transaction>(std::move(transaction));
+  return true;
+}
+
+// Add one resolved transaction item to the confirmation preview model.
+static void
+append_preview_item(TransactionPreview &preview, const libdnf5::base::TransactionPackage &item)
+{
+  using Action = libdnf5::base::TransactionPackage::Action;
+
+  const std::string label = transaction_package_label(item);
+  const long long install_size = static_cast<long long>(item.get_package().get_install_size());
+
+  switch (item.get_action()) {
+  case Action::INSTALL:
+    preview.install.push_back(label);
+    preview.disk_space_delta += install_size;
+    break;
+  case Action::UPGRADE:
+    preview.upgrade.push_back(label);
+    preview.disk_space_delta += install_size;
+    break;
+  case Action::DOWNGRADE:
+    preview.downgrade.push_back(label);
+    preview.disk_space_delta += install_size;
+    break;
+  case Action::REINSTALL:
+    preview.reinstall.push_back(label);
+    break;
+  case Action::REMOVE:
+    preview.remove.push_back(label);
+    preview.disk_space_delta -= install_size;
+    break;
+  case Action::REPLACED:
+    preview.disk_space_delta -= install_size;
+    break;
+  default:
+    break;
+  }
+}
+
+// Resolve the final transaction and group the resulting package actions for the summary dialog.
+bool
+preview_transaction(const std::vector<std::string> &install_nevras,
+                    const std::vector<std::string> &remove_nevras,
+                    const std::vector<std::string> &reinstall_nevras,
+                    TransactionPreview &preview,
+                    std::string &error_out)
+{
+  error_out.clear();
+  preview = TransactionPreview();
+
+  try {
+    auto [base, guard] = BaseManager::instance().acquire_write();
+    std::unique_ptr<libdnf5::base::Transaction> transaction;
+
+    if (!resolve_transaction_plan(base, install_nevras, remove_nevras, reinstall_nevras, error_out, {}, transaction)) {
+      return false;
+    }
+
+    for (const auto &item : transaction->get_transaction_packages()) {
+      append_preview_item(preview, item);
+    }
+
+    return true;
+  } catch (const std::exception &e) {
+    error_out = e.what();
+    return false;
+  }
+}
+
 bool
 apply_transaction(const std::vector<std::string> &install_nevras,
                   const std::vector<std::string> &remove_nevras,
@@ -782,65 +915,21 @@ apply_transaction(const std::vector<std::string> &install_nevras,
     return false;
   }
 
-  if (install_nevras.empty() && remove_nevras.empty() && reinstall_nevras.empty()) {
-    error_out = "No packages specified in transaction.";
-    return false;
-  }
-
   try {
     // Exclusive access to shared libdnf Base for transactional changes
     auto [base, guard] = BaseManager::instance().acquire_write();
+    std::unique_ptr<libdnf5::base::Transaction> transaction;
 
-    libdnf5::Goal goal(base);
-
-    emit_progress_line(progress_cb, "Resolving dependency changes...");
-
-    // NOTE: We pass package "specs" (currently NEVRA strings from the UI list).
-
-    for (const auto &spec : install_nevras) {
-      goal.add_rpm_install(spec);
-    }
-
-    for (const auto &spec : remove_nevras) {
-      goal.add_rpm_remove(spec);
-    }
-
-    for (const auto &spec : reinstall_nevras) {
-      goal.add_rpm_reinstall(spec);
-    }
-
-    auto transaction = goal.resolve();
-
-    auto goal_problem = transaction.get_problems();
-    if (goal_problem != libdnf5::GoalProblem::NO_PROBLEM) {
-      std::ostringstream oss;
-      oss << "Unable to resolve transaction.\n";
-
-      for (const auto &log : transaction.get_resolve_logs_as_strings()) {
-        oss << "  " << log << "\n";
-      }
-
-      error_out = oss.str();
-      emit_progress_block(progress_cb, error_out);
-      return false;
-    }
-
-    if (transaction.get_transaction_packages().empty()) {
-      std::ostringstream oss;
-      oss << "No packages in transaction (nothing to do).\n"
-          << "Install specs: " << format_specs(install_nevras) << "\n"
-          << "Remove specs: " << format_specs(remove_nevras) << "\n"
-          << "Reinstall specs: " << format_specs(reinstall_nevras) << "\n";
-      error_out = oss.str();
-      emit_progress_block(progress_cb, error_out);
+    if (!resolve_transaction_plan(
+            base, install_nevras, remove_nevras, reinstall_nevras, error_out, progress_cb, transaction)) {
       return false;
     }
 
     emit_progress_line(progress_cb,
-                       "Resolved " + std::to_string(transaction.get_transaction_packages_count()) + " package item" +
-                           (transaction.get_transaction_packages_count() == 1 ? "." : "s."));
+                       "Resolved " + std::to_string(transaction->get_transaction_packages_count()) + " package item" +
+                           (transaction->get_transaction_packages_count() == 1 ? "." : "s."));
 
-    for (const auto &item : transaction.get_transaction_packages()) {
+    for (const auto &item : transaction->get_transaction_packages()) {
       emit_progress_line(progress_cb,
                          transaction_action_label(item.get_action()) + ": " + transaction_package_label(item));
     }
@@ -848,21 +937,21 @@ apply_transaction(const std::vector<std::string> &install_nevras,
     base.set_download_callbacks(std::make_unique<StreamingDownloadCallbacks>(progress_cb));
     DownloadCallbacksReset download_callbacks_reset(base);
     emit_progress_line(progress_cb, "Starting package downloads...");
-    transaction.download();
+    transaction->download();
     emit_progress_line(progress_cb, "Package downloads finished.");
 
-    transaction.set_callbacks(std::make_unique<StreamingTransactionCallbacks>(progress_cb));
+    transaction->set_callbacks(std::make_unique<StreamingTransactionCallbacks>(progress_cb));
 
-    auto run_result = transaction.run();
+    auto run_result = transaction->run();
     if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
       std::ostringstream oss;
       oss << "Transaction failed (code " << static_cast<int>(run_result) << ").\n";
 
-      for (const auto &msg : transaction.get_transaction_problems()) {
+      for (const auto &msg : transaction->get_transaction_problems()) {
         oss << "  " << msg << "\n";
       }
 
-      auto rpm_messages = transaction.get_rpm_messages();
+      auto rpm_messages = transaction->get_rpm_messages();
       if (!rpm_messages.empty()) {
         oss << "RPM messages:\n";
         for (const auto &msg : rpm_messages) {
@@ -870,7 +959,7 @@ apply_transaction(const std::vector<std::string> &install_nevras,
         }
       }
 
-      std::string script_output = transaction.get_last_script_output();
+      std::string script_output = transaction->get_last_script_output();
       if (!script_output.empty()) {
         oss << "Last script output:\n" << script_output << "\n";
       }
