@@ -64,9 +64,9 @@ make_package_row(const libdnf5::rpm::Package &pkg)
   return row;
 }
 
-// Return true when the active search task was cancelled by the UI.
+// Return true when the active package query task was cancelled by the UI.
 static bool
-search_request_cancelled(GCancellable *cancellable)
+package_query_cancelled(GCancellable *cancellable)
 {
   return cancellable && g_cancellable_is_cancelled(cancellable);
 }
@@ -87,7 +87,7 @@ search_available_package_rows_interruptible(const std::string &pattern, GCancell
     std::transform(pattern_lower.begin(), pattern_lower.end(), pattern_lower.begin(), ::tolower);
 
     for (auto pkg : query) {
-      if (search_request_cancelled(cancellable)) {
+      if (package_query_cancelled(cancellable)) {
         return packages;
       }
 
@@ -116,7 +116,7 @@ search_available_package_rows_interruptible(const std::string &pattern, GCancell
     }
 
     for (auto pkg : query) {
-      if (search_request_cancelled(cancellable)) {
+      if (package_query_cancelled(cancellable)) {
         return packages;
       }
 
@@ -164,30 +164,49 @@ refresh_installed_nevras()
 // Also updates the global set of installed package NEVRAs (g_installed_nevras).
 //
 // Thread-safety:
-//   The same g_installed_mutex is held during cache update to synchronize with
-//   other background refreshes and avoid data races with UI access.
+//   The query result is collected in local sets first, then published under
+//   g_installed_mutex once the scan completes. This avoids partial cache
+//   updates if the worker task is cancelled midway through the scan.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow>
-get_installed_package_rows()
+get_installed_package_rows_interruptible(GCancellable *cancellable)
 {
   std::vector<PackageRow> packages;
+  std::set<std::string> installed_nevras;
+  std::set<std::string> installed_names;
 
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
-  // Collect all installed packages and populate global NEVRA cache.
-  // Lock ensures atomic clear and repopulate sequence.
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-  g_installed_nevras.clear();
-  g_installed_names.clear();
-
   for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      return packages;
+    }
+
     std::string nevra = pkg.get_nevra();
-    g_installed_nevras.insert(nevra);
-    g_installed_names.insert(pkg.get_name());
+    installed_nevras.insert(nevra);
+    installed_names.insert(pkg.get_name());
     packages.push_back(make_package_row(pkg));
   }
+
+  // Publish the new installed-package cache only after a complete uncancelled scan.
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  g_installed_nevras.swap(installed_nevras);
+  g_installed_names.swap(installed_names);
+
+  return packages;
+}
+
+// -----------------------------------------------------------------------------
+// Helper: Query installed packages via libdnf5
+// Returns a list of all installed packages in full NEVRA format (e.g., pkg-1.0-1.fc38.x86_64).
+// Also updates the global set of installed package NEVRAs (g_installed_nevras).
+// -----------------------------------------------------------------------------
+std::vector<PackageRow>
+get_installed_package_rows()
+{
+  std::vector<PackageRow> packages = get_installed_package_rows_interruptible(nullptr);
 
   return packages;
 }

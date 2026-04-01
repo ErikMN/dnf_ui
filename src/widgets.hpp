@@ -17,6 +17,11 @@ struct PendingAction {
 };
 
 // -----------------------------------------------------------------------------
+// Active background request using the package-list action buttons
+// -----------------------------------------------------------------------------
+enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED };
+
+// -----------------------------------------------------------------------------
 // Struct for holding UI elements and signal callbacks
 // -----------------------------------------------------------------------------
 struct SearchWidgets {
@@ -27,6 +32,7 @@ struct SearchWidgets {
   GtkListBox *history_list;
   GtkSpinner *spinner;
   GtkButton *search_button;
+  GtkButton *list_button;
   GtkButton *install_button;
   GtkButton *remove_button;
   GtkButton *reinstall_button;
@@ -40,12 +46,14 @@ struct SearchWidgets {
   GtkLabel *files_label;
   GtkLabel *deps_label;
   GtkLabel *changelog_label;
-  // Active cancellable for the current background search, if any.
-  GCancellable *search_cancellable;
-  // Next search request id used to distinguish overlapping search tasks.
-  uint64_t next_search_request_id;
-  // Current search request id owned by the search UI state.
-  uint64_t current_search_request_id;
+  // Active cancellable for the current background package-list request, if any.
+  GCancellable *package_list_cancellable;
+  // Next package-list request id used to distinguish overlapping background tasks.
+  uint64_t next_package_list_request_id;
+  // Current package-list request id owned by the active package-list button UI state.
+  uint64_t current_package_list_request_id;
+  // Identifies whether the active Stop button belongs to search or installed listing.
+  PackageListRequestKind current_package_list_request_kind;
   // Allow the next window close after the user confirms discarding pending changes.
   bool allow_close_with_pending;
   // Prevent opening multiple quit-confirmation dialogs for the same pending state.

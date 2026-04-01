@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include <gio/gio.h>
+
 // -----------------------------------------------------------------------------
 // libdnf5 backend helpers
 // -----------------------------------------------------------------------------
@@ -58,8 +60,12 @@ extern std::set<std::string> g_installed_names;
 void refresh_installed_nevras();
 
 // Structured package row queries used by the main package list presentation.
+// Interruptible variants are used by GTK worker tasks that support the Stop button.
+std::vector<PackageRow> get_installed_package_rows_interruptible(GCancellable *cancellable);
 std::vector<PackageRow> get_installed_package_rows();
 std::vector<std::string> get_installed_packages();
+std::vector<PackageRow> search_available_package_rows_interruptible(const std::string &pattern,
+                                                                    GCancellable *cancellable);
 std::vector<PackageRow> search_available_package_rows(const std::string &pattern);
 std::vector<std::string> search_available_packages(const std::string &pattern);
 std::string get_package_info(const std::string &pkg_name);

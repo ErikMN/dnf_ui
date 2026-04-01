@@ -443,6 +443,7 @@ create_search_widgets(const AppWidgets *ui)
   widgets->history_list = GTK_LIST_BOX(ui->history_list);
   widgets->spinner = GTK_SPINNER(ui->spinner);
   widgets->search_button = GTK_BUTTON(ui->search_button);
+  widgets->list_button = GTK_BUTTON(ui->list_button);
   widgets->install_button = GTK_BUTTON(ui->install_button);
   widgets->remove_button = GTK_BUTTON(ui->remove_button);
   widgets->reinstall_button = GTK_BUTTON(ui->reinstall_button);
@@ -457,9 +458,10 @@ create_search_widgets(const AppWidgets *ui)
   widgets->count_label = GTK_LABEL(ui->count_label);
   widgets->changelog_label = GTK_LABEL(ui->changelog_label);
   widgets->pending_list = GTK_LIST_BOX(ui->pending_list);
-  widgets->search_cancellable = nullptr;
-  widgets->next_search_request_id = 1;
-  widgets->current_search_request_id = 0;
+  widgets->package_list_cancellable = nullptr;
+  widgets->next_package_list_request_id = 1;
+  widgets->current_package_list_request_id = 0;
+  widgets->current_package_list_request_kind = PackageListRequestKind::NONE;
   widgets->allow_close_with_pending = false;
   widgets->pending_quit_dialog_open = false;
 
@@ -759,8 +761,8 @@ connect_cleanup(GtkWidget *window, SearchWidgets *widgets)
                    "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer data) {
                      SearchWidgets *widgets = static_cast<SearchWidgets *>(data);
-                     if (widgets->search_cancellable) {
-                       g_object_unref(widgets->search_cancellable);
+                     if (widgets->package_list_cancellable) {
+                       g_object_unref(widgets->package_list_cancellable);
                      }
                      delete widgets;
                    }),

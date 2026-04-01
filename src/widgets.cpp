@@ -17,10 +17,8 @@
 static void add_to_history(SearchWidgets *widgets, const std::string &term);
 static void perform_search(SearchWidgets *widgets, const std::string &term);
 static void refresh_current_package_view(SearchWidgets *widgets);
-static void cancel_active_search(SearchWidgets *widgets);
+static void cancel_active_package_list_request(SearchWidgets *widgets);
 static void start_apply_transaction(SearchWidgets *widgets);
-std::vector<PackageRow> search_available_package_rows_interruptible(const std::string &pattern,
-                                                                    GCancellable *cancellable);
 
 // Global cache for previous search results
 static std::map<std::string, std::vector<PackageRow>> g_search_cache;
@@ -684,89 +682,124 @@ spinner_release(GtkSpinner *spinner)
   }
 }
 
-// Stop and hide the spinner immediately after the current search is cancelled.
-static void
-spinner_reset(GtkSpinner *spinner)
+// Return true when the shared package-list request state currently owns a running task.
+static bool
+has_active_package_list_request(const SearchWidgets *widgets)
 {
-  if (!spinner) {
-    return;
-  }
-
-  gtk_spinner_stop(spinner);
-  gtk_widget_set_visible(GTK_WIDGET(spinner), FALSE);
-  g_object_set_qdata(G_OBJECT(spinner), spinner_quark(), nullptr);
+  return widgets && widgets->package_list_cancellable && !g_cancellable_is_cancelled(widgets->package_list_cancellable);
 }
 
-// Track the active background search and switch the search button to Stop.
+// Return the button that owns the Stop state for the active package list request.
+static GtkButton *
+package_list_stop_button(SearchWidgets *widgets, PackageListRequestKind kind)
+{
+  if (!widgets) {
+    return nullptr;
+  }
+
+  return kind == PackageListRequestKind::LIST_INSTALLED ? widgets->list_button : widgets->search_button;
+}
+
+// Human-readable cancel status for the current background package list request.
+static const char *
+package_list_cancelled_status(PackageListRequestKind kind)
+{
+  switch (kind) {
+  case PackageListRequestKind::SEARCH:
+    return "Search cancelled.";
+  case PackageListRequestKind::LIST_INSTALLED:
+    return "Listing installed packages cancelled.";
+  case PackageListRequestKind::NONE:
+  default:
+    return "Operation cancelled.";
+  }
+}
+
+// Track the active background package list request and switch the owning button to Stop.
 static void
-begin_search_request(SearchWidgets *widgets, GCancellable *c, uint64_t request_id)
+begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t request_id, PackageListRequestKind kind)
 {
   if (!widgets || !c) {
     return;
   }
 
-  if (widgets->search_cancellable) {
-    g_object_unref(widgets->search_cancellable);
+  if (widgets->package_list_cancellable) {
+    g_object_unref(widgets->package_list_cancellable);
   }
 
-  widgets->search_cancellable = G_CANCELLABLE(g_object_ref(c));
-  widgets->current_search_request_id = request_id;
-  gtk_button_set_label(widgets->search_button, "Stop");
+  widgets->package_list_cancellable = G_CANCELLABLE(g_object_ref(c));
+  widgets->current_package_list_request_id = request_id;
+  widgets->current_package_list_request_kind = kind;
+  GtkButton *stop_button = package_list_stop_button(widgets, kind);
+  GtkButton *other_button =
+      kind == PackageListRequestKind::LIST_INSTALLED ? widgets->search_button : widgets->list_button;
+
+  gtk_button_set_label(widgets->search_button, "Search");
+  gtk_button_set_label(widgets->list_button, "List Installed");
+  gtk_button_set_label(stop_button, "Stop");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->desc_checkbox), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->exact_checkbox), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->history_list), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(other_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(stop_button), TRUE);
 }
 
-// Restore the normal search controls after a running search is stopped or finished.
+// Restore the normal search and list controls after a package query stops or finishes.
 static void
-restore_search_controls(SearchWidgets *widgets)
+restore_package_list_controls(SearchWidgets *widgets)
 {
   if (!widgets) {
     return;
   }
 
   gtk_button_set_label(widgets->search_button, "Search");
+  gtk_button_set_label(widgets->list_button, "List Installed");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->desc_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->exact_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->history_list), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_button), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 }
 
-// Restore the normal search UI when the active background search is done.
+// Restore the shared package list UI when the active background request is done.
 static void
-end_search_request(SearchWidgets *widgets, uint64_t request_id)
+end_package_list_request(SearchWidgets *widgets, uint64_t request_id, PackageListRequestKind kind)
 {
-  if (!widgets || widgets->current_search_request_id != request_id) {
+  if (!widgets || widgets->current_package_list_request_id != request_id ||
+      widgets->current_package_list_request_kind != kind) {
     return;
   }
 
-  if (widgets->search_cancellable) {
-    g_object_unref(widgets->search_cancellable);
-    widgets->search_cancellable = nullptr;
+  if (widgets->package_list_cancellable) {
+    g_object_unref(widgets->package_list_cancellable);
+    widgets->package_list_cancellable = nullptr;
   }
-  widgets->current_search_request_id = 0;
-  restore_search_controls(widgets);
+  widgets->current_package_list_request_id = 0;
+  widgets->current_package_list_request_kind = PackageListRequestKind::NONE;
+  restore_package_list_controls(widgets);
 }
 
-// Cancel the active search and immediately unlock the search controls.
+// Cancel the active package list request and immediately unlock the shared controls.
 static void
-cancel_active_search(SearchWidgets *widgets)
+cancel_active_package_list_request(SearchWidgets *widgets)
 {
-  if (!widgets || !widgets->search_cancellable) {
+  if (!widgets || !widgets->package_list_cancellable) {
     return;
   }
 
-  GCancellable *c = widgets->search_cancellable;
+  PackageListRequestKind kind = widgets->current_package_list_request_kind;
+  GCancellable *c = widgets->package_list_cancellable;
   if (!g_cancellable_is_cancelled(c)) {
     g_cancellable_cancel(c);
   }
 
-  spinner_reset(widgets->spinner);
-  restore_search_controls(widgets);
-  set_status(widgets->status_label, "Search cancelled.", "gray");
+  // Release only the spinner slot owned by this request so other running tasks
+  // can keep their progress indication visible.
+  spinner_release(widgets->spinner);
+  restore_package_list_controls(widgets);
+  set_status(widgets->status_label, package_list_cancelled_status(kind), "gray");
 }
 
 // -----------------------------------------------------------------------------
@@ -835,17 +868,20 @@ cache_key_for(const std::string &term)
 
 // Task data for list-installed operation.
 // We snapshot the BaseManager generation at dispatch time so the UI can ignore
-// results produced against an older Base after a rebuild/transaction.
+// results produced against an older Base after a rebuild or transaction.
+// request_id keeps the active Stop button state matched to the task that
+// currently owns it.
 struct ListTaskData {
+  uint64_t request_id;
   uint64_t generation;
 };
 
 static void
-on_list_task(GTask *task, gpointer, gpointer, GCancellable *)
+on_list_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
   try {
     // Query all installed packages
-    auto *results = new std::vector<PackageRow>(get_installed_package_rows());
+    auto *results = new std::vector<PackageRow>(get_installed_package_rows_interruptible(cancellable));
     // Ensure results are freed if never propagated (stale/cancel path).
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
@@ -864,23 +900,22 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
   SearchWidgets *widgets = (SearchWidgets *)user_data;
+  const ListTaskData *td = static_cast<const ListTaskData *>(g_task_get_task_data(task));
 
   if (GCancellable *c = g_task_get_cancellable(task)) {
     if (g_cancellable_is_cancelled(c)) {
-      spinner_release(widgets->spinner);
-      gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-      gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+      if (td) {
+        end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
+      }
       return;
     }
   }
 
   // Drop stale results if the backend Base changed while the worker was running.
   // This prevents rendering a list that no longer matches the current repo/system state.
-  const ListTaskData *td = static_cast<const ListTaskData *>(g_task_get_task_data(task));
   if (td && td->generation != BaseManager::instance().current_generation()) {
     spinner_release(widgets->spinner);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
     return;
   }
 
@@ -890,9 +925,9 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   // Stop spinner (ref-counted)
   spinner_release(widgets->spinner);
 
-  // Re-enable UI after async list finishes
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+  if (td) {
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
+  }
 
   if (packages) {
     // Populate the package table and update status
@@ -947,18 +982,15 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   const SearchTaskData *td = static_cast<const SearchTaskData *>(g_task_get_task_data(task));
 
   if (c && g_cancellable_is_cancelled(c)) {
-    if (td && widgets->current_search_request_id == td->request_id) {
-      end_search_request(widgets, td->request_id);
-      set_status(widgets->status_label, "Search cancelled.", "gray");
+    if (td) {
+      end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
     }
     return;
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
     spinner_release(widgets->spinner);
-    if (widgets->current_search_request_id == td->request_id) {
-      end_search_request(widgets, td->request_id);
-    }
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
     return;
   }
 
@@ -969,7 +1001,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   spinner_release(widgets->spinner);
 
   if (td) {
-    end_search_request(widgets, td->request_id);
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
   }
 
   if (packages) {
@@ -999,26 +1031,34 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 // -----------------------------------------------------------------------------
 // UI callback: List Installed button
 // Starts async listing of all installed packages
+// The same button changes to Stop while the worker task is running.
 // -----------------------------------------------------------------------------
 void
 on_list_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
+  if (has_active_package_list_request(widgets)) {
+    if (widgets->current_package_list_request_kind == PackageListRequestKind::LIST_INSTALLED) {
+      cancel_active_package_list_request(widgets);
+    }
+    return;
+  }
+
   set_status(widgets->status_label, "Listing installed packages...", "blue");
 
   // Show spinner (ref-counted)
   spinner_acquire(widgets->spinner);
 
-  // Disable search controls while loading
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
-
   // Run query asynchronously
   GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
   // Store generation snapshot so completion can reject stale results.
   ListTaskData *td = new ListTaskData;
+  td->request_id = widgets->next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
+  // The shared request helper owns disabling the entry and flipping the
+  // initiating button from List Installed to Stop.
+  begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_INSTALLED);
   GTask *task = g_task_new(nullptr, c, on_list_task_finished, widgets);
   g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<ListTaskData *>(p); });
 
@@ -1030,13 +1070,16 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
 // -----------------------------------------------------------------------------
 // UI callback: Search button (or pressing Enter in entry field)
 // Reads options, caches query, and triggers background search
+// The same button acts as Stop while a search worker task is running.
 // -----------------------------------------------------------------------------
 void
 on_search_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = (SearchWidgets *)user_data;
-  if (widgets->search_cancellable && !g_cancellable_is_cancelled(widgets->search_cancellable)) {
-    cancel_active_search(widgets);
+  if (has_active_package_list_request(widgets)) {
+    if (widgets->current_package_list_request_kind == PackageListRequestKind::SEARCH) {
+      cancel_active_package_list_request(widgets);
+    }
     return;
   }
 
@@ -1157,11 +1200,13 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
   td->term = g_strdup(term.c_str());
   td->cache_key = g_strdup(key.c_str());
-  td->request_id = widgets->next_search_request_id++;
+  td->request_id = widgets->next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
   GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
-  begin_search_request(widgets, c, td->request_id);
+  // The shared request helper owns disabling the search controls and flipping
+  // the initiating Search button to Stop.
+  begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::SEARCH);
   GTask *task = g_task_new(nullptr, c, on_search_task_finished, widgets);
   g_task_set_task_data(task, td, search_task_data_free);
   g_task_run_in_thread(task, on_search_task);
