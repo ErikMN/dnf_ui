@@ -21,11 +21,29 @@
 struct PackageRow {
   std::string nevra;
   std::string name;
+  std::string epoch;
   std::string version;
   std::string release;
   std::string arch;
   std::string repo;
   std::string summary;
+
+  const std::string &get_epoch() const
+  {
+    return epoch;
+  }
+  const std::string &get_version() const
+  {
+    return version;
+  }
+  const std::string &get_release() const
+  {
+    return release;
+  }
+  std::string name_arch_key() const
+  {
+    return name + "\n" + arch;
+  }
 
   std::string display_version() const
   {
@@ -37,6 +55,14 @@ struct PackageRow {
     }
     return version + "-" + release;
   }
+};
+
+// Backend-owned install state so the UI can reason about package actions
+// without depending on libdnf5 headers or EVR comparison details.
+enum class PackageInstallState {
+  AVAILABLE,
+  UPGRADEABLE,
+  INSTALLED,
 };
 
 // Resolved transaction preview used by the confirmation dialog before apply.
@@ -58,11 +84,14 @@ extern std::set<std::string> g_installed_nevras;
 extern std::set<std::string> g_installed_names;
 
 void refresh_installed_nevras();
+PackageInstallState get_package_install_state(const PackageRow &row);
 
 // Structured package row queries used by the main package list presentation.
 // Interruptible variants are used by GTK worker tasks that support the Stop button.
 std::vector<PackageRow> get_installed_package_rows_interruptible(GCancellable *cancellable);
 std::vector<PackageRow> get_installed_package_rows();
+std::vector<PackageRow> get_available_package_rows_interruptible(GCancellable *cancellable);
+std::vector<PackageRow> get_available_package_rows();
 std::vector<std::string> get_installed_packages();
 std::vector<PackageRow> search_available_package_rows_interruptible(const std::string &pattern,
                                                                     GCancellable *cancellable);

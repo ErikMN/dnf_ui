@@ -17,6 +17,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <memory>
 #include <set>
@@ -30,6 +31,7 @@
 #include <libdnf5/base/transaction.hpp>
 #include <libdnf5/base/transaction_package.hpp>
 #include <libdnf5/repo/download_callbacks.hpp>
+#include <libdnf5/rpm/nevra.hpp>
 #include <libdnf5/rpm/package_query.hpp>
 #include <libdnf5/transaction/transaction_item_action.hpp>
 
@@ -41,6 +43,33 @@ std::set<std::string> g_installed_names;             // Cached package names for
 std::mutex g_installed_mutex;                        // Mutex for thread-safe access to global sets
 std::atomic<bool> g_search_in_description { false }; // Global flag: include description field in search
 std::atomic<bool> g_exact_match { false };           // Global flag: match package name/desc exactly
+static std::map<std::string, PackageRow> g_installed_rows_by_name_arch; // Cached installed rows keyed by name and arch
+
+// Keep the newest installed row for one package name and architecture tuple.
+static void
+remember_installed_row(std::map<std::string, PackageRow> &rows_by_name_arch, const PackageRow &row)
+{
+  auto [it, inserted] = rows_by_name_arch.emplace(row.name_arch_key(), row);
+  if (!inserted && libdnf5::rpm::evrcmp(row, it->second) > 0) {
+    it->second = row;
+  }
+}
+
+// Read the cached installed-package snapshot and classify one visible row.
+static PackageInstallState
+package_install_state_from_cache(const PackageRow &row)
+{
+  auto it = g_installed_rows_by_name_arch.find(row.name_arch_key());
+  if (it == g_installed_rows_by_name_arch.end()) {
+    return PackageInstallState::AVAILABLE;
+  }
+
+  if (libdnf5::rpm::evrcmp(row, it->second) > 0) {
+    return PackageInstallState::UPGRADEABLE;
+  }
+
+  return PackageInstallState::AVAILABLE;
+}
 
 // -----------------------------------------------------------------------------
 // Helper: Convert a libdnf5 package to the structured UI row model
@@ -51,6 +80,7 @@ make_package_row(const libdnf5::rpm::Package &pkg)
   PackageRow row;
   row.nevra = pkg.get_nevra();
   row.name = pkg.get_name();
+  row.epoch = pkg.get_epoch();
   row.version = pkg.get_version();
   row.release = pkg.get_release();
   row.arch = pkg.get_arch();
@@ -151,11 +181,26 @@ refresh_installed_nevras()
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   g_installed_nevras.clear();
   g_installed_names.clear();
+  g_installed_rows_by_name_arch.clear();
 
   for (auto pkg : query) {
-    g_installed_nevras.insert(pkg.get_nevra());
-    g_installed_names.insert(pkg.get_name());
+    PackageRow row = make_package_row(pkg);
+    g_installed_nevras.insert(row.nevra);
+    g_installed_names.insert(row.name);
+    remember_installed_row(g_installed_rows_by_name_arch, row);
   }
+}
+
+// Return whether one package row is available, upgradeable, or installed exactly.
+PackageInstallState
+get_package_install_state(const PackageRow &row)
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  if (g_installed_nevras.count(row.nevra) > 0) {
+    return PackageInstallState::INSTALLED;
+  }
+
+  return package_install_state_from_cache(row);
 }
 
 // -----------------------------------------------------------------------------
@@ -174,6 +219,7 @@ get_installed_package_rows_interruptible(GCancellable *cancellable)
   std::vector<PackageRow> packages;
   std::set<std::string> installed_nevras;
   std::set<std::string> installed_names;
+  std::map<std::string, PackageRow> installed_rows_by_name_arch;
 
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -184,16 +230,18 @@ get_installed_package_rows_interruptible(GCancellable *cancellable)
       return packages;
     }
 
-    std::string nevra = pkg.get_nevra();
-    installed_nevras.insert(nevra);
-    installed_names.insert(pkg.get_name());
-    packages.push_back(make_package_row(pkg));
+    PackageRow row = make_package_row(pkg);
+    installed_nevras.insert(row.nevra);
+    installed_names.insert(row.name);
+    remember_installed_row(installed_rows_by_name_arch, row);
+    packages.push_back(row);
   }
 
   // Publish the new installed-package cache only after a complete uncancelled scan.
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   g_installed_nevras.swap(installed_nevras);
   g_installed_names.swap(installed_names);
+  g_installed_rows_by_name_arch.swap(installed_rows_by_name_arch);
 
   return packages;
 }
@@ -207,6 +255,49 @@ std::vector<PackageRow>
 get_installed_package_rows()
 {
   std::vector<PackageRow> packages = get_installed_package_rows_interruptible(nullptr);
+
+  return packages;
+}
+
+// -----------------------------------------------------------------------------
+// Helper: Query latest available packages via libdnf5
+// Returns the newest available candidate for each package stream selected by
+// libdnf5::rpm::PackageQuery::filter_latest_evr(), which keeps the list closer
+// to a Synaptic-style "available packages" view than a raw NEVRA dump.
+//
+// Thread-safety:
+//   This function reads package data directly from libdnf5 and does not modify
+//   shared installed-package caches. No locking is required here.
+// -----------------------------------------------------------------------------
+std::vector<PackageRow>
+get_available_package_rows_interruptible(GCancellable *cancellable)
+{
+  std::vector<PackageRow> packages;
+
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_available();
+  query.filter_latest_evr();
+
+  for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      return packages;
+    }
+
+    packages.push_back(make_package_row(pkg));
+  }
+
+  return packages;
+}
+
+// -----------------------------------------------------------------------------
+// Helper: Query latest available packages via libdnf5
+// Returns a list of the latest available package rows for the main package view.
+// -----------------------------------------------------------------------------
+std::vector<PackageRow>
+get_available_package_rows()
+{
+  std::vector<PackageRow> packages = get_available_package_rows_interruptible(nullptr);
 
   return packages;
 }

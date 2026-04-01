@@ -697,7 +697,16 @@ package_list_stop_button(SearchWidgets *widgets, PackageListRequestKind kind)
     return nullptr;
   }
 
-  return kind == PackageListRequestKind::LIST_INSTALLED ? widgets->list_button : widgets->search_button;
+  switch (kind) {
+  case PackageListRequestKind::LIST_INSTALLED:
+    return widgets->list_button;
+  case PackageListRequestKind::LIST_AVAILABLE:
+    return widgets->list_available_button;
+  case PackageListRequestKind::SEARCH:
+  case PackageListRequestKind::NONE:
+  default:
+    return widgets->search_button;
+  }
 }
 
 // Human-readable cancel status for the current background package list request.
@@ -709,6 +718,8 @@ package_list_cancelled_status(PackageListRequestKind kind)
     return "Search cancelled.";
   case PackageListRequestKind::LIST_INSTALLED:
     return "Listing installed packages cancelled.";
+  case PackageListRequestKind::LIST_AVAILABLE:
+    return "Listing available packages cancelled.";
   case PackageListRequestKind::NONE:
   default:
     return "Operation cancelled.";
@@ -731,17 +742,18 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
   widgets->current_package_list_request_id = request_id;
   widgets->current_package_list_request_kind = kind;
   GtkButton *stop_button = package_list_stop_button(widgets, kind);
-  GtkButton *other_button =
-      kind == PackageListRequestKind::LIST_INSTALLED ? widgets->search_button : widgets->list_button;
 
   gtk_button_set_label(widgets->search_button, "Search");
   gtk_button_set_label(widgets->list_button, "List Installed");
+  gtk_button_set_label(widgets->list_available_button, "List Available");
   gtk_button_set_label(stop_button, "Stop");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->desc_checkbox), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->exact_checkbox), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->history_list), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(other_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_available_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(stop_button), TRUE);
 }
 
@@ -755,11 +767,13 @@ restore_package_list_controls(SearchWidgets *widgets)
 
   gtk_button_set_label(widgets->search_button, "Search");
   gtk_button_set_label(widgets->list_button, "List Installed");
+  gtk_button_set_label(widgets->list_available_button, "List Available");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->desc_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->exact_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->history_list), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_button), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_available_button), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
 }
 
@@ -829,6 +843,20 @@ refresh_current_package_view(SearchWidgets *widgets)
   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, restore_scroll_position_idle, scroll, scroll_restore_data_free);
 }
 
+// Reset the details notebook after repopulating the main package view.
+static void
+reset_package_details_view(SearchWidgets *widgets)
+{
+  if (!widgets) {
+    return;
+  }
+
+  gtk_label_set_text(widgets->details_label, "Select a package for details.");
+  gtk_label_set_text(widgets->files_label, "Select an installed package to view its file list.");
+  gtk_label_set_text(widgets->deps_label, "Select a package to view dependencies.");
+  gtk_label_set_text(widgets->changelog_label, "Select a package to view its changelog.");
+}
+
 // -----------------------------------------------------------------------------
 // Clear cached search results (called from Clear Cache button)
 // -----------------------------------------------------------------------------
@@ -866,12 +894,12 @@ cache_key_for(const std::string &term)
 // Returns a std::vector<PackageRow> containing structured package metadata.
 // -----------------------------------------------------------------------------
 
-// Task data for list-installed operation.
+// Task data for package-list operations started from the main action buttons.
 // We snapshot the BaseManager generation at dispatch time so the UI can ignore
 // results produced against an older Base after a rebuild or transaction.
 // request_id keeps the active Stop button state matched to the task that
 // currently owns it.
-struct ListTaskData {
+struct PackageListTaskData {
   uint64_t request_id;
   uint64_t generation;
 };
@@ -900,7 +928,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
   SearchWidgets *widgets = (SearchWidgets *)user_data;
-  const ListTaskData *td = static_cast<const ListTaskData *>(g_task_get_task_data(task));
+  const PackageListTaskData *td = static_cast<const PackageListTaskData *>(g_task_get_task_data(task));
 
   if (GCancellable *c = g_task_get_cancellable(task)) {
     if (g_cancellable_is_cancelled(c)) {
@@ -936,13 +964,83 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages->size());
     set_status(widgets->status_label, msg, "green");
-    gtk_label_set_text(widgets->details_label, "Select a package for details.");
-    gtk_label_set_text(widgets->files_label, "Select an installed package to view its file list.");
-    gtk_label_set_text(widgets->deps_label, "Select a package to view dependencies.");
-    gtk_label_set_text(widgets->changelog_label, "Select a package to view its changelog.");
+    reset_package_details_view(widgets);
     delete packages;
   } else {
     set_status(widgets->status_label, error ? error->message : "Error listing packages.", "red");
+    if (error) {
+      g_error_free(error);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Async: Latest available packages (non-blocking)
+// Executes a background query using libdnf5 to fetch the latest available
+// package candidate rows. Runs in a worker thread via GTask to avoid blocking
+// the GTK UI.
+// -----------------------------------------------------------------------------
+static void
+on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
+{
+  try {
+    auto *results = new std::vector<PackageRow>(get_available_package_rows_interruptible(cancellable));
+    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
+  } catch (const std::exception &e) {
+    g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Async completion handler: Latest available package listing
+// Runs on the GTK main thread after on_list_available_task() finishes.
+// Retrieves the result vector from the GTask, refreshes installed highlighting,
+// and repopulates the package list UI.
+// -----------------------------------------------------------------------------
+static void
+on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
+{
+  GTask *task = G_TASK(res);
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  const PackageListTaskData *td = static_cast<const PackageListTaskData *>(g_task_get_task_data(task));
+
+  if (GCancellable *c = g_task_get_cancellable(task)) {
+    if (g_cancellable_is_cancelled(c)) {
+      if (td) {
+        end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+      }
+      return;
+    }
+  }
+
+  if (td && td->generation != BaseManager::instance().current_generation()) {
+    spinner_release(widgets->spinner);
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+    return;
+  }
+
+  GError *error = nullptr;
+  std::vector<PackageRow> *packages = (std::vector<PackageRow> *)g_task_propagate_pointer(task, &error);
+
+  // Stop spinner (ref-counted)
+  spinner_release(widgets->spinner);
+
+  if (td) {
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+  }
+
+  if (packages) {
+    refresh_installed_nevras();
+
+    widgets->selected_nevra.clear();
+    fill_package_view(widgets, *packages);
+    char msg[256];
+    snprintf(msg, sizeof(msg), "Found %zu available packages.", packages->size());
+    set_status(widgets->status_label, msg, "green");
+    reset_package_details_view(widgets);
+    delete packages;
+  } else {
+    set_status(widgets->status_label, error ? error->message : "Error listing available packages.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -1052,7 +1150,7 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
   // Run query asynchronously
   GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
   // Store generation snapshot so completion can reject stale results.
-  ListTaskData *td = new ListTaskData;
+  PackageListTaskData *td = new PackageListTaskData;
   td->request_id = widgets->next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
@@ -1060,9 +1158,46 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
   // initiating button from List Installed to Stop.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_INSTALLED);
   GTask *task = g_task_new(nullptr, c, on_list_task_finished, widgets);
-  g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<ListTaskData *>(p); });
+  g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
 
   g_task_run_in_thread(task, on_list_task);
+  g_object_unref(task);
+  g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
+// UI callback: List Available button
+// Starts async listing of the latest available package candidates
+// The same button changes to Stop while the worker task is running.
+// -----------------------------------------------------------------------------
+void
+on_list_available_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  if (has_active_package_list_request(widgets)) {
+    if (widgets->current_package_list_request_kind == PackageListRequestKind::LIST_AVAILABLE) {
+      cancel_active_package_list_request(widgets);
+    }
+    return;
+  }
+
+  set_status(widgets->status_label, "Listing available packages...", "blue");
+
+  // Show spinner (ref-counted)
+  spinner_acquire(widgets->spinner);
+
+  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
+  PackageListTaskData *td = new PackageListTaskData;
+  td->request_id = widgets->next_package_list_request_id++;
+  td->generation = BaseManager::instance().current_generation();
+
+  // The shared request helper owns disabling the entry and flipping the
+  // initiating button from List Available to Stop.
+  begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+  GTask *task = g_task_new(nullptr, c, on_list_available_task_finished, widgets);
+  g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
+
+  g_task_run_in_thread(task, on_list_available_task);
   g_object_unref(task);
   g_object_unref(c);
 }
@@ -1128,10 +1263,7 @@ on_clear_button_clicked(GtkButton *, gpointer user_data)
 
   // Reset UI labels and actions
   set_status(widgets->status_label, "Ready.", "gray");
-  gtk_label_set_text(widgets->details_label, "Select a package for details.");
-  gtk_label_set_text(widgets->files_label, "Select an installed package to view its file list.");
-  gtk_label_set_text(widgets->deps_label, "Select a package to view dependencies.");
-  gtk_label_set_text(widgets->changelog_label, "Select a package to view its changelog.");
+  reset_package_details_view(widgets);
   update_action_button_labels(widgets, "");
 }
 

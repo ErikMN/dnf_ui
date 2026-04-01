@@ -9,7 +9,6 @@
 #include "dnf_backend.hpp"
 #include "base_manager.hpp"
 
-#include <mutex>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -62,11 +61,31 @@ struct PackageItem {
   int status_rank;
 };
 
-static bool
-package_is_installed(const PackageRow &row)
+static const char *
+install_state_text(PackageInstallState state)
 {
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-  return g_installed_nevras.count(row.nevra) > 0;
+  switch (state) {
+  case PackageInstallState::INSTALLED:
+    return "Installed";
+  case PackageInstallState::UPGRADEABLE:
+    return "Upgradeable";
+  case PackageInstallState::AVAILABLE:
+  default:
+    return "Available";
+  }
+}
+
+static int
+install_state_rank(PackageInstallState state)
+{
+  switch (state) {
+  case PackageInstallState::AVAILABLE:
+    return 0;
+  case PackageInstallState::UPGRADEABLE:
+  case PackageInstallState::INSTALLED:
+  default:
+    return 1;
+  }
 }
 
 // Snapshot the visible status text and its sort order for one package row.
@@ -93,14 +112,9 @@ fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
     }
   }
 
-  if (package_is_installed(item.row)) {
-    item.status_text = "Installed";
-    item.status_rank = 1;
-    return;
-  }
-
-  item.status_text = "Available";
-  item.status_rank = 0;
+  PackageInstallState install_state = get_package_install_state(item.row);
+  item.status_text = install_state_text(install_state);
+  item.status_rank = install_state_rank(install_state);
 }
 
 // Wrap one package row in a GObject so GTK list models can sort and select it.
@@ -174,7 +188,7 @@ status_text(SearchWidgets *widgets, const PackageRow &row)
     }
   }
 
-  return package_is_installed(row) ? "Installed" : "Available";
+  return install_state_text(get_package_install_state(row));
 }
 
 static void
@@ -182,6 +196,7 @@ clear_status_css(GtkWidget *label)
 {
   gtk_widget_remove_css_class(label, "package-status-available");
   gtk_widget_remove_css_class(label, "package-status-installed");
+  gtk_widget_remove_css_class(label, "package-status-upgradeable");
   gtk_widget_remove_css_class(label, "package-status-pending-install");
   gtk_widget_remove_css_class(label, "package-status-pending-reinstall");
   gtk_widget_remove_css_class(label, "package-status-pending-remove");
@@ -357,8 +372,10 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                        const PackageRow &row = package_item->row;
                        if (const char *pending_class = pending_css_class(widgets, row.nevra)) {
                          gtk_widget_add_css_class(label, pending_class);
-                       } else if (package_is_installed(row)) {
+                       } else if (get_package_install_state(row) == PackageInstallState::INSTALLED) {
                          gtk_widget_add_css_class(label, "package-status-installed");
+                       } else if (get_package_install_state(row) == PackageInstallState::UPGRADEABLE) {
+                         gtk_widget_add_css_class(label, "package-status-upgradeable");
                        } else {
                          gtk_widget_add_css_class(label, "package-status-available");
                        }
@@ -551,16 +568,19 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
 
                      set_status(widgets->status_label, "Fetching package info...", "blue");
 
-                     // Enable or disable install and remove buttons based on installed state,
-                     // but keep them disabled entirely if not running as root.
-                     bool is_installed = package_is_installed(selected);
+                     // Enable install for new packages and upgrade candidates, while
+                     // remove and reinstall stay reserved for the exact installed row.
+                     PackageInstallState install_state = get_package_install_state(selected);
 
                      // FIXME: Replace with Polkit:
                      bool is_root = (geteuid() == 0);
 
-                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), is_root && !is_installed);
-                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), is_root && is_installed);
-                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->reinstall_button), is_root && is_installed);
+                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button),
+                                              is_root && install_state != PackageInstallState::INSTALLED);
+                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button),
+                                              is_root && install_state == PackageInstallState::INSTALLED);
+                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->reinstall_button),
+                                              is_root && install_state == PackageInstallState::INSTALLED);
                      update_action_button_labels(widgets, selected.nevra);
 
                      // --- Async task: Fetch and display package info + file list ---
@@ -690,11 +710,11 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                        return;
                      }
 
-                     bool is_installed = package_is_installed(*row);
+                     PackageInstallState install_state = get_package_install_state(*row);
                      gtk_single_selection_set_selected(sel, position);
                      g_object_unref(obj);
 
-                     if (is_installed) {
+                     if (install_state == PackageInstallState::INSTALLED) {
                        on_remove_button_clicked(nullptr, widgets);
                      } else {
                        on_install_button_clicked(nullptr, widgets);

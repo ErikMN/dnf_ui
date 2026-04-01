@@ -34,6 +34,7 @@ struct AppWidgets {
   GtkWidget *spinner = NULL;
 
   GtkWidget *list_button = NULL;
+  GtkWidget *list_available_button = NULL;
   GtkWidget *clear_button = NULL;
   GtkWidget *clear_cache_button = NULL;
   GtkWidget *toggle_history_button = NULL;
@@ -266,6 +267,10 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_buttons), list_button);
   ui->list_button = list_button;
 
+  GtkWidget *list_available_button = gtk_button_new_with_label("List Available");
+  gtk_box_append(GTK_BOX(hbox_buttons), list_available_button);
+  ui->list_available_button = list_available_button;
+
   GtkWidget *clear_button = gtk_button_new_with_label("Clear List");
   gtk_box_append(GTK_BOX(hbox_buttons), clear_button);
   ui->clear_button = clear_button;
@@ -444,6 +449,7 @@ create_search_widgets(const AppWidgets *ui)
   widgets->spinner = GTK_SPINNER(ui->spinner);
   widgets->search_button = GTK_BUTTON(ui->search_button);
   widgets->list_button = GTK_BUTTON(ui->list_button);
+  widgets->list_available_button = GTK_BUTTON(ui->list_available_button);
   widgets->install_button = GTK_BUTTON(ui->install_button);
   widgets->remove_button = GTK_BUTTON(ui->remove_button);
   widgets->reinstall_button = GTK_BUTTON(ui->reinstall_button);
@@ -494,6 +500,11 @@ setup_css(SearchWidgets *widgets)
                                     "  background-color: #cfe6c2; "
                                     "  border-color: #668f58; "
                                     "  color: #173915; "
+                                    "} "
+                                    ".package-status-upgradeable { "
+                                    "  background-color: #f0ddb0; "
+                                    "  border-color: #9f7a24; "
+                                    "  color: #4a3200; "
                                     "} "
                                     ".package-status-pending-install { "
                                     "  background-color: #2b64b5; "
@@ -552,6 +563,8 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
       ui->clear_cache_button, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) { clear_search_cache(); }), NULL);
 
   g_signal_connect(ui->list_button, "clicked", G_CALLBACK(on_list_button_clicked), widgets);
+
+  g_signal_connect(ui->list_available_button, "clicked", G_CALLBACK(on_list_available_button_clicked), widgets);
 
   g_signal_connect(ui->install_button, "clicked", G_CALLBACK(on_install_button_clicked), widgets);
 

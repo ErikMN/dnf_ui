@@ -19,7 +19,7 @@ struct PendingAction {
 // -----------------------------------------------------------------------------
 // Active background request using the package-list action buttons
 // -----------------------------------------------------------------------------
-enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED };
+enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
 
 // -----------------------------------------------------------------------------
 // Struct for holding UI elements and signal callbacks
@@ -33,6 +33,7 @@ struct SearchWidgets {
   GtkSpinner *spinner;
   GtkButton *search_button;
   GtkButton *list_button;
+  GtkButton *list_available_button;
   GtkButton *install_button;
   GtkButton *remove_button;
   GtkButton *reinstall_button;
@@ -52,7 +53,8 @@ struct SearchWidgets {
   uint64_t next_package_list_request_id;
   // Current package-list request id owned by the active package-list button UI state.
   uint64_t current_package_list_request_id;
-  // Identifies whether the active Stop button belongs to search or installed listing.
+  // Identifies whether the active Stop button belongs to search, installed listing,
+  // or available-package listing.
   PackageListRequestKind current_package_list_request_kind;
   // Allow the next window close after the user confirms discarding pending changes.
   bool allow_close_with_pending;
@@ -66,6 +68,7 @@ struct SearchWidgets {
 };
 
 void on_list_button_clicked(GtkButton *, gpointer user_data);
+void on_list_available_button_clicked(GtkButton *, gpointer user_data);
 void on_search_button_clicked(GtkButton *, gpointer user_data);
 void on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data);
 void on_clear_button_clicked(GtkButton *, gpointer user_data);
