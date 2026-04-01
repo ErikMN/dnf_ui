@@ -6,6 +6,8 @@
 // -----------------------------------------------------------------------------
 #include "base_manager.hpp"
 
+#include <libdnf5/conf/const.hpp>
+
 #include <iostream>
 #include <stdexcept>
 
@@ -107,6 +109,10 @@ BaseManager::ensure_base_initialized()
   // Create and fully initialize a new libdnf5::Base
   auto base = std::make_shared<libdnf5::Base>();
   base->load_config();
+
+  // Changelog lookups for available packages need repo "other" metadata.
+  base->get_config().get_optional_metadata_types_option().add_item(libdnf5::Option::Priority::RUNTIME,
+                                                                   libdnf5::METADATA_TYPE_OTHER);
   base->setup();
 
   // Load system repositories
