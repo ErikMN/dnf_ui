@@ -16,7 +16,7 @@ TEST_CASE("Search contains mode returns results for common package")
   g_search_in_description = false;
   g_exact_match = false;
 
-  auto results = search_available_packages("bash");
+  auto results = search_available_package_rows_interruptible("bash", nullptr);
 
   REQUIRE(!results.empty());
 }
@@ -32,7 +32,7 @@ TEST_CASE("Search exact mode does not match partial substring")
   g_search_in_description = false;
   g_exact_match = true;
 
-  auto exact = search_available_packages("ba");
+  auto exact = search_available_package_rows_interruptible("ba", nullptr);
 
   REQUIRE(exact.empty());
 }
@@ -48,10 +48,10 @@ TEST_CASE("Search description mode expands or equals name-only results")
   g_exact_match = false;
 
   g_search_in_description = false;
-  auto name_only = search_available_packages("shell");
+  auto name_only = search_available_package_rows_interruptible("shell", nullptr);
 
   g_search_in_description = true;
-  auto desc_search = search_available_packages("shell");
+  auto desc_search = search_available_package_rows_interruptible("shell", nullptr);
 
   if (desc_search.size() < name_only.size()) {
     FAIL("Description search returned fewer results than name-only search");
@@ -69,7 +69,7 @@ TEST_CASE("Search returns empty for impossible package name")
   g_search_in_description = false;
   g_exact_match = false;
 
-  auto results = search_available_packages("___definitely_not_a_real_package_987654___");
+  auto results = search_available_package_rows_interruptible("___definitely_not_a_real_package_987654___", nullptr);
 
   REQUIRE(results.empty());
 }

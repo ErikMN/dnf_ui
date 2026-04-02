@@ -172,25 +172,6 @@ pending_css_class(SearchWidgets *widgets, const std::string &nevra)
   return nullptr;
 }
 
-static std::string
-status_text(SearchWidgets *widgets, const PackageRow &row)
-{
-  for (const auto &a : widgets->pending) {
-    if (a.nevra == row.nevra) {
-      switch (a.type) {
-      case PendingAction::INSTALL:
-        return "Pending Install";
-      case PendingAction::REINSTALL:
-        return "Pending Reinstall";
-      case PendingAction::REMOVE:
-        return "Pending Removal";
-      }
-    }
-  }
-
-  return install_state_text(get_package_install_state(row));
-}
-
 static void
 clear_status_css(GtkWidget *label)
 {

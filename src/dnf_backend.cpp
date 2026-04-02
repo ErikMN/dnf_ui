@@ -247,19 +247,6 @@ get_installed_package_rows_interruptible(GCancellable *cancellable)
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Query installed packages via libdnf5
-// Returns a list of all installed packages in full NEVRA format (e.g., pkg-1.0-1.fc38.x86_64).
-// Also updates the global set of installed package NEVRAs (g_installed_nevras).
-// -----------------------------------------------------------------------------
-std::vector<PackageRow>
-get_installed_package_rows()
-{
-  std::vector<PackageRow> packages = get_installed_package_rows_interruptible(nullptr);
-
-  return packages;
-}
-
-// -----------------------------------------------------------------------------
 // Helper: Query latest available packages via libdnf5
 // Returns the newest available candidate for each package stream selected by
 // libdnf5::rpm::PackageQuery::filter_latest_evr(), which keeps the list closer
@@ -291,75 +278,6 @@ get_available_package_rows_interruptible(GCancellable *cancellable)
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Query latest available packages via libdnf5
-// Returns a list of the latest available package rows for the main package view.
-// -----------------------------------------------------------------------------
-std::vector<PackageRow>
-get_available_package_rows()
-{
-  std::vector<PackageRow> packages = get_available_package_rows_interruptible(nullptr);
-
-  return packages;
-}
-
-// -----------------------------------------------------------------------------
-// Compatibility wrapper: Installed packages as NEVRA strings
-// Preserves the original string-based API for callers and tests that do not yet
-// consume the structured PackageRow model.
-// -----------------------------------------------------------------------------
-std::vector<std::string>
-get_installed_packages()
-{
-  std::vector<PackageRow> rows = get_installed_package_rows();
-  std::vector<std::string> packages;
-  packages.reserve(rows.size());
-
-  for (const auto &row : rows) {
-    packages.push_back(row.nevra);
-  }
-
-  return packages;
-}
-
-// -----------------------------------------------------------------------------
-// Helper: Search available packages
-// Performs a name or description-based search depending on active flags.
-// Supports both substring (default) and exact match modes.
-//
-// Search logic:
-//   - If g_search_in_description == true, searches name + description manually
-//     using case-insensitive substring comparison.
-//   - Otherwise uses libdnf5 query filters for efficient name-only search.
-//
-// Thread-safety:
-//   This function performs only reads and does not touch global caches, so no
-//   locking is required here.
-// -----------------------------------------------------------------------------
-std::vector<PackageRow>
-search_available_package_rows(const std::string &pattern)
-{
-  return search_available_package_rows_interruptible(pattern, nullptr);
-}
-
-// -----------------------------------------------------------------------------
-// Compatibility wrapper: Search results as NEVRA strings
-// Preserves the original string-based API for callers and tests that still expect
-// raw identifiers while the UI migrates to PackageRow.
-// -----------------------------------------------------------------------------
-std::vector<std::string>
-search_available_packages(const std::string &pattern)
-{
-  std::vector<PackageRow> rows = search_available_package_rows(pattern);
-  std::vector<std::string> packages;
-  packages.reserve(rows.size());
-
-  for (const auto &row : rows) {
-    packages.push_back(row.nevra);
-  }
-
-  return packages;
-}
-
 // -----------------------------------------------------------------------------
 // Helper: Retrieve detailed package information
 // Fetches and formats detailed info for a single package, including:
@@ -521,27 +439,6 @@ get_package_changelog(const std::string &pkg_nevra)
   }
 
   return out.str();
-}
-
-// -----------------------------------------------------------------------------
-// Transaction helpers
-// -----------------------------------------------------------------------------
-bool
-install_packages(const std::vector<std::string> &pkg_specs, std::string &error_out)
-{
-  return apply_transaction(pkg_specs, {}, {}, error_out);
-}
-
-bool
-remove_packages(const std::vector<std::string> &pkg_specs, std::string &error_out)
-{
-  return apply_transaction({}, pkg_specs, {}, error_out);
-}
-
-bool
-reinstall_packages(const std::vector<std::string> &pkg_specs, std::string &error_out)
-{
-  return apply_transaction({}, {}, pkg_specs, error_out);
 }
 
 // -----------------------------------------------------------------------------

@@ -87,23 +87,15 @@ void refresh_installed_nevras();
 PackageInstallState get_package_install_state(const PackageRow &row);
 
 // Structured package row queries used by the main package list presentation.
-// Interruptible variants are used by GTK worker tasks that support the Stop button.
+// Callers that do not need cancellation can pass nullptr as the cancellable.
 std::vector<PackageRow> get_installed_package_rows_interruptible(GCancellable *cancellable);
-std::vector<PackageRow> get_installed_package_rows();
 std::vector<PackageRow> get_available_package_rows_interruptible(GCancellable *cancellable);
-std::vector<PackageRow> get_available_package_rows();
-std::vector<std::string> get_installed_packages();
 std::vector<PackageRow> search_available_package_rows_interruptible(const std::string &pattern,
                                                                     GCancellable *cancellable);
-std::vector<PackageRow> search_available_package_rows(const std::string &pattern);
-std::vector<std::string> search_available_packages(const std::string &pattern);
 std::string get_package_info(const std::string &pkg_name);
 std::string get_installed_package_files(const std::string &pkg_nevra);
 std::string get_package_deps(const std::string &pkg_nevra);
 std::string get_package_changelog(const std::string &pkg_nevra);
-bool install_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
-bool remove_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
-bool reinstall_packages(const std::vector<std::string> &pkg_names, std::string &error_out);
 // Resolve the pending transaction and summarize the final package changes for UI review.
 bool preview_transaction(const std::vector<std::string> &install_nevras,
                          const std::vector<std::string> &remove_nevras,
