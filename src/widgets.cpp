@@ -927,7 +927,7 @@ static void
 on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   const PackageListTaskData *td = static_cast<const PackageListTaskData *>(g_task_get_task_data(task));
 
   if (GCancellable *c = g_task_get_cancellable(task)) {
@@ -948,7 +948,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   GError *error = nullptr;
-  std::vector<PackageRow> *packages = (std::vector<PackageRow> *)g_task_propagate_pointer(task, &error);
+  std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
   spinner_release(widgets->spinner);
@@ -1001,7 +1001,7 @@ static void
 on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   const PackageListTaskData *td = static_cast<const PackageListTaskData *>(g_task_get_task_data(task));
 
   if (GCancellable *c = g_task_get_cancellable(task)) {
@@ -1020,7 +1020,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   }
 
   GError *error = nullptr;
-  std::vector<PackageRow> *packages = (std::vector<PackageRow> *)g_task_propagate_pointer(task, &error);
+  std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
   spinner_release(widgets->spinner);
@@ -1075,7 +1075,7 @@ static void
 on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   GCancellable *c = g_task_get_cancellable(task);
   const SearchTaskData *td = static_cast<const SearchTaskData *>(g_task_get_task_data(task));
 
@@ -1093,7 +1093,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   GError *error = nullptr;
-  std::vector<PackageRow> *packages = (std::vector<PackageRow> *)g_task_propagate_pointer(task, &error);
+  std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
   spinner_release(widgets->spinner);
@@ -1134,7 +1134,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 void
 on_list_button_clicked(GtkButton *, gpointer user_data)
 {
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
     if (widgets->current_package_list_request_kind == PackageListRequestKind::LIST_INSTALLED) {
       cancel_active_package_list_request(widgets);
@@ -1173,7 +1173,7 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
 void
 on_list_available_button_clicked(GtkButton *, gpointer user_data)
 {
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
     if (widgets->current_package_list_request_kind == PackageListRequestKind::LIST_AVAILABLE) {
       cancel_active_package_list_request(widgets);
@@ -1210,7 +1210,7 @@ on_list_available_button_clicked(GtkButton *, gpointer user_data)
 void
 on_search_button_clicked(GtkButton *, gpointer user_data)
 {
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
     if (widgets->current_package_list_request_kind == PackageListRequestKind::SEARCH) {
       cancel_active_package_list_request(widgets);
@@ -1243,7 +1243,7 @@ on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
     return;
   }
 
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   GtkWidget *child = gtk_list_box_row_get_child(row);
   const char *term = gtk_label_get_text(GTK_LABEL(child));
   perform_search(widgets, term);
@@ -1256,7 +1256,7 @@ on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
 void
 on_clear_button_clicked(GtkButton *, gpointer user_data)
 {
-  SearchWidgets *widgets = (SearchWidgets *)user_data;
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   widgets->current_packages.clear();
   widgets->selected_nevra.clear();
   fill_package_view(widgets, {});

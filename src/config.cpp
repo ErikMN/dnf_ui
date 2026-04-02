@@ -97,8 +97,7 @@ save_window_geometry(GtkWindow *window)
   auto config = load_config_map();
   int w = 900, h = 700;
 
-#if GTK_CHECK_VERSION(4, 0, 0)
-  // GTK4-safe: use gtk_window_get_default_size() and gtk_widget_compute_bounds()
+  // GTK4 build: use gtk_window_get_default_size() and gtk_widget_compute_bounds()
   int default_w = 0, default_h = 0;
   gtk_window_get_default_size(window, &default_w, &default_h);
 
@@ -113,12 +112,6 @@ save_window_geometry(GtkWindow *window)
       h = static_cast<int>(bounds.size.height);
     }
   }
-#else
-  GtkAllocation alloc;
-  gtk_widget_get_allocation(GTK_WIDGET(window), &alloc);
-  w = alloc.width;
-  h = alloc.height;
-#endif
 
   config["window_width"] = std::to_string(w);
   config["window_height"] = std::to_string(h);
