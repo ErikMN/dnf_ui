@@ -110,6 +110,10 @@ search_available_package_rows_interruptible(const std::string &pattern, GCancell
   query.filter_available();
 
   if (g_search_in_description.load()) {
+    // Keep only the newest available candidate for each package stream so
+    // search results match the terminal more closely and avoid older repo copies.
+    query.filter_latest_evr();
+
     // Manually match pattern in description (case-insensitive)
     std::string pattern_lower = pattern;
     std::transform(pattern_lower.begin(), pattern_lower.end(), pattern_lower.begin(), ::tolower);
@@ -142,6 +146,7 @@ search_available_package_rows_interruptible(const std::string &pattern, GCancell
     } else {
       query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
     }
+    query.filter_latest_evr();
 
     for (auto pkg : query) {
       if (package_query_cancelled(cancellable)) {

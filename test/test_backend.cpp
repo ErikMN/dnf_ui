@@ -4,7 +4,9 @@
 #include "base_manager.hpp"
 #include "test_utils.hpp"
 
+#include <map>
 #include <mutex>
+#include <set>
 #include <string>
 
 // -----------------------------------------------------------------------------
@@ -158,6 +160,27 @@ TEST_CASE("Structured package rows expose searchable metadata")
   REQUIRE(!row.arch.empty());
   REQUIRE(!row.repo.empty());
   REQUIRE(!row.display_version().empty());
+}
+
+TEST_CASE("Search results keep one visible EVR per package name and architecture")
+{
+  reset_backend_globals();
+
+  g_search_in_description = false;
+  g_exact_match = false;
+
+  auto results = search_available_package_rows_interruptible("bash", nullptr);
+  REQUIRE(!results.empty());
+
+  std::map<std::string, std::set<std::string>> versions_by_name_arch;
+  for (const auto &row : results) {
+    versions_by_name_arch[row.name_arch_key()].insert(row.display_version());
+  }
+
+  for (const auto &[key, versions] : versions_by_name_arch) {
+    INFO(key);
+    REQUIRE(versions.size() == 1);
+  }
 }
 
 // -----------------------------------------------------------------------------
