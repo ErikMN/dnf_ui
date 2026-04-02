@@ -16,7 +16,6 @@
 #include <ctime>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <map>
 #include <mutex>
 #include <memory>
@@ -31,7 +30,6 @@
 #include <libdnf5/base/transaction.hpp>
 #include <libdnf5/base/transaction_package.hpp>
 #include <libdnf5/repo/download_callbacks.hpp>
-#include <libdnf5/rpm/nevra.hpp>
 #include <libdnf5/rpm/package_query.hpp>
 #include <libdnf5/transaction/transaction_item_action.hpp>
 
@@ -626,137 +624,6 @@ class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks
 };
 
 // -----------------------------------------------------------------------------
-// libdnf5 rpm transaction callbacks for the streaming transaction popup
-// -----------------------------------------------------------------------------
-class StreamingTransactionCallbacks final : public libdnf5::rpm::TransactionCallbacks {
-  public:
-  explicit StreamingTransactionCallbacks(TransactionProgressCallback progress_cb)
-      : progress_cb(std::move(progress_cb))
-  {
-  }
-
-  void before_begin(uint64_t total) override
-  {
-    emit_progress_line(progress_cb,
-                       "Running RPM transaction for " + std::to_string(total) + " package item" +
-                           (total == 1 ? "." : "s."));
-  }
-
-  void after_complete(bool success) override
-  {
-    emit_progress_line(progress_cb, success ? "RPM transaction completed." : "RPM transaction reported an error.");
-  }
-
-  void transaction_start(uint64_t total) override
-  {
-    emit_progress_line(progress_cb,
-                       "Preparing transaction metadata for " + std::to_string(total) + " package item" +
-                           (total == 1 ? "." : "s."));
-  }
-
-  void transaction_stop(uint64_t) override
-  {
-    emit_progress_line(progress_cb, "Preparation phase finished.");
-  }
-
-  void verify_start(uint64_t total) override
-  {
-    emit_progress_line(progress_cb,
-                       "Verifying " + std::to_string(total) + " package signature" + (total == 1 ? "." : "s."));
-  }
-
-  void verify_stop(uint64_t) override
-  {
-    emit_progress_line(progress_cb, "Verification phase finished.");
-  }
-
-  void elem_progress(const libdnf5::base::TransactionPackage &item, uint64_t amount, uint64_t total) override
-  {
-    if (amount == last_reported_item) {
-      return;
-    }
-
-    last_reported_item = amount;
-    emit_progress_line(progress_cb,
-                       "Processing " + std::to_string(amount + 1) + " of " + std::to_string(total) + ": " +
-                           transaction_action_label(item.get_action()) + " " + transaction_package_label(item));
-  }
-
-  void install_start(const libdnf5::base::TransactionPackage &item, uint64_t) override
-  {
-    emit_progress_line(progress_cb, "Installing: " + transaction_package_label(item));
-  }
-
-  void install_stop(const libdnf5::base::TransactionPackage &item, uint64_t, uint64_t) override
-  {
-    emit_progress_line(progress_cb, "Installed: " + transaction_package_label(item));
-  }
-
-  void uninstall_start(const libdnf5::base::TransactionPackage &item, uint64_t) override
-  {
-    emit_progress_line(progress_cb, "Removing: " + transaction_package_label(item));
-  }
-
-  void uninstall_stop(const libdnf5::base::TransactionPackage &item, uint64_t, uint64_t) override
-  {
-    emit_progress_line(progress_cb, "Removed: " + transaction_package_label(item));
-  }
-
-  void unpack_error(const libdnf5::base::TransactionPackage &item) override
-  {
-    emit_progress_line(progress_cb, "Unpack failed: " + transaction_package_label(item));
-  }
-
-  void cpio_error(const libdnf5::base::TransactionPackage &item) override
-  {
-    emit_progress_line(progress_cb, "Payload extraction failed: " + transaction_package_label(item));
-  }
-
-  void script_start(const libdnf5::base::TransactionPackage *item, libdnf5::rpm::Nevra nevra, ScriptType type) override
-  {
-    emit_progress_line(progress_cb,
-                       "Running " + std::string(script_type_to_string(type)) + " for " + script_owner(item, nevra));
-  }
-
-  void script_stop(const libdnf5::base::TransactionPackage *item,
-                   libdnf5::rpm::Nevra nevra,
-                   ScriptType type,
-                   uint64_t return_code) override
-  {
-    if (return_code == 0) {
-      return;
-    }
-
-    emit_progress_line(progress_cb,
-                       std::string(script_type_to_string(type)) + " finished for " + script_owner(item, nevra) +
-                           " with exit code " + std::to_string(return_code) + ".");
-  }
-
-  void script_error(const libdnf5::base::TransactionPackage *item,
-                    libdnf5::rpm::Nevra nevra,
-                    ScriptType type,
-                    uint64_t return_code) override
-  {
-    emit_progress_line(progress_cb,
-                       "Script failed: " + std::string(script_type_to_string(type)) + " for " +
-                           script_owner(item, nevra) + " (exit code " + std::to_string(return_code) + ")");
-  }
-
-  private:
-  static std::string script_owner(const libdnf5::base::TransactionPackage *item, const libdnf5::rpm::Nevra &nevra)
-  {
-    if (item) {
-      return transaction_package_label(*item);
-    }
-
-    return libdnf5::rpm::to_nevra_string(nevra);
-  }
-
-  TransactionProgressCallback progress_cb;
-  uint64_t last_reported_item = std::numeric_limits<uint64_t>::max();
-};
-
-// -----------------------------------------------------------------------------
 // Helper: Reset Base download callbacks when leaving transaction apply scope
 // -----------------------------------------------------------------------------
 class DownloadCallbacksReset {
@@ -946,8 +813,6 @@ apply_transaction(const std::vector<std::string> &install_nevras,
     emit_progress_line(progress_cb, "Starting package downloads...");
     transaction->download();
     emit_progress_line(progress_cb, "Package downloads finished.");
-
-    transaction->set_callbacks(std::make_unique<StreamingTransactionCallbacks>(progress_cb));
 
     auto run_result = transaction->run();
     if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
