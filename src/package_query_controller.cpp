@@ -52,7 +52,8 @@ search_task_data_free(gpointer p)
 static bool
 has_active_package_list_request(const SearchWidgets *widgets)
 {
-  return widgets && widgets->package_list_cancellable && !g_cancellable_is_cancelled(widgets->package_list_cancellable);
+  return widgets && widgets->query_state.package_list_cancellable &&
+      !g_cancellable_is_cancelled(widgets->query_state.package_list_cancellable);
 }
 
 // Return the button that owns the Stop state for the active package list request.
@@ -65,13 +66,13 @@ package_list_stop_button(SearchWidgets *widgets, PackageListRequestKind kind)
 
   switch (kind) {
   case PackageListRequestKind::LIST_INSTALLED:
-    return widgets->list_button;
+    return widgets->query.list_button;
   case PackageListRequestKind::LIST_AVAILABLE:
-    return widgets->list_available_button;
+    return widgets->query.list_available_button;
   case PackageListRequestKind::SEARCH:
   case PackageListRequestKind::NONE:
   default:
-    return widgets->search_button;
+    return widgets->query.search_button;
   }
 }
 
@@ -100,26 +101,26 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
     return;
   }
 
-  if (widgets->package_list_cancellable) {
-    g_object_unref(widgets->package_list_cancellable);
+  if (widgets->query_state.package_list_cancellable) {
+    g_object_unref(widgets->query_state.package_list_cancellable);
   }
 
-  widgets->package_list_cancellable = G_CANCELLABLE(g_object_ref(c));
-  widgets->current_package_list_request_id = request_id;
-  widgets->current_package_list_request_kind = kind;
+  widgets->query_state.package_list_cancellable = G_CANCELLABLE(g_object_ref(c));
+  widgets->query_state.current_package_list_request_id = request_id;
+  widgets->query_state.current_package_list_request_kind = kind;
   GtkButton *stop_button = package_list_stop_button(widgets, kind);
 
-  gtk_button_set_label(widgets->search_button, "Search");
-  gtk_button_set_label(widgets->list_button, "List Installed");
-  gtk_button_set_label(widgets->list_available_button, "List Available");
+  gtk_button_set_label(widgets->query.search_button, "Search");
+  gtk_button_set_label(widgets->query.list_button, "List Installed");
+  gtk_button_set_label(widgets->query.list_available_button, "List Available");
   gtk_button_set_label(stop_button, "Stop");
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->desc_checkbox), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->exact_checkbox), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->history_list), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_button), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_available_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.history_list), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_available_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(stop_button), TRUE);
 }
 
@@ -131,33 +132,33 @@ restore_package_list_controls(SearchWidgets *widgets)
     return;
   }
 
-  gtk_button_set_label(widgets->search_button, "Search");
-  gtk_button_set_label(widgets->list_button, "List Installed");
-  gtk_button_set_label(widgets->list_available_button, "List Available");
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->entry), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->desc_checkbox), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->exact_checkbox), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->history_list), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_button), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->list_available_button), TRUE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), TRUE);
+  gtk_button_set_label(widgets->query.search_button, "Search");
+  gtk_button_set_label(widgets->query.list_button, "List Installed");
+  gtk_button_set_label(widgets->query.list_available_button, "List Available");
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.history_list), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_button), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_available_button), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), TRUE);
 }
 
 // Restore the shared package list UI when the active background request is done.
 static void
 end_package_list_request(SearchWidgets *widgets, uint64_t request_id, PackageListRequestKind kind)
 {
-  if (!widgets || widgets->current_package_list_request_id != request_id ||
-      widgets->current_package_list_request_kind != kind) {
+  if (!widgets || widgets->query_state.current_package_list_request_id != request_id ||
+      widgets->query_state.current_package_list_request_kind != kind) {
     return;
   }
 
-  if (widgets->package_list_cancellable) {
-    g_object_unref(widgets->package_list_cancellable);
-    widgets->package_list_cancellable = nullptr;
+  if (widgets->query_state.package_list_cancellable) {
+    g_object_unref(widgets->query_state.package_list_cancellable);
+    widgets->query_state.package_list_cancellable = nullptr;
   }
-  widgets->current_package_list_request_id = 0;
-  widgets->current_package_list_request_kind = PackageListRequestKind::NONE;
+  widgets->query_state.current_package_list_request_id = 0;
+  widgets->query_state.current_package_list_request_kind = PackageListRequestKind::NONE;
   restore_package_list_controls(widgets);
 }
 
@@ -165,21 +166,21 @@ end_package_list_request(SearchWidgets *widgets, uint64_t request_id, PackageLis
 static void
 cancel_active_package_list_request(SearchWidgets *widgets)
 {
-  if (!widgets || !widgets->package_list_cancellable) {
+  if (!widgets || !widgets->query_state.package_list_cancellable) {
     return;
   }
 
-  PackageListRequestKind kind = widgets->current_package_list_request_kind;
-  GCancellable *c = widgets->package_list_cancellable;
+  PackageListRequestKind kind = widgets->query_state.current_package_list_request_kind;
+  GCancellable *c = widgets->query_state.package_list_cancellable;
   if (!g_cancellable_is_cancelled(c)) {
     g_cancellable_cancel(c);
   }
 
   // Release only the spinner slot owned by this request so other running tasks
   // can keep their progress indication visible.
-  spinner_release(widgets->spinner);
+  spinner_release(widgets->query.spinner);
   restore_package_list_controls(widgets);
-  set_status(widgets->status_label, package_list_cancelled_status(kind), "gray");
+  set_status(widgets->query.status_label, package_list_cancelled_status(kind), "gray");
 }
 
 // Reset the details notebook after repopulating the main package view.
@@ -190,10 +191,10 @@ reset_package_details_view(SearchWidgets *widgets)
     return;
   }
 
-  gtk_label_set_text(widgets->details_label, "Select a package for details.");
-  gtk_label_set_text(widgets->files_label, "Select an installed package to view its file list.");
-  gtk_label_set_text(widgets->deps_label, "Select a package to view dependencies.");
-  gtk_label_set_text(widgets->changelog_label, "Select a package to view its changelog.");
+  gtk_label_set_text(widgets->results.details_label, "Select a package for details.");
+  gtk_label_set_text(widgets->results.files_label, "Select an installed package to view its file list.");
+  gtk_label_set_text(widgets->results.deps_label, "Select a package to view dependencies.");
+  gtk_label_set_text(widgets->results.changelog_label, "Select a package to view its changelog.");
 }
 
 // -----------------------------------------------------------------------------
@@ -281,7 +282,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   // Drop stale results if the backend Base changed while the worker was running.
   // This prevents rendering a list that no longer matches the current repo/system state.
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    spinner_release(widgets->spinner);
+    spinner_release(widgets->query.spinner);
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
     return;
   }
@@ -290,7 +291,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
-  spinner_release(widgets->spinner);
+  spinner_release(widgets->query.spinner);
 
   if (td) {
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
@@ -298,15 +299,15 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 
   if (packages) {
     // Populate the package table and update status
-    widgets->selected_nevra.clear();
+    widgets->results.selected_nevra.clear();
     fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages->size());
-    set_status(widgets->status_label, msg, "green");
+    set_status(widgets->query.status_label, msg, "green");
     reset_package_details_view(widgets);
     delete packages;
   } else {
-    set_status(widgets->status_label, error ? error->message : "Error listing packages.", "red");
+    set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -353,7 +354,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    spinner_release(widgets->spinner);
+    spinner_release(widgets->query.spinner);
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
     return;
   }
@@ -362,7 +363,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
-  spinner_release(widgets->spinner);
+  spinner_release(widgets->query.spinner);
 
   if (td) {
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
@@ -371,15 +372,15 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   if (packages) {
     refresh_installed_nevras();
 
-    widgets->selected_nevra.clear();
+    widgets->results.selected_nevra.clear();
     fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu available packages.", packages->size());
-    set_status(widgets->status_label, msg, "green");
+    set_status(widgets->query.status_label, msg, "green");
     reset_package_details_view(widgets);
     delete packages;
   } else {
-    set_status(widgets->status_label, error ? error->message : "Error listing available packages.", "red");
+    set_status(widgets->query.status_label, error ? error->message : "Error listing available packages.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -426,7 +427,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    spinner_release(widgets->spinner);
+    spinner_release(widgets->query.spinner);
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
     return;
   }
@@ -435,7 +436,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
-  spinner_release(widgets->spinner);
+  spinner_release(widgets->query.spinner);
 
   if (td) {
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
@@ -451,14 +452,14 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     refresh_installed_nevras();
 
     // Fill the package table and display result count
-    widgets->selected_nevra.clear();
+    widgets->results.selected_nevra.clear();
     fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
-    set_status(widgets->status_label, msg, "green");
+    set_status(widgets->query.status_label, msg, "green");
     delete packages;
   } else {
-    set_status(widgets->status_label, error ? error->message : "Error or no results.", "red");
+    set_status(widgets->query.status_label, error ? error->message : "Error or no results.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -475,22 +476,22 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
-    if (widgets->current_package_list_request_kind == PackageListRequestKind::LIST_INSTALLED) {
+    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::LIST_INSTALLED) {
       cancel_active_package_list_request(widgets);
     }
     return;
   }
 
-  set_status(widgets->status_label, "Listing installed packages...", "blue");
+  set_status(widgets->query.status_label, "Listing installed packages...", "blue");
 
   // Show spinner (ref-counted)
-  spinner_acquire(widgets->spinner);
+  spinner_acquire(widgets->query.spinner);
 
   // Run query asynchronously
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
+  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   // Store generation snapshot so completion can reject stale results.
   PackageListTaskData *td = new PackageListTaskData;
-  td->request_id = widgets->next_package_list_request_id++;
+  td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
   // The shared request helper owns disabling the entry and flipping the
@@ -514,20 +515,20 @@ on_list_available_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
-    if (widgets->current_package_list_request_kind == PackageListRequestKind::LIST_AVAILABLE) {
+    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::LIST_AVAILABLE) {
       cancel_active_package_list_request(widgets);
     }
     return;
   }
 
-  set_status(widgets->status_label, "Listing available packages...", "blue");
+  set_status(widgets->query.status_label, "Listing available packages...", "blue");
 
   // Show spinner (ref-counted)
-  spinner_acquire(widgets->spinner);
+  spinner_acquire(widgets->query.spinner);
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
+  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   PackageListTaskData *td = new PackageListTaskData;
-  td->request_id = widgets->next_package_list_request_id++;
+  td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
   // The shared request helper owns disabling the entry and flipping the
@@ -551,16 +552,16 @@ on_search_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
-    if (widgets->current_package_list_request_kind == PackageListRequestKind::SEARCH) {
+    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::SEARCH) {
       cancel_active_package_list_request(widgets);
     }
     return;
   }
 
-  g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->desc_checkbox));
-  g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->exact_checkbox));
+  g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox));
+  g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox));
 
-  const char *txt = gtk_editable_get_text(GTK_EDITABLE(widgets->entry));
+  const char *txt = gtk_editable_get_text(GTK_EDITABLE(widgets->query.entry));
   std::string pattern = txt ? txt : "";
 
   if (pattern.empty()) {
@@ -596,12 +597,12 @@ void
 on_clear_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-  widgets->current_packages.clear();
-  widgets->selected_nevra.clear();
+  widgets->results.current_packages.clear();
+  widgets->results.selected_nevra.clear();
   fill_package_view(widgets, {});
 
   // Reset UI labels and actions
-  set_status(widgets->status_label, "Ready.", "gray");
+  set_status(widgets->query.status_label, "Ready.", "gray");
   reset_package_details_view(widgets);
   update_action_button_labels(widgets, "");
 }
@@ -617,17 +618,17 @@ add_to_history(SearchWidgets *widgets, const std::string &term)
   }
 
   // Prevent duplicates in history
-  for (const auto &s : widgets->history) {
+  for (const auto &s : widgets->query_state.history) {
     if (s == term) {
       return;
     }
   }
 
   // Append new term to internal list and UI widget
-  widgets->history.push_back(term);
+  widgets->query_state.history.push_back(term);
   GtkWidget *row = gtk_label_new(term.c_str());
   gtk_label_set_xalign(GTK_LABEL(row), 0.0);
-  gtk_list_box_append(widgets->history_list, row);
+  gtk_list_box_append(widgets->query.history_list, row);
 }
 
 // -----------------------------------------------------------------------------
@@ -641,12 +642,12 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   }
 
   // Ensure cache key reflects current checkboxes even when triggered from history
-  g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->desc_checkbox));
-  g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->exact_checkbox));
+  g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox));
+  g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox));
 
-  gtk_editable_set_text(GTK_EDITABLE(widgets->entry), term.c_str());
-  set_status(widgets->status_label, ("Searching for '" + term + "'...").c_str(), "blue");
-  widgets->selected_nevra.clear();
+  gtk_editable_set_text(GTK_EDITABLE(widgets->query.entry), term.c_str());
+  set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
+  widgets->results.selected_nevra.clear();
 
   // Check cache first
   {
@@ -658,23 +659,23 @@ perform_search(SearchWidgets *widgets, const std::string &term)
 
       char msg[256];
       snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
-      set_status(widgets->status_label, msg, "gray");
+      set_status(widgets->query.status_label, msg, "gray");
 
       return;
     }
   }
 
   // Otherwise perform real background search
-  spinner_acquire(widgets->spinner);
+  spinner_acquire(widgets->query.spinner);
 
   const std::string key = cache_key_for(term);
   SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
   td->term = g_strdup(term.c_str());
   td->cache_key = g_strdup(key.c_str());
-  td->request_id = widgets->next_package_list_request_id++;
+  td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->entry));
+  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   // The shared request helper owns disabling the search controls and flipping
   // the initiating Search button to Stop.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::SEARCH);

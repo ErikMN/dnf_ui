@@ -93,7 +93,7 @@ create_transaction_progress_window(SearchWidgets *widgets, size_t pending_count)
   gtk_window_set_default_size(progress->window, 760, 420);
   gtk_window_set_modal(progress->window, TRUE);
 
-  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->entry));
+  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->query.entry));
   if (root && GTK_IS_WINDOW(root)) {
     GtkWindow *parent = GTK_WINDOW(root);
     if (GtkApplication *app = gtk_window_get_application(parent)) {
@@ -297,7 +297,7 @@ show_transaction_summary_dialog(SearchWidgets *widgets,
   gtk_window_set_default_size(dialog, 760, 520);
   gtk_window_set_modal(dialog, TRUE);
 
-  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->entry));
+  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->query.entry));
   if (root && GTK_IS_WINDOW(root)) {
     GtkWindow *parent = GTK_WINDOW(root);
     if (GtkApplication *app = gtk_window_get_application(parent)) {

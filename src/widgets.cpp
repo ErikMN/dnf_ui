@@ -134,19 +134,19 @@ refresh_current_package_view(SearchWidgets *widgets)
 {
   ScrollRestoreData *scroll = new ScrollRestoreData { nullptr, nullptr, 0.0, 0.0 };
 
-  GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(widgets->list_scroller);
+  GtkAdjustment *hadj = gtk_scrolled_window_get_hadjustment(widgets->results.list_scroller);
   if (hadj) {
     scroll->hadj = GTK_ADJUSTMENT(g_object_ref(hadj));
     scroll->hvalue = gtk_adjustment_get_value(hadj);
   }
 
-  GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(widgets->list_scroller);
+  GtkAdjustment *vadj = gtk_scrolled_window_get_vadjustment(widgets->results.list_scroller);
   if (vadj) {
     scroll->vadj = GTK_ADJUSTMENT(g_object_ref(vadj));
     scroll->vvalue = gtk_adjustment_get_value(vadj);
   }
 
-  fill_package_view(widgets, widgets->current_packages);
+  fill_package_view(widgets, widgets->results.current_packages);
 
   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, restore_scroll_position_idle, scroll, scroll_restore_data_free);
 }
@@ -183,9 +183,9 @@ on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gboolean success = g_task_propagate_boolean(task, &error);
 
   if (success) {
-    set_status(widgets->status_label, "Repositories refreshed.", "green");
+    set_status(widgets->query.status_label, "Repositories refreshed.", "green");
   } else {
-    set_status(widgets->status_label, error ? error->message : "Repo refresh failed.", "red");
+    set_status(widgets->query.status_label, error ? error->message : "Repo refresh failed.", "red");
     if (error) {
       g_error_free(error);
     }

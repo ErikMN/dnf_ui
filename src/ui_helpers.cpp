@@ -92,7 +92,7 @@ install_state_rank(PackageInstallState state)
 static void
 fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
 {
-  for (const auto &a : widgets->pending) {
+  for (const auto &a : widgets->transaction.actions) {
     if (a.nevra == item.row.nevra) {
       switch (a.type) {
       case PendingAction::INSTALL:
@@ -157,7 +157,7 @@ package_row_from_object(GObject *obj)
 static const char *
 pending_css_class(SearchWidgets *widgets, const std::string &nevra)
 {
-  for (const auto &a : widgets->pending) {
+  for (const auto &a : widgets->transaction.actions) {
     if (a.nevra == nevra) {
       switch (a.type) {
       case PendingAction::INSTALL:
@@ -408,11 +408,11 @@ set_status(GtkLabel *label, const std::string &text, const std::string &color)
 bool
 get_selected_package_row(SearchWidgets *widgets, PackageRow &out_pkg)
 {
-  if (!widgets || !widgets->list_scroller) {
+  if (!widgets || !widgets->results.list_scroller) {
     return false;
   }
 
-  GtkWidget *child = gtk_scrolled_window_get_child(widgets->list_scroller);
+  GtkWidget *child = gtk_scrolled_window_get_child(widgets->results.list_scroller);
   if (!child || !GTK_IS_COLUMN_VIEW(child)) {
     return false;
   }
@@ -453,7 +453,7 @@ update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
   bool pending_remove = false;
   bool pending_reinstall = false;
 
-  for (const auto &a : widgets->pending) {
+  for (const auto &a : widgets->transaction.actions) {
     if (a.nevra == pkg) {
       pending_install = (a.type == PendingAction::INSTALL);
       pending_remove = (a.type == PendingAction::REMOVE);
@@ -463,21 +463,21 @@ update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
   }
 
   if (pending_install) {
-    gtk_button_set_label(widgets->install_button, "Unmark Install");
-    gtk_button_set_label(widgets->remove_button, "Mark for Removal");
-    gtk_button_set_label(widgets->reinstall_button, "Mark for Reinstall");
+    gtk_button_set_label(widgets->transaction.install_button, "Unmark Install");
+    gtk_button_set_label(widgets->transaction.remove_button, "Mark for Removal");
+    gtk_button_set_label(widgets->transaction.reinstall_button, "Mark for Reinstall");
   } else if (pending_reinstall) {
-    gtk_button_set_label(widgets->install_button, "Mark for Install");
-    gtk_button_set_label(widgets->remove_button, "Mark for Removal");
-    gtk_button_set_label(widgets->reinstall_button, "Unmark Reinstall");
+    gtk_button_set_label(widgets->transaction.install_button, "Mark for Install");
+    gtk_button_set_label(widgets->transaction.remove_button, "Mark for Removal");
+    gtk_button_set_label(widgets->transaction.reinstall_button, "Unmark Reinstall");
   } else if (pending_remove) {
-    gtk_button_set_label(widgets->install_button, "Mark for Install");
-    gtk_button_set_label(widgets->remove_button, "Unmark Removal");
-    gtk_button_set_label(widgets->reinstall_button, "Mark for Reinstall");
+    gtk_button_set_label(widgets->transaction.install_button, "Mark for Install");
+    gtk_button_set_label(widgets->transaction.remove_button, "Unmark Removal");
+    gtk_button_set_label(widgets->transaction.reinstall_button, "Mark for Reinstall");
   } else {
-    gtk_button_set_label(widgets->install_button, "Mark for Install");
-    gtk_button_set_label(widgets->remove_button, "Mark for Removal");
-    gtk_button_set_label(widgets->reinstall_button, "Mark for Reinstall");
+    gtk_button_set_label(widgets->transaction.install_button, "Mark for Install");
+    gtk_button_set_label(widgets->transaction.remove_button, "Mark for Removal");
+    gtk_button_set_label(widgets->transaction.reinstall_button, "Mark for Reinstall");
   }
 }
 
@@ -489,7 +489,7 @@ update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
 void
 fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
 {
-  widgets->current_packages = items;
+  widgets->results.current_packages = items;
 
   GListStore *store = g_list_store_new(G_TYPE_OBJECT);
   for (const auto &row : items) {
@@ -521,147 +521,148 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
   gtk_single_selection_set_model(sel, G_LIST_MODEL(sort_model));
   gtk_single_selection_set_selected(sel, GTK_INVALID_LIST_POSITION);
 
-  g_signal_connect(sel,
-                   "selection-changed",
-                   G_CALLBACK(+[](GtkSingleSelection *self, guint, guint, gpointer user_data) {
-                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-                     guint index = gtk_single_selection_get_selected(self);
+  g_signal_connect(
+      sel,
+      "selection-changed",
+      G_CALLBACK(+[](GtkSingleSelection *self, guint, guint, gpointer user_data) {
+        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+        guint index = gtk_single_selection_get_selected(self);
 
-                     if (index == GTK_INVALID_LIST_POSITION) {
-                       widgets->selected_nevra.clear();
-                       gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), FALSE);
-                       gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), FALSE);
-                       gtk_widget_set_sensitive(GTK_WIDGET(widgets->reinstall_button), FALSE);
-                       update_action_button_labels(widgets, "");
-                       return;
-                     }
+        if (index == GTK_INVALID_LIST_POSITION) {
+          widgets->results.selected_nevra.clear();
+          gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), FALSE);
+          gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button), FALSE);
+          gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button), FALSE);
+          update_action_button_labels(widgets, "");
+          return;
+        }
 
-                     GObject *obj = G_OBJECT(g_list_model_get_item(gtk_single_selection_get_model(self), index));
-                     const PackageRow *row = package_row_from_object(obj);
-                     if (!row) {
-                       g_object_unref(obj);
-                       return;
-                     }
+        GObject *obj = G_OBJECT(g_list_model_get_item(gtk_single_selection_get_model(self), index));
+        const PackageRow *row = package_row_from_object(obj);
+        if (!row) {
+          g_object_unref(obj);
+          return;
+        }
 
-                     PackageRow selected = *row;
-                     widgets->selected_nevra = selected.nevra;
-                     g_object_unref(obj);
+        PackageRow selected = *row;
+        widgets->results.selected_nevra = selected.nevra;
+        g_object_unref(obj);
 
-                     set_status(widgets->status_label, "Fetching package info...", "blue");
+        set_status(widgets->query.status_label, "Fetching package info...", "blue");
 
-                     // Enable install for new packages and upgrade candidates, while
-                     // remove and reinstall stay reserved for the exact installed row.
-                     PackageInstallState install_state = get_package_install_state(selected);
+        // Enable install for new packages and upgrade candidates, while
+        // remove and reinstall stay reserved for the exact installed row.
+        PackageInstallState install_state = get_package_install_state(selected);
 
-                     // FIXME: Replace with Polkit:
-                     bool is_root = (geteuid() == 0);
+        // FIXME: Replace with Polkit:
+        bool is_root = (geteuid() == 0);
 
-                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button),
-                                              is_root && install_state != PackageInstallState::INSTALLED);
-                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button),
-                                              is_root && install_state == PackageInstallState::INSTALLED);
-                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->reinstall_button),
-                                              is_root && install_state == PackageInstallState::INSTALLED);
-                     update_action_button_labels(widgets, selected.nevra);
+        gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button),
+                                 is_root && install_state != PackageInstallState::INSTALLED);
+        gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button),
+                                 is_root && install_state == PackageInstallState::INSTALLED);
+        gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
+                                 is_root && install_state == PackageInstallState::INSTALLED);
+        update_action_button_labels(widgets, selected.nevra);
 
-                     // --- Async task: Fetch and display package info + file list ---
-                     GCancellable *c = g_cancellable_new();
-                     g_signal_connect_object(
-                         GTK_WIDGET(widgets->entry), "destroy", G_CALLBACK(g_cancellable_cancel), c, G_CONNECT_SWAPPED);
+        // --- Async task: Fetch and display package info + file list ---
+        GCancellable *c = g_cancellable_new();
+        g_signal_connect_object(
+            GTK_WIDGET(widgets->query.entry), "destroy", G_CALLBACK(g_cancellable_cancel), c, G_CONNECT_SWAPPED);
 
-                     GTask *task = g_task_new(
-                         NULL,
-                         c,
-                         +[](GObject *, GAsyncResult *res, gpointer user_data) {
-                           GTask *task = G_TASK(res);
-                           if (GCancellable *c = g_task_get_cancellable(task)) {
-                             if (g_cancellable_is_cancelled(c)) {
-                               return;
-                             }
-                           }
+        GTask *task = g_task_new(
+            NULL,
+            c,
+            +[](GObject *, GAsyncResult *res, gpointer user_data) {
+              GTask *task = G_TASK(res);
+              if (GCancellable *c = g_task_get_cancellable(task)) {
+                if (g_cancellable_is_cancelled(c)) {
+                  return;
+                }
+              }
 
-                           SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+              SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
-                           const InfoTaskData *td = static_cast<const InfoTaskData *>(g_task_get_task_data(task));
-                           if (!td) {
-                             char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
-                             if (info) {
-                               g_free(info);
-                             }
-                             return;
-                           }
+              const InfoTaskData *td = static_cast<const InfoTaskData *>(g_task_get_task_data(task));
+              if (!td) {
+                char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
+                if (info) {
+                  g_free(info);
+                }
+                return;
+              }
 
-                           if (td->generation != BaseManager::instance().current_generation()) {
-                             // Drop stale results, but still propagate to ensure the task result is released.
-                             char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
-                             if (info) {
-                               g_free(info);
-                             }
-                             return;
-                           }
+              if (td->generation != BaseManager::instance().current_generation()) {
+                // Drop stale results, but still propagate to ensure the task result is released.
+                char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
+                if (info) {
+                  g_free(info);
+                }
+                return;
+              }
 
-                           char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
-                           if (info) {
-                             // Display general package information
-                             gtk_label_set_text(widgets->details_label, info);
+              char *info = static_cast<char *>(g_task_propagate_pointer(task, NULL));
+              if (info) {
+                // Display general package information
+                gtk_label_set_text(widgets->results.details_label, info);
 
-                             // Fetch and display the file list for the selected package
-                             try {
-                               std::string files = get_installed_package_files(td->nevra);
-                               gtk_label_set_text(widgets->files_label, files.c_str());
-                             } catch (const std::exception &e) {
-                               gtk_label_set_text(widgets->files_label, e.what());
-                             }
+                // Fetch and display the file list for the selected package
+                try {
+                  std::string files = get_installed_package_files(td->nevra);
+                  gtk_label_set_text(widgets->results.files_label, files.c_str());
+                } catch (const std::exception &e) {
+                  gtk_label_set_text(widgets->results.files_label, e.what());
+                }
 
-                             // Fetch and display dependencies for the selected package
-                             try {
-                               std::string deps = get_package_deps(td->nevra);
-                               gtk_label_set_text(widgets->deps_label, deps.c_str());
-                             } catch (const std::exception &e) {
-                               gtk_label_set_text(widgets->deps_label, e.what());
-                             }
+                // Fetch and display dependencies for the selected package
+                try {
+                  std::string deps = get_package_deps(td->nevra);
+                  gtk_label_set_text(widgets->results.deps_label, deps.c_str());
+                } catch (const std::exception &e) {
+                  gtk_label_set_text(widgets->results.deps_label, e.what());
+                }
 
-                             // Fetch and display changelog
-                             try {
-                               std::string changelog = get_package_changelog(td->nevra);
-                               gtk_label_set_text(widgets->changelog_label, changelog.c_str());
-                             } catch (const std::exception &e) {
-                               gtk_label_set_text(widgets->changelog_label, e.what());
-                             }
+                // Fetch and display changelog
+                try {
+                  std::string changelog = get_package_changelog(td->nevra);
+                  gtk_label_set_text(widgets->results.changelog_label, changelog.c_str());
+                } catch (const std::exception &e) {
+                  gtk_label_set_text(widgets->results.changelog_label, e.what());
+                }
 
-                             set_status(widgets->status_label, "Package info loaded.", "green");
-                             g_free(info);
-                           } else {
-                             set_status(widgets->status_label, "Error loading info.", "red");
-                           }
-                         },
-                         widgets);
+                set_status(widgets->query.status_label, "Package info loaded.", "green");
+                g_free(info);
+              } else {
+                set_status(widgets->query.status_label, "Error loading info.", "red");
+              }
+            },
+            widgets);
 
-                     // Pass package NEVRA to background task
-                     InfoTaskData *td = static_cast<InfoTaskData *>(g_malloc0(sizeof *td));
-                     td->nevra = g_strdup(selected.nevra.c_str());
-                     td->generation = BaseManager::instance().current_generation();
-                     g_task_set_task_data(task, td, info_task_data_free);
+        // Pass package NEVRA to background task
+        InfoTaskData *td = static_cast<InfoTaskData *>(g_malloc0(sizeof *td));
+        td->nevra = g_strdup(selected.nevra.c_str());
+        td->generation = BaseManager::instance().current_generation();
+        g_task_set_task_data(task, td, info_task_data_free);
 
-                     // Run background task to fetch metadata using dnf_backend
-                     g_task_run_in_thread(
-                         task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *cancellable) {
-                           if (cancellable && g_cancellable_is_cancelled(cancellable)) {
-                             return;
-                           }
-                           InfoTaskData *td = static_cast<InfoTaskData *>(task_data);
-                           try {
-                             std::string info = get_package_info(td->nevra);
-                             g_task_return_pointer(t, g_strdup(info.c_str()), g_free);
-                           } catch (const std::exception &e) {
-                             g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
-                           }
-                         });
+        // Run background task to fetch metadata using dnf_backend
+        g_task_run_in_thread(
+            task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *cancellable) {
+              if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+                return;
+              }
+              InfoTaskData *td = static_cast<InfoTaskData *>(task_data);
+              try {
+                std::string info = get_package_info(td->nevra);
+                g_task_return_pointer(t, g_strdup(info.c_str()), g_free);
+              } catch (const std::exception &e) {
+                g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+              }
+            });
 
-                     g_object_unref(task);
-                     g_object_unref(c);
-                   }),
-                   widgets);
+        g_object_unref(task);
+        g_object_unref(c);
+      }),
+      widgets);
 
   gtk_column_view_set_model(view, GTK_SELECTION_MODEL(sel));
 
@@ -703,24 +704,24 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                    }),
                    widgets);
 
-  gtk_scrolled_window_set_child(widgets->list_scroller, GTK_WIDGET(view));
-  widgets->listbox = nullptr;
+  gtk_scrolled_window_set_child(widgets->results.list_scroller, GTK_WIDGET(view));
+  widgets->results.listbox = nullptr;
 
   // Update count label
   char count_msg[128];
   snprintf(count_msg, sizeof(count_msg), "Items: %zu", items.size());
-  gtk_label_set_text(widgets->count_label, count_msg);
+  gtk_label_set_text(widgets->results.count_label, count_msg);
 
   // Restore selection when the same package is still present after a refresh.
   bool restored = false;
-  if (!widgets->selected_nevra.empty()) {
+  if (!widgets->results.selected_nevra.empty()) {
     GListModel *selected_model = gtk_single_selection_get_model(sel);
     guint n_items = g_list_model_get_n_items(selected_model);
 
     for (guint i = 0; i < n_items; ++i) {
       GObject *obj = G_OBJECT(g_list_model_get_item(selected_model, i));
       const PackageRow *row = package_row_from_object(obj);
-      bool match = row && row->nevra == widgets->selected_nevra;
+      bool match = row && row->nevra == widgets->results.selected_nevra;
       g_object_unref(obj);
 
       if (match) {
@@ -731,14 +732,14 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
     }
   }
 
-  if (!restored && widgets->selected_nevra.size() > 0) {
-    widgets->selected_nevra.clear();
+  if (!restored && widgets->results.selected_nevra.size() > 0) {
+    widgets->results.selected_nevra.clear();
   }
 
   if (!restored) {
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->install_button), FALSE);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->remove_button), FALSE);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->reinstall_button), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button), FALSE);
     update_action_button_labels(widgets, "");
   }
 

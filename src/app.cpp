@@ -4,6 +4,7 @@
 // -----------------------------------------------------------------------------
 #include "app.hpp"
 #include "widgets.hpp"
+#include "widgets_internal.hpp"
 #include "config.hpp"
 #include "dnf_backend.hpp"
 #include "ui_helpers.hpp"
@@ -447,35 +448,38 @@ static SearchWidgets *
 create_search_widgets(const AppWidgets *ui)
 {
   SearchWidgets *widgets = new SearchWidgets();
-  widgets->entry = GTK_ENTRY(ui->entry);
-  widgets->listbox = GTK_LIST_BOX(ui->listbox);
-  widgets->list_scroller = GTK_SCROLLED_WINDOW(ui->scrolled_list);
-  widgets->inner_paned = GTK_PANED(ui->inner_paned);
-  widgets->history_list = GTK_LIST_BOX(ui->history_list);
-  widgets->spinner = GTK_SPINNER(ui->spinner);
-  widgets->search_button = GTK_BUTTON(ui->search_button);
-  widgets->list_button = GTK_BUTTON(ui->list_button);
-  widgets->list_available_button = GTK_BUTTON(ui->list_available_button);
-  widgets->install_button = GTK_BUTTON(ui->install_button);
-  widgets->remove_button = GTK_BUTTON(ui->remove_button);
-  widgets->reinstall_button = GTK_BUTTON(ui->reinstall_button);
-  widgets->apply_button = GTK_BUTTON(ui->apply_button);
-  widgets->clear_pending_button = GTK_BUTTON(ui->clear_pending_button);
-  widgets->status_label = GTK_LABEL(ui->status_label);
-  widgets->details_label = GTK_LABEL(ui->details_label);
-  widgets->files_label = GTK_LABEL(ui->files_label);
-  widgets->deps_label = GTK_LABEL(ui->deps_label);
-  widgets->desc_checkbox = GTK_CHECK_BUTTON(ui->desc_checkbox);
-  widgets->exact_checkbox = GTK_CHECK_BUTTON(ui->exact_checkbox);
-  widgets->count_label = GTK_LABEL(ui->count_label);
-  widgets->changelog_label = GTK_LABEL(ui->changelog_label);
-  widgets->pending_list = GTK_LIST_BOX(ui->pending_list);
-  widgets->package_list_cancellable = nullptr;
-  widgets->next_package_list_request_id = 1;
-  widgets->current_package_list_request_id = 0;
-  widgets->current_package_list_request_kind = PackageListRequestKind::NONE;
-  widgets->allow_close_with_pending = false;
-  widgets->pending_quit_dialog_open = false;
+  widgets->query.entry = GTK_ENTRY(ui->entry);
+  widgets->query.history_list = GTK_LIST_BOX(ui->history_list);
+  widgets->query.spinner = GTK_SPINNER(ui->spinner);
+  widgets->query.search_button = GTK_BUTTON(ui->search_button);
+  widgets->query.list_button = GTK_BUTTON(ui->list_button);
+  widgets->query.list_available_button = GTK_BUTTON(ui->list_available_button);
+  widgets->query.status_label = GTK_LABEL(ui->status_label);
+  widgets->query.desc_checkbox = GTK_CHECK_BUTTON(ui->desc_checkbox);
+  widgets->query.exact_checkbox = GTK_CHECK_BUTTON(ui->exact_checkbox);
+
+  widgets->results.listbox = GTK_LIST_BOX(ui->listbox);
+  widgets->results.list_scroller = GTK_SCROLLED_WINDOW(ui->scrolled_list);
+  widgets->results.inner_paned = GTK_PANED(ui->inner_paned);
+  widgets->results.details_label = GTK_LABEL(ui->details_label);
+  widgets->results.files_label = GTK_LABEL(ui->files_label);
+  widgets->results.deps_label = GTK_LABEL(ui->deps_label);
+  widgets->results.changelog_label = GTK_LABEL(ui->changelog_label);
+  widgets->results.count_label = GTK_LABEL(ui->count_label);
+
+  widgets->transaction.install_button = GTK_BUTTON(ui->install_button);
+  widgets->transaction.remove_button = GTK_BUTTON(ui->remove_button);
+  widgets->transaction.reinstall_button = GTK_BUTTON(ui->reinstall_button);
+  widgets->transaction.apply_button = GTK_BUTTON(ui->apply_button);
+  widgets->transaction.clear_pending_button = GTK_BUTTON(ui->clear_pending_button);
+  widgets->transaction.pending_list = GTK_LIST_BOX(ui->pending_list);
+
+  widgets->query_state.package_list_cancellable = nullptr;
+  widgets->query_state.next_package_list_request_id = 1;
+  widgets->query_state.current_package_list_request_id = 0;
+  widgets->query_state.current_package_list_request_kind = PackageListRequestKind::NONE;
+  widgets->window_state.allow_close_with_pending = false;
+  widgets->window_state.pending_quit_dialog_open = false;
 
   return widgets;
 }
@@ -541,7 +545,7 @@ setup_css(SearchWidgets *widgets)
                                     "} ");
   gtk_style_context_add_provider_for_display(
       gdk_display_get_default(), GTK_STYLE_PROVIDER(css), GTK_STYLE_PROVIDER_PRIORITY_USER);
-  gtk_widget_add_css_class(GTK_WIDGET(widgets->status_label), "status-bar");
+  gtk_widget_add_css_class(GTK_WIDGET(widgets->query.status_label), "status-bar");
   g_object_unref(css);
 }
 
@@ -552,10 +556,10 @@ static void
 initialize_ui_state(SearchWidgets *widgets)
 {
   // Apply and Clear Transactions are meaningful only when there are pending actions
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->clear_pending_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), FALSE);
 
-  set_status(widgets->status_label, "Ready.", "gray");
+  set_status(widgets->query.status_label, "Ready.", "gray");
   fill_package_view(widgets, {});
 }
 
@@ -608,23 +612,24 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
   g_signal_connect(ui->apply_button, "clicked", G_CALLBACK(on_apply_button_clicked), widgets);
   g_signal_connect(ui->clear_pending_button, "clicked", G_CALLBACK(on_clear_pending_button_clicked), widgets);
 
-  g_signal_connect(ui->refresh_button,
-                   "clicked",
-                   G_CALLBACK(+[](GtkButton *, gpointer user_data) {
-                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-                     set_status(widgets->status_label, "Refreshing repositories...", "blue");
-                     gtk_widget_set_sensitive(GTK_WIDGET(widgets->search_button), FALSE);
+  g_signal_connect(
+      ui->refresh_button,
+      "clicked",
+      G_CALLBACK(+[](GtkButton *, gpointer user_data) {
+        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+        set_status(widgets->query.status_label, "Refreshing repositories...", "blue");
+        gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
 
-                     GCancellable *c = g_cancellable_new();
-                     g_signal_connect_object(
-                         GTK_WIDGET(widgets->entry), "destroy", G_CALLBACK(g_cancellable_cancel), c, G_CONNECT_SWAPPED);
+        GCancellable *c = g_cancellable_new();
+        g_signal_connect_object(
+            GTK_WIDGET(widgets->query.entry), "destroy", G_CALLBACK(g_cancellable_cancel), c, G_CONNECT_SWAPPED);
 
-                     GTask *task = g_task_new(NULL, c, on_rebuild_task_finished, widgets);
-                     g_task_run_in_thread(task, on_rebuild_task);
-                     g_object_unref(task);
-                     g_object_unref(c);
-                   }),
-                   widgets);
+        GTask *task = g_task_new(NULL, c, on_rebuild_task_finished, widgets);
+        g_task_run_in_thread(task, on_rebuild_task);
+        g_object_unref(task);
+        g_object_unref(c);
+      }),
+      widgets);
 
   // Intercept window close so unapplied marked changes can be confirmed first.
   g_signal_connect(ui->window, "close-request", G_CALLBACK(on_main_window_close_request), widgets);
@@ -656,14 +661,14 @@ show_pending_quit_dialog(SearchWidgets *widgets)
     return;
   }
 
-  widgets->pending_quit_dialog_open = true;
+  widgets->window_state.pending_quit_dialog_open = true;
 
   GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
   gtk_window_set_title(dialog, "Quit and discard marked changes?");
   gtk_window_set_default_size(dialog, 520, 180);
   gtk_window_set_modal(dialog, TRUE);
 
-  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->entry));
+  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->query.entry));
   if (root && GTK_IS_WINDOW(root)) {
     GtkWindow *parent = GTK_WINDOW(root);
     if (GtkApplication *app = gtk_window_get_application(parent)) {
@@ -715,14 +720,14 @@ show_pending_quit_dialog(SearchWidgets *widgets)
                    "clicked",
                    G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                      SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-                     widgets->allow_close_with_pending = true;
+                     widgets->window_state.allow_close_with_pending = true;
 
                      GtkRoot *dialog_root = gtk_widget_get_root(GTK_WIDGET(button));
                      if (dialog_root && GTK_IS_WINDOW(dialog_root)) {
                        gtk_window_destroy(GTK_WINDOW(dialog_root));
                      }
 
-                     GtkRoot *parent_root = gtk_widget_get_root(GTK_WIDGET(widgets->entry));
+                     GtkRoot *parent_root = gtk_widget_get_root(GTK_WIDGET(widgets->query.entry));
                      if (parent_root && GTK_IS_WINDOW(parent_root)) {
                        gtk_window_close(GTK_WINDOW(parent_root));
                      }
@@ -733,7 +738,7 @@ show_pending_quit_dialog(SearchWidgets *widgets)
                    "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer user_data) {
                      SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-                     widgets->pending_quit_dialog_open = false;
+                     widgets->window_state.pending_quit_dialog_open = false;
                    }),
                    widgets);
 
@@ -751,19 +756,19 @@ on_main_window_close_request(GtkWindow *window, gpointer user_data)
   // TODO: FIXME: This is broken
   // Save paned position on close
   save_window_geometry(window);
-  if (widgets && widgets->inner_paned) {
-    save_paned_position(widgets->inner_paned);
+  if (widgets && widgets->results.inner_paned) {
+    save_paned_position(widgets->results.inner_paned);
   }
 
-  if (!widgets || widgets->allow_close_with_pending) {
+  if (!widgets || widgets->window_state.allow_close_with_pending) {
     return FALSE;
   }
 
-  if (widgets->pending.empty()) {
+  if (widgets->transaction.actions.empty()) {
     return FALSE;
   }
 
-  if (!widgets->pending_quit_dialog_open) {
+  if (!widgets->window_state.pending_quit_dialog_open) {
     show_pending_quit_dialog(widgets);
   }
 
@@ -780,8 +785,8 @@ connect_cleanup(GtkWidget *window, SearchWidgets *widgets)
                    "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer data) {
                      SearchWidgets *widgets = static_cast<SearchWidgets *>(data);
-                     if (widgets->package_list_cancellable) {
-                       g_object_unref(widgets->package_list_cancellable);
+                     if (widgets->query_state.package_list_cancellable) {
+                       g_object_unref(widgets->query_state.package_list_cancellable);
                      }
                      delete widgets;
                    }),
@@ -816,7 +821,7 @@ apply_root_state(const AppWidgets *ui, SearchWidgets *widgets)
     gtk_widget_set_sensitive(ui->install_button, FALSE);
     gtk_widget_set_sensitive(ui->reinstall_button, FALSE);
     gtk_widget_set_sensitive(ui->remove_button, FALSE);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->apply_button), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), FALSE);
   }
 }
 
