@@ -118,9 +118,8 @@ cppcheck:
 	@cppcheck $(shell find src -name "*.cpp" -o -name "*.hpp") \
 		--quiet --enable=all -DDEBUG=1 \
 		--suppress=missingIncludeSystem \
-		--suppress=unknownMacro \
-		--suppress=unusedFunction \
-		--suppress=variableScope
+		--suppress=unusedStructMember \
+		--suppress=knownConditionTrueFalse
 
 .PHONY: indent
 indent:

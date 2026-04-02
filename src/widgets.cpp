@@ -1647,7 +1647,7 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
   TransactionPreview preview;
   std::string error;
   if (!preview_transaction(install, remove, reinstall, preview, error)) {
-    set_status(widgets->status_label, error.empty() ? "Unable to prepare transaction preview." : error.c_str(), "red");
+    set_status(widgets->status_label, error.empty() ? "Unable to prepare transaction preview." : error, "red");
     return;
   }
 
