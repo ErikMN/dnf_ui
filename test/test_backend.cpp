@@ -52,6 +52,7 @@ TEST_CASE("Installed package cache matches returned list")
 
   for (const auto &row : list) {
     REQUIRE(g_installed_nevras.count(row.nevra) == 1);
+    REQUIRE(g_installed_names.count(row.name) == 1);
   }
 }
 
@@ -95,7 +96,12 @@ TEST_CASE("Exact match results are subset of contains results")
   g_exact_match = true;
   auto exact = search_available_package_rows_interruptible("bash", nullptr);
 
+  auto contains_nevras = package_row_nevras(contains);
   REQUIRE(contains.size() >= exact.size());
+  for (const auto &row : exact) {
+    INFO(row.nevra);
+    REQUIRE(contains_nevras.count(row.nevra) == 1);
+  }
 }
 
 TEST_CASE("Description search returns superset of name-only search")
@@ -110,7 +116,28 @@ TEST_CASE("Description search returns superset of name-only search")
   g_search_in_description = true;
   auto desc_search = search_available_package_rows_interruptible("shell", nullptr);
 
+  auto desc_search_nevras = package_row_nevras(desc_search);
   REQUIRE(desc_search.size() >= name_only.size());
+  for (const auto &row : name_only) {
+    INFO(row.nevra);
+    REQUIRE(desc_search_nevras.count(row.nevra) == 1);
+  }
+}
+
+TEST_CASE("Cancelled search returns no results")
+{
+  reset_backend_globals();
+
+  g_search_in_description = false;
+  g_exact_match = false;
+
+  GCancellable *cancellable = g_cancellable_new();
+  g_cancellable_cancel(cancellable);
+
+  auto results = search_available_package_rows_interruptible("bash", cancellable);
+
+  REQUIRE(results.empty());
+  g_object_unref(cancellable);
 }
 
 // -----------------------------------------------------------------------------
