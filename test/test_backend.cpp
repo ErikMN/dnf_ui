@@ -183,7 +183,7 @@ TEST_CASE("File list query is safe and returns valid state")
 {
   reset_backend_globals();
 
-  auto results = search_available_package_rows("bash");
+  auto results = search_available_package_rows_interruptible("bash", nullptr);
   REQUIRE(!results.empty());
 
   auto files = get_installed_package_files(results.front().nevra);

@@ -4,7 +4,7 @@ PROGS = dnf_ui
 LDLIBS = -lm
 
 PKGS = libdnf5 gtk4
-TEST_PKGS = libdnf5 catch2-with-main
+TEST_PKGS = libdnf5 gio-2.0 catch2-with-main
 
 ifneq ($(filter test,$(MAKECMDGOALS)),)
   PKG_OK := $(shell pkg-config --exists $(TEST_PKGS) && echo yes)
