@@ -182,6 +182,10 @@ on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   GError *error = nullptr;
   gboolean success = g_task_propagate_boolean(task, &error);
 
+  // Refresh temporarily disables the main Search button while the rebuild runs.
+  // Restore it once the background refresh finishes so the query UI unlocks.
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), TRUE);
+
   if (success) {
     // Search caches are bound to the old Base generation and must be dropped
     // before the user can query against freshly refreshed repositories.
