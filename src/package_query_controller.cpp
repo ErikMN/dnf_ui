@@ -9,6 +9,7 @@
 
 #include "base_manager.hpp"
 #include "dnf_backend.hpp"
+#include "package_info_controller.hpp"
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
 
@@ -181,20 +182,6 @@ cancel_active_package_list_request(SearchWidgets *widgets)
   spinner_release(widgets->query.spinner);
   restore_package_list_controls(widgets);
   set_status(widgets->query.status_label, package_list_cancelled_status(kind), "gray");
-}
-
-// Reset the details notebook after repopulating the main package view.
-static void
-reset_package_details_view(SearchWidgets *widgets)
-{
-  if (!widgets) {
-    return;
-  }
-
-  gtk_label_set_text(widgets->results.details_label, "Select a package for details.");
-  gtk_label_set_text(widgets->results.files_label, "Select an installed package to view its file list.");
-  gtk_label_set_text(widgets->results.deps_label, "Select a package to view dependencies.");
-  gtk_label_set_text(widgets->results.changelog_label, "Select a package to view its changelog.");
 }
 
 // -----------------------------------------------------------------------------
@@ -457,6 +444,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
     set_status(widgets->query.status_label, msg, "green");
+    reset_package_details_view(widgets);
     delete packages;
   } else {
     set_status(widgets->query.status_label, error ? error->message : "Error or no results.", "red");
@@ -660,6 +648,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
       char msg[256];
       snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
       set_status(widgets->query.status_label, msg, "gray");
+      reset_package_details_view(widgets);
 
       return;
     }
