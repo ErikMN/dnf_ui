@@ -193,5 +193,25 @@ on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
+// UI callback: Refresh repositories button
+// Starts an asynchronous Base rebuild through the shared widget controller layer
+// so application setup code does not depend on widget-internal task helpers.
+// -----------------------------------------------------------------------------
+void
+on_refresh_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  set_status(widgets->query.status_label, "Refreshing repositories...", "blue");
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
+
+  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GTask *task = g_task_new(nullptr, c, on_rebuild_task_finished, widgets);
+  g_task_run_in_thread(task, on_rebuild_task);
+  g_object_unref(task);
+  g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

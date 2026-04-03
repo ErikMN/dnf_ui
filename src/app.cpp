@@ -4,7 +4,6 @@
 // -----------------------------------------------------------------------------
 #include "app.hpp"
 #include "widgets.hpp"
-#include "widgets_internal.hpp"
 #include "config.hpp"
 #include "dnf_backend.hpp"
 #include "ui_helpers.hpp"
@@ -612,24 +611,7 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
   g_signal_connect(ui->apply_button, "clicked", G_CALLBACK(on_apply_button_clicked), widgets);
   g_signal_connect(ui->clear_pending_button, "clicked", G_CALLBACK(on_clear_pending_button_clicked), widgets);
 
-  g_signal_connect(
-      ui->refresh_button,
-      "clicked",
-      G_CALLBACK(+[](GtkButton *, gpointer user_data) {
-        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-        set_status(widgets->query.status_label, "Refreshing repositories...", "blue");
-        gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
-
-        GCancellable *c = g_cancellable_new();
-        g_signal_connect_object(
-            GTK_WIDGET(widgets->query.entry), "destroy", G_CALLBACK(g_cancellable_cancel), c, G_CONNECT_SWAPPED);
-
-        GTask *task = g_task_new(NULL, c, on_rebuild_task_finished, widgets);
-        g_task_run_in_thread(task, on_rebuild_task);
-        g_object_unref(task);
-        g_object_unref(c);
-      }),
-      widgets);
+  g_signal_connect(ui->refresh_button, "clicked", G_CALLBACK(on_refresh_button_clicked), widgets);
 
   // Intercept window close so unapplied marked changes can be confirmed first.
   g_signal_connect(ui->window, "close-request", G_CALLBACK(on_main_window_close_request), widgets);

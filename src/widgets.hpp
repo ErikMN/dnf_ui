@@ -108,6 +108,7 @@ void on_list_available_button_clicked(GtkButton *, gpointer user_data);
 void on_search_button_clicked(GtkButton *, gpointer user_data);
 void on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data);
 void on_clear_button_clicked(GtkButton *, gpointer user_data);
+void on_refresh_button_clicked(GtkButton *, gpointer user_data);
 void on_install_button_clicked(GtkButton *, gpointer user_data);
 void on_remove_button_clicked(GtkButton *, gpointer user_data);
 void on_reinstall_button_clicked(GtkButton *, gpointer user_data);
