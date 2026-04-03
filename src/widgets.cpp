@@ -183,6 +183,9 @@ on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gboolean success = g_task_propagate_boolean(task, &error);
 
   if (success) {
+    // Search caches are bound to the old Base generation and must be dropped
+    // before the user can query against freshly refreshed repositories.
+    clear_search_cache();
     set_status(widgets->query.status_label, "Repositories refreshed.", "green");
   } else {
     set_status(widgets->query.status_label, error ? error->message : "Repo refresh failed.", "red");
@@ -202,6 +205,9 @@ on_refresh_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
+  // Once a rebuild starts, stop serving cached search results immediately so
+  // the UI does not reuse rows from repo state that is actively changing.
+  clear_search_cache();
   set_status(widgets->query.status_label, "Refreshing repositories...", "blue");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
 

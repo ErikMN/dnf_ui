@@ -21,8 +21,15 @@ static void add_to_history(SearchWidgets *widgets, const std::string &term);
 static void perform_search(SearchWidgets *widgets, const std::string &term);
 static void cancel_active_package_list_request(SearchWidgets *widgets);
 
-// Global cache for previous search results
-static std::map<std::string, std::vector<PackageRow>> g_search_cache;
+// Cache one visible result set per search term and flag combination.
+// Entries are tied to the BaseManager generation that produced them so a Base
+// rebuild cannot serve stale package metadata back into the UI.
+struct CachedSearchResults {
+  uint64_t generation;
+  std::vector<PackageRow> packages;
+};
+
+static std::map<std::string, CachedSearchResults> g_search_cache;
 static std::mutex g_cache_mutex; // Protects g_search_cache
 
 // -----------------------------------------------------------------------------
@@ -185,7 +192,8 @@ cancel_active_package_list_request(SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Clear cached search results (called from Clear Cache button)
+// Clear cached search results.
+// Used both by the Clear Cache button and after successful Base rebuilds.
 // -----------------------------------------------------------------------------
 void
 clear_search_cache()
@@ -430,10 +438,12 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (packages) {
-    // Cache results for faster re-display next time (use dispatch-time key)
+    // Cache results for faster re-display next time.
+    // Search results are only reusable while the backend Base generation stays
+    // the same, otherwise repo state may have changed underneath the cache.
     if (td && td->cache_key) {
       std::lock_guard<std::mutex> lock(g_cache_mutex);
-      g_search_cache[td->cache_key] = *packages;
+      g_search_cache[td->cache_key] = CachedSearchResults { td->generation, *packages };
     }
 
     refresh_installed_nevras();
@@ -637,20 +647,27 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
   widgets->results.selected_nevra.clear();
 
-  // Check cache first
+  // Check cache first.
+  // Reuse only results produced from the current Base generation so refreshes
+  // and transaction rebuilds cannot surface outdated package metadata.
   {
     std::lock_guard<std::mutex> lock(g_cache_mutex);
+    uint64_t generation = BaseManager::instance().current_generation();
     auto it = g_search_cache.find(cache_key_for(term));
     if (it != g_search_cache.end()) {
-      // Use cached results and skip background thread
-      fill_package_view(widgets, it->second);
+      if (it->second.generation != generation) {
+        g_search_cache.erase(it);
+      } else {
+        // Use cached results and skip background thread.
+        fill_package_view(widgets, it->second.packages);
 
-      char msg[256];
-      snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.size());
-      set_status(widgets->query.status_label, msg, "gray");
-      reset_package_details_view(widgets);
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.packages.size());
+        set_status(widgets->query.status_label, msg, "gray");
+        reset_package_details_view(widgets);
 
-      return;
+        return;
+      }
     }
   }
 

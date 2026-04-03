@@ -167,6 +167,10 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
     return;
   }
 
+  // Transaction follow-up rebuilds produce a new Base generation, so any
+  // cached search result rows must be discarded before the next search.
+  clear_search_cache();
+
   // Refresh installed state and rebind the current package rows.
   refresh_installed_nevras();
 
@@ -178,6 +182,10 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
 static void
 rebuild_after_tx_async(SearchWidgets *widgets)
 {
+  // Once the post-transaction rebuild begins, stop serving cached search
+  // results from the pre-transaction Base generation.
+  clear_search_cache();
+
   GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   GTask *task = g_task_new(nullptr, c, rebuild_after_tx_finished, widgets);
   g_task_run_in_thread(task, on_rebuild_task);
