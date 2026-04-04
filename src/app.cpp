@@ -61,6 +61,7 @@ struct AppWidgets {
   GtkWidget *pending_list = NULL;
 
   GtkWidget *count_label = NULL;
+  GtkWidget *warmup_label = NULL;
 };
 
 // -----------------------------------------------------------------------------
@@ -81,6 +82,10 @@ static void setup_periodic_tasks(void);
 static void apply_root_state(const AppWidgets *ui, SearchWidgets *widgets);
 static void show_pending_quit_dialog(SearchWidgets *widgets);
 static gboolean on_main_window_close_request(GtkWindow *window, gpointer user_data);
+static gboolean start_backend_warmup_idle(gpointer user_data);
+static void start_backend_warmup_task(SearchWidgets *widgets);
+static void on_backend_warmup_task(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable);
+static void on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gpointer user_data);
 
 // -----------------------------------------------------------------------------
 // Run GTK application and return process exit status
@@ -435,8 +440,16 @@ build_main_ui(AppWidgets *ui)
 
   GtkWidget *count_label = gtk_label_new("Items: 0");
   gtk_label_set_xalign(GTK_LABEL(count_label), 0.0);
+  gtk_widget_set_hexpand(count_label, TRUE);
   gtk_box_append(GTK_BOX(bottom_bar), count_label);
   ui->count_label = count_label;
+
+  // Passive startup note shown only while the backend is warming up.
+  GtkWidget *warmup_label = gtk_label_new("Loading package data...");
+  gtk_label_set_xalign(GTK_LABEL(warmup_label), 1.0);
+  gtk_widget_set_visible(warmup_label, FALSE);
+  gtk_box_append(GTK_BOX(bottom_bar), warmup_label);
+  ui->warmup_label = warmup_label;
 }
 
 // -----------------------------------------------------------------------------
@@ -477,8 +490,11 @@ create_search_widgets(const AppWidgets *ui)
   widgets->query_state.next_package_list_request_id = 1;
   widgets->query_state.current_package_list_request_id = 0;
   widgets->query_state.current_package_list_request_kind = PackageListRequestKind::NONE;
+
   widgets->window_state.allow_close_with_pending = false;
   widgets->window_state.pending_quit_dialog_open = false;
+  widgets->window_state.backend_warmup_label = GTK_LABEL(ui->warmup_label);
+  widgets->window_state.backend_warmup_cancellable = nullptr;
 
   return widgets;
 }
@@ -767,6 +783,10 @@ connect_cleanup(GtkWidget *window, SearchWidgets *widgets)
                    "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer data) {
                      SearchWidgets *widgets = static_cast<SearchWidgets *>(data);
+                     if (widgets->window_state.backend_warmup_cancellable) {
+                       g_cancellable_cancel(widgets->window_state.backend_warmup_cancellable);
+                       g_object_unref(widgets->window_state.backend_warmup_cancellable);
+                     }
                      if (widgets->query_state.package_list_cancellable) {
                        g_object_unref(widgets->query_state.package_list_cancellable);
                      }
@@ -789,6 +809,86 @@ setup_periodic_tasks(void)
         return TRUE; // keep repeating
       },
       nullptr);
+}
+
+// -----------------------------------------------------------------------------
+// Start backend warm up after the first window show is out of the way.
+// -----------------------------------------------------------------------------
+static gboolean
+start_backend_warmup_idle(gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  start_backend_warmup_task(widgets);
+  return G_SOURCE_REMOVE;
+}
+
+// -----------------------------------------------------------------------------
+// Start a quiet background task that warms up the shared DNF base.
+// -----------------------------------------------------------------------------
+static void
+start_backend_warmup_task(SearchWidgets *widgets)
+{
+  if (!widgets || !widgets->window_state.backend_warmup_label) {
+    return;
+  }
+
+  gtk_widget_set_visible(GTK_WIDGET(widgets->window_state.backend_warmup_label), TRUE);
+
+  widgets->window_state.backend_warmup_cancellable = g_cancellable_new();
+
+  GTask *task = g_task_new(G_OBJECT(widgets->window_state.backend_warmup_label),
+                           widgets->window_state.backend_warmup_cancellable,
+                           on_backend_warmup_task_finished,
+                           nullptr);
+  g_task_run_in_thread(task, on_backend_warmup_task);
+  g_object_unref(task);
+}
+
+// -----------------------------------------------------------------------------
+// Warm up BaseManager in the background so the first package query is faster.
+// -----------------------------------------------------------------------------
+static void
+on_backend_warmup_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
+{
+  if (g_cancellable_is_cancelled(cancellable)) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Backend warm up was cancelled.");
+    return;
+  }
+
+  try {
+    BaseManager::instance().acquire_read();
+    if (g_cancellable_is_cancelled(cancellable)) {
+      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Backend warm up was cancelled.");
+      return;
+    }
+    g_task_return_boolean(task, TRUE);
+  } catch (const std::exception &e) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
+  } catch (...) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "Backend warm up failed.");
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Ignore warm up errors so startup stays quiet and normal queries handle them.
+// -----------------------------------------------------------------------------
+static void
+on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gpointer)
+{
+  GtkLabel *label = GTK_LABEL(source_object);
+  GError *error = nullptr;
+  g_task_propagate_boolean(G_TASK(result), &error);
+
+  if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+    g_clear_error(&error);
+    return;
+  }
+
+  g_clear_error(&error);
+
+  if (label) {
+    gtk_widget_set_visible(GTK_WIDGET(label), FALSE);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -834,6 +934,9 @@ activate(GtkApplication *app, gpointer)
 
   // Show the fully initialized window
   gtk_window_present(GTK_WINDOW(ui.window));
+
+  // Warm up the shared backend after the window is on screen
+  g_idle_add_full(G_PRIORITY_LOW, start_backend_warmup_idle, widgets, nullptr);
 }
 
 // -----------------------------------------------------------------------------

@@ -90,6 +90,10 @@ struct MainWindowState {
   bool allow_close_with_pending = false;
   // Prevent opening multiple quit-confirmation dialogs for the same pending state.
   bool pending_quit_dialog_open = false;
+  // Passive bottom-bar label used for quiet startup backend status.
+  GtkLabel *backend_warmup_label = nullptr;
+  // Cancellable owned by the startup backend warm up task.
+  GCancellable *backend_warmup_cancellable = nullptr;
 };
 
 // -----------------------------------------------------------------------------
