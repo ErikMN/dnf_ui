@@ -364,7 +364,13 @@ start_apply_transaction(SearchWidgets *widgets)
           // Rebuild base and refresh installed highlighting asynchronously
           rebuild_after_tx_async(widgets);
         } else {
-          set_status(widgets->query.status_label, error ? error->message : "Transaction failed.", "red");
+          std::string details = error ? error->message : "Transaction failed.";
+          set_status(widgets->query.status_label, details.c_str(), "red");
+          // Show the full backend error in a copyable dialog instead of only in the status bar.
+          show_transaction_error_dialog(widgets,
+                                        "Transaction Failed",
+                                        "The transaction could not be completed. Review the details below.",
+                                        details);
           if (error) {
             g_error_free(error);
           }
@@ -414,7 +420,13 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
   TransactionPreview preview;
   std::string error;
   if (!preview_transaction(install, remove, reinstall, preview, error)) {
-    set_status(widgets->query.status_label, error.empty() ? "Unable to prepare transaction preview." : error, "red");
+    const char *status_message = error.empty() ? "Unable to prepare transaction preview." : error.c_str();
+    set_status(widgets->query.status_label, status_message, "red");
+    // Show the solver error in a copyable dialog before the transaction starts.
+    show_transaction_error_dialog(widgets,
+                                  "Transaction Preview Failed",
+                                  "The transaction could not be prepared. Review the details below.",
+                                  error.empty() ? std::string(status_message) : error);
     return;
   }
 

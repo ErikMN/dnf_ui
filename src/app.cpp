@@ -332,6 +332,8 @@ build_main_ui(AppWidgets *ui)
 
   GtkWidget *status_label = gtk_label_new("Ready.");
   gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
+  gtk_label_set_selectable(GTK_LABEL(status_label), TRUE);
+  gtk_label_set_wrap(GTK_LABEL(status_label), TRUE);
   gtk_box_append(GTK_BOX(vbox_main), status_label);
   ui->status_label = status_label;
 
@@ -575,7 +577,7 @@ initialize_ui_state(SearchWidgets *widgets)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), FALSE);
 
   set_status(widgets->query.status_label, "Ready.", "gray");
-  fill_package_view(widgets, {});
+  fill_package_view(widgets, { });
 }
 
 // -----------------------------------------------------------------------------
@@ -914,7 +916,7 @@ static void
 activate(GtkApplication *app, gpointer)
 {
   // Create top-level application window
-  AppWidgets ui = {};
+  AppWidgets ui = { };
   ui.window = create_window(app);
 
   // Build all visible GTK widgets and layout containers

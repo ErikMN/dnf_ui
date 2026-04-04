@@ -80,6 +80,82 @@ summary_dialog_apply_data_free(gpointer p)
 }
 
 // -----------------------------------------------------------------------------
+// Show a modal dialog with selectable transaction error details.
+// -----------------------------------------------------------------------------
+void
+show_transaction_error_dialog(SearchWidgets *widgets, const char *title, const char *intro, const std::string &details)
+{
+  if (!widgets || !title || !intro) {
+    return;
+  }
+
+  GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
+  gtk_window_set_title(dialog, title);
+  gtk_window_set_default_size(dialog, 760, 420);
+  gtk_window_set_modal(dialog, TRUE);
+
+  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->query.entry));
+  if (root && GTK_IS_WINDOW(root)) {
+    GtkWindow *parent = GTK_WINDOW(root);
+    if (GtkApplication *app = gtk_window_get_application(parent)) {
+      gtk_window_set_application(dialog, app);
+    }
+    gtk_window_set_transient_for(dialog, parent);
+  }
+
+  GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_start(outer, 12);
+  gtk_widget_set_margin_end(outer, 12);
+  gtk_widget_set_margin_top(outer, 12);
+  gtk_widget_set_margin_bottom(outer, 12);
+  gtk_window_set_child(dialog, outer);
+
+  GtkWidget *heading = gtk_label_new(nullptr);
+  gchar *markup = g_markup_printf_escaped("<b>%s</b>", title);
+  gtk_label_set_markup(GTK_LABEL(heading), markup);
+  g_free(markup);
+  gtk_label_set_xalign(GTK_LABEL(heading), 0.0f);
+  gtk_box_append(GTK_BOX(outer), heading);
+
+  GtkWidget *message = gtk_label_new(intro);
+  gtk_label_set_xalign(GTK_LABEL(message), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(message), TRUE);
+  gtk_box_append(GTK_BOX(outer), message);
+
+  GtkWidget *scroller = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(scroller, TRUE);
+  gtk_widget_set_vexpand(scroller, TRUE);
+  gtk_box_append(GTK_BOX(outer), scroller);
+
+  // Use a text view so solver and transaction output can be selected and copied.
+  GtkWidget *view = gtk_text_view_new();
+  gtk_text_view_set_editable(GTK_TEXT_VIEW(view), FALSE);
+  gtk_text_view_set_monospace(GTK_TEXT_VIEW(view), TRUE);
+  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(view), GTK_WRAP_WORD_CHAR);
+  gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(view)), details.c_str(), -1);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroller), view);
+
+  GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(button_box, GTK_ALIGN_END);
+  gtk_box_append(GTK_BOX(outer), button_box);
+
+  GtkWidget *close_button = gtk_button_new_with_label("Close");
+  gtk_box_append(GTK_BOX(button_box), close_button);
+
+  g_signal_connect(close_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer) {
+                     GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(button));
+                     if (root && GTK_IS_WINDOW(root)) {
+                       gtk_window_destroy(GTK_WINDOW(root));
+                     }
+                   }),
+                   nullptr);
+
+  gtk_window_present(dialog);
+}
+
+// -----------------------------------------------------------------------------
 // Build the transaction popup used for streaming package install output
 // -----------------------------------------------------------------------------
 TransactionProgressWindow *
