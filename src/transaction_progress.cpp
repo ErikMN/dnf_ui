@@ -282,6 +282,7 @@ append_transaction_summary_section(GtkBox *parent, const char *title, const std:
     gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
     gtk_label_set_wrap(GTK_LABEL(label), TRUE);
     gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+    gtk_widget_set_focusable(label, FALSE);
     gtk_box_append(GTK_BOX(section), label);
   }
 }
