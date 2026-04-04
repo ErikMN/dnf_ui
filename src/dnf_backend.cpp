@@ -317,6 +317,26 @@ get_package_info(const std::string &pkg_nevra)
   best_candidate.filter_latest_evr();
 
   auto pkg = *best_candidate.begin();
+  PackageRow selected_row = make_package_row(pkg);
+
+  // Show the installed version when the selected row is an update candidate.
+  libdnf5::rpm::PackageQuery installed_by_name(base);
+  installed_by_name.filter_name(pkg.get_name(), libdnf5::sack::QueryCmp::EQ);
+  installed_by_name.filter_installed();
+
+  PackageRow installed_row;
+  bool have_installed_counterpart = false;
+  for (auto installed_pkg : installed_by_name) {
+    if (installed_pkg.get_arch() != pkg.get_arch()) {
+      continue;
+    }
+
+    PackageRow row = make_package_row(installed_pkg);
+    if (!have_installed_counterpart || libdnf5::rpm::evrcmp(row, installed_row) > 0) {
+      installed_row = row;
+      have_installed_counterpart = true;
+    }
+  }
 
   std::ostringstream oss;
   oss << "Name: " << pkg.get_name() << "\n"
@@ -324,7 +344,13 @@ get_package_info(const std::string &pkg_nevra)
       << "Version: " << pkg.get_version() << "\n"
       << "Release: " << pkg.get_release() << "\n"
       << "Arch: " << pkg.get_arch() << "\n"
-      << "Repo: " << pkg.get_repo_id() << "\n\n"
+      << "Repo: " << pkg.get_repo_id() << "\n";
+
+  if (have_installed_counterpart && installed_row.nevra != selected_row.nevra) {
+    oss << "Installed Version: " << installed_row.display_version() << "\n";
+  }
+
+  oss << "\n"
       << "Summary:\n"
       << pkg.get_summary() << "\n\n"
       << "Description:\n"

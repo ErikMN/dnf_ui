@@ -48,7 +48,7 @@ install_state_text(PackageInstallState state)
   case PackageInstallState::INSTALLED:
     return "Installed";
   case PackageInstallState::UPGRADEABLE:
-    return "Upgradeable";
+    return "Update available";
   case PackageInstallState::AVAILABLE:
   default:
     return "Available";
