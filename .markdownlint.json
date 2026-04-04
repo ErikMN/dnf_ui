@@ -3,10 +3,16 @@
     "allowed_elements": [
       "p",
       "br",
-      "img"
+      "strong",
+      "img",
+      "div",
+      "table",
+      "tr",
+      "td"
     ]
   },
   "MD013": {
     "line_length": 120
-  }
+  },
+  "MD041": false
 }
