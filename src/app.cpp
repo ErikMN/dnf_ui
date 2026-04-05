@@ -428,6 +428,8 @@ build_main_ui(AppWidgets *ui)
   gtk_widget_set_vexpand(pending_scrolled, TRUE);
 
   GtkWidget *pending_list = gtk_list_box_new();
+  // Pending rows act as direct action buttons and should not keep listbox selection state.
+  gtk_list_box_set_selection_mode(GTK_LIST_BOX(pending_list), GTK_SELECTION_NONE);
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(pending_scrolled), pending_list);
   ui->pending_list = pending_list;
 
@@ -577,7 +579,7 @@ initialize_ui_state(SearchWidgets *widgets)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), FALSE);
 
   set_status(widgets->query.status_label, "Ready.", "gray");
-  fill_package_view(widgets, { });
+  fill_package_view(widgets, {});
 }
 
 // -----------------------------------------------------------------------------
@@ -916,7 +918,7 @@ static void
 activate(GtkApplication *app, gpointer)
 {
   // Create top-level application window
-  AppWidgets ui = { };
+  AppWidgets ui = {};
   ui.window = create_window(app);
 
   // Build all visible GTK widgets and layout containers

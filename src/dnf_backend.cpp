@@ -280,6 +280,42 @@ get_available_package_rows_interruptible(GCancellable *cancellable)
   return packages;
 }
 
+// Return installed package rows that exactly match one NEVRA.
+std::vector<PackageRow>
+get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
+{
+  std::vector<PackageRow> packages;
+
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_nevra(pkg_nevra);
+  query.filter_installed();
+
+  for (auto pkg : query) {
+    packages.push_back(make_package_row(pkg));
+  }
+
+  return packages;
+}
+
+// Return available package rows that exactly match one NEVRA.
+std::vector<PackageRow>
+get_available_package_rows_by_nevra(const std::string &pkg_nevra)
+{
+  std::vector<PackageRow> packages;
+
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_nevra(pkg_nevra);
+  query.filter_available();
+
+  for (auto pkg : query) {
+    packages.push_back(make_package_row(pkg));
+  }
+
+  return packages;
+}
+
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // Helper: Retrieve detailed package information

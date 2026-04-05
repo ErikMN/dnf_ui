@@ -92,6 +92,8 @@ std::vector<PackageRow> get_installed_package_rows_interruptible(GCancellable *c
 std::vector<PackageRow> get_available_package_rows_interruptible(GCancellable *cancellable);
 std::vector<PackageRow> search_available_package_rows_interruptible(const std::string &pattern,
                                                                     GCancellable *cancellable);
+std::vector<PackageRow> get_installed_package_rows_by_nevra(const std::string &pkg_nevra);
+std::vector<PackageRow> get_available_package_rows_by_nevra(const std::string &pkg_nevra);
 std::string get_package_info(const std::string &pkg_name);
 std::string get_installed_package_files(const std::string &pkg_nevra);
 std::string get_package_deps(const std::string &pkg_nevra);

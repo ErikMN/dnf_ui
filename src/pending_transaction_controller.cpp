@@ -23,11 +23,52 @@ struct ApplyTaskData {
   TransactionProgressWindow *progress_window;
 };
 
+// Button payload used to jump from one pending action back to its package row.
+struct PendingJumpButtonData {
+  SearchWidgets *widgets;
+  PendingAction action;
+};
+
 static void
 apply_task_data_free(gpointer p)
 {
   ApplyTaskData *d = static_cast<ApplyTaskData *>(p);
   delete d;
+}
+
+static void
+pending_jump_button_data_free(gpointer p)
+{
+  PendingJumpButtonData *d = static_cast<PendingJumpButtonData *>(p);
+  delete d;
+}
+
+// Show the selected pending action in the main package list so it can be reviewed or changed.
+static void
+show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
+{
+  if (!widgets) {
+    return;
+  }
+
+  std::vector<PackageRow> rows;
+  switch (action.type) {
+  case PendingAction::INSTALL:
+    rows = get_available_package_rows_by_nevra(action.nevra);
+    break;
+  case PendingAction::REMOVE:
+  case PendingAction::REINSTALL:
+    rows = get_installed_package_rows_by_nevra(action.nevra);
+    break;
+  }
+
+  if (rows.empty()) {
+    set_status(widgets->query.status_label, "Pending package could not be found in current package data.", "red");
+    return;
+  }
+
+  widgets->results.selected_nevra = action.nevra;
+  fill_package_view(widgets, rows);
 }
 
 // Split the pending queue into install, remove, and reinstall transaction specs.
@@ -108,9 +149,33 @@ refresh_pending_tab(SearchWidgets *widgets)
       break;
     }
     std::string line = prefix + a.nevra;
-    GtkWidget *row = gtk_label_new(line.c_str());
-    gtk_label_set_xalign(GTK_LABEL(row), 0.0);
-    gtk_list_box_append(widgets->transaction.pending_list, row);
+
+    GtkWidget *button = gtk_button_new();
+    gtk_widget_add_css_class(button, "flat");
+    gtk_widget_set_hexpand(button, TRUE);
+
+    GtkWidget *label = gtk_label_new(line.c_str());
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+    gtk_widget_set_halign(label, GTK_ALIGN_FILL);
+    gtk_button_set_child(GTK_BUTTON(button), label);
+
+    PendingJumpButtonData *data = new PendingJumpButtonData { widgets, a };
+    g_signal_connect_data(
+        button,
+        "clicked",
+        G_CALLBACK(+[](GtkButton *, gpointer user_data) {
+          PendingJumpButtonData *data = static_cast<PendingJumpButtonData *>(user_data);
+          if (!data) {
+            return;
+          }
+
+          show_pending_action_package(data->widgets, data->action);
+        }),
+        data,
+        +[](gpointer data, GClosure *) { pending_jump_button_data_free(data); },
+        GConnectFlags(0));
+
+    gtk_list_box_append(widgets->transaction.pending_list, button);
   }
   update_apply_button(widgets);
 }
