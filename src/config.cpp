@@ -79,15 +79,15 @@ void
 load_window_geometry(GtkWindow *window)
 {
   auto config = load_config_map();
-  int w = 900, h = 700;
+  int w = 1200, h = 820;
   if (config.count("window_width"))
     w = std::stoi(config["window_width"]);
   if (config.count("window_height"))
     h = std::stoi(config["window_height"]);
   if (w < 600)
-    w = 900;
+    w = 1200;
   if (h < 400)
-    h = 700;
+    h = 820;
   gtk_window_set_default_size(window, w, h);
 }
 
@@ -95,7 +95,7 @@ void
 save_window_geometry(GtkWindow *window)
 {
   auto config = load_config_map();
-  int w = 900, h = 700;
+  int w = 1200, h = 820;
 
   // GTK4 build: use gtk_window_get_default_size() and gtk_widget_compute_bounds()
   int default_w = 0, default_h = 0;
