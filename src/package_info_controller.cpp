@@ -20,6 +20,14 @@ struct InfoTaskData {
   uint64_t generation;
 };
 
+// Text payload returned by the background package-info task.
+struct InfoTaskResult {
+  char *info;
+  char *files;
+  char *deps;
+  char *changelog;
+};
+
 static void
 info_task_data_free(gpointer p)
 {
@@ -29,6 +37,22 @@ info_task_data_free(gpointer p)
   }
   g_free(d->nevra);
   g_free(d);
+}
+
+// Release the text payload returned by the background package-info task.
+static void
+info_task_result_free(gpointer p)
+{
+  InfoTaskResult *r = static_cast<InfoTaskResult *>(p);
+  if (!r) {
+    return;
+  }
+
+  g_free(r->info);
+  g_free(r->files);
+  g_free(r->deps);
+  g_free(r->changelog);
+  g_free(r);
 }
 
 // Reset the details notebook after repopulating the main package view.
@@ -80,7 +104,7 @@ update_selected_package_actions(SearchWidgets *widgets, const PackageRow &select
   update_action_button_labels(widgets, selected.nevra);
 }
 
-// Async worker: load the main package information text in the background.
+// Async worker: load the package notebook text in the background.
 static void
 on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancellable)
 {
@@ -90,8 +114,44 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
 
   InfoTaskData *td = static_cast<InfoTaskData *>(task_data);
   try {
-    std::string info = get_package_info(td->nevra);
-    g_task_return_pointer(task, g_strdup(info.c_str()), g_free);
+    InfoTaskResult *result = static_cast<InfoTaskResult *>(g_malloc0(sizeof *result));
+
+    result->info = g_strdup(get_package_info(td->nevra).c_str());
+
+    if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+      info_task_result_free(result);
+      return;
+    }
+
+    try {
+      result->files = g_strdup(get_installed_package_files(td->nevra).c_str());
+    } catch (const std::exception &e) {
+      result->files = g_strdup(e.what());
+    }
+
+    if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+      info_task_result_free(result);
+      return;
+    }
+
+    try {
+      result->deps = g_strdup(get_package_deps(td->nevra).c_str());
+    } catch (const std::exception &e) {
+      result->deps = g_strdup(e.what());
+    }
+
+    if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+      info_task_result_free(result);
+      return;
+    }
+
+    try {
+      result->changelog = g_strdup(get_package_changelog(td->nevra).c_str());
+    } catch (const std::exception &e) {
+      result->changelog = g_strdup(e.what());
+    }
+
+    g_task_return_pointer(task, result, info_task_result_free);
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
   }
@@ -111,11 +171,11 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   const InfoTaskData *td = static_cast<const InfoTaskData *>(g_task_get_task_data(task));
   GError *error = nullptr;
-  char *info = static_cast<char *>(g_task_propagate_pointer(task, &error));
+  InfoTaskResult *result = static_cast<InfoTaskResult *>(g_task_propagate_pointer(task, &error));
 
   if (!td) {
-    if (info) {
-      g_free(info);
+    if (result) {
+      info_task_result_free(result);
     }
     if (error) {
       g_error_free(error);
@@ -124,8 +184,8 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (td->generation != BaseManager::instance().current_generation() || widgets->results.selected_nevra != td->nevra) {
-    if (info) {
-      g_free(info);
+    if (result) {
+      info_task_result_free(result);
     }
     if (error) {
       g_error_free(error);
@@ -133,7 +193,7 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     return;
   }
 
-  if (!info) {
+  if (!result) {
     set_status(widgets->query.status_label, error ? error->message : "Error loading info.", "red");
     if (error) {
       g_error_free(error);
@@ -142,34 +202,22 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   // Display general package information
-  gtk_label_set_text(widgets->results.details_label, info);
+  gtk_label_set_text(widgets->results.details_label, result->info ? result->info : "No details found.");
 
-  // Fetch and display the file list for the selected package
-  try {
-    std::string files = get_installed_package_files(td->nevra);
-    gtk_label_set_text(widgets->results.files_label, files.c_str());
-  } catch (const std::exception &e) {
-    gtk_label_set_text(widgets->results.files_label, e.what());
-  }
+  // Display the file list fetched by the background task.
+  gtk_label_set_text(widgets->results.files_label,
+                     result->files ? result->files : "Select an installed package to view its file list.");
 
-  // Fetch and display dependencies for the selected package
-  try {
-    std::string deps = get_package_deps(td->nevra);
-    gtk_label_set_text(widgets->results.deps_label, deps.c_str());
-  } catch (const std::exception &e) {
-    gtk_label_set_text(widgets->results.deps_label, e.what());
-  }
+  // Display dependencies fetched by the background task.
+  gtk_label_set_text(widgets->results.deps_label,
+                     result->deps ? result->deps : "Select a package to view dependencies.");
 
-  // Fetch and display changelog
-  try {
-    std::string changelog = get_package_changelog(td->nevra);
-    gtk_label_set_text(widgets->results.changelog_label, changelog.c_str());
-  } catch (const std::exception &e) {
-    gtk_label_set_text(widgets->results.changelog_label, e.what());
-  }
+  // Display changelog fetched by the background task.
+  gtk_label_set_text(widgets->results.changelog_label,
+                     result->changelog ? result->changelog : "Select a package to view its changelog.");
 
   set_status(widgets->query.status_label, "Package info loaded.", "green");
-  g_free(info);
+  info_task_result_free(result);
 }
 
 // Start the async package info load for the newly selected package row.
