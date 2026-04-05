@@ -694,6 +694,11 @@ resolve_transaction_plan(libdnf5::Base &base,
 
   emit_progress_line(progress_cb, "Resolving dependency changes...");
 
+  // NOTE: Let package removal also remove installed packages that depend on the selected package.
+  if (!remove_nevras.empty()) {
+    goal.set_allow_erasing(true);
+  }
+
   // NOTE: We pass package "specs" (currently NEVRA strings from the UI list).
   for (const auto &spec : install_nevras) {
     goal.add_rpm_install(spec);
