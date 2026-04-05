@@ -92,6 +92,16 @@ make_package_row(const libdnf5::rpm::Package &pkg)
   return row;
 }
 
+// Format package size in a way that is easy to read in the details pane.
+static std::string
+format_package_size(unsigned long long size_bytes)
+{
+  char *formatted = g_format_size(size_bytes);
+  std::string text = formatted ? formatted : "Unknown";
+  g_free(formatted);
+  return text;
+}
+
 // Return true when the active package query task was cancelled by the UI.
 static bool
 package_query_cancelled(GCancellable *cancellable)
@@ -380,7 +390,13 @@ get_package_info(const std::string &pkg_nevra)
       << "Version: " << pkg.get_version() << "\n"
       << "Release: " << pkg.get_release() << "\n"
       << "Arch: " << pkg.get_arch() << "\n"
-      << "Repo: " << pkg.get_repo_id() << "\n";
+      << "Repo: " << pkg.get_repo_id() << "\n"
+      << "Install Size: " << format_package_size(static_cast<unsigned long long>(pkg.get_install_size())) << "\n";
+
+  unsigned long long download_size = static_cast<unsigned long long>(pkg.get_download_size());
+  if (download_size > 0) {
+    oss << "Download Size: " << format_package_size(download_size) << "\n";
+  }
 
   if (have_installed_counterpart && installed_row.nevra != selected_row.nevra) {
     oss << "Installed Version: " << installed_row.display_version() << "\n";
