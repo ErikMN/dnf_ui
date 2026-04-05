@@ -61,10 +61,12 @@ install_state_rank(PackageInstallState state)
   switch (state) {
   case PackageInstallState::AVAILABLE:
     return 0;
-  case PackageInstallState::UPGRADEABLE:
   case PackageInstallState::INSTALLED:
-  default:
     return 1;
+  case PackageInstallState::UPGRADEABLE:
+    return 2;
+  default:
+    return 0;
   }
 }
 
@@ -72,29 +74,29 @@ install_state_rank(PackageInstallState state)
 static void
 fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
 {
+  // Keep Status sorting tied to the stable package state so marking a pending
+  // action does not move the row away from the user in the current view.
+  PackageInstallState install_state = get_package_install_state(item.row);
+  item.status_rank = install_state_rank(install_state);
+
   for (const auto &a : widgets->transaction.actions) {
     if (a.nevra == item.row.nevra) {
       switch (a.type) {
       case PendingAction::INSTALL:
         item.status_text = "Pending Install";
-        item.status_rank = 2;
         break;
       case PendingAction::REINSTALL:
         item.status_text = "Pending Reinstall";
-        item.status_rank = 3;
         break;
       case PendingAction::REMOVE:
         item.status_text = "Pending Removal";
-        item.status_rank = 4;
         break;
       }
       return;
     }
   }
 
-  PackageInstallState install_state = get_package_install_state(item.row);
   item.status_text = install_state_text(install_state);
-  item.status_rank = install_state_rank(install_state);
 }
 
 // Wrap one package row in a GObject so GTK list models can sort and select it.
@@ -345,6 +347,7 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                    nullptr);
 
   GtkColumnViewColumn *column = gtk_column_view_column_new(title, factory);
+  g_object_set_data(G_OBJECT(column), "dnfui-column-kind", GINT_TO_POINTER(static_cast<int>(kind)));
   gtk_column_view_column_set_resizable(column, TRUE);
   gtk_column_view_column_set_expand(column, expand);
   gtk_column_view_column_set_sorter(
@@ -355,6 +358,61 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
     gtk_column_view_column_set_fixed_width(column, fixed_width);
   }
   return column;
+}
+
+// Read the current primary package table sort before rebuilding the GTK view.
+static bool
+get_package_view_sort_state(SearchWidgets *widgets, PackageColumnKind &out_kind, GtkSortType &out_order)
+{
+  if (!widgets || !widgets->results.list_scroller) {
+    return false;
+  }
+
+  GtkWidget *child = gtk_scrolled_window_get_child(widgets->results.list_scroller);
+  if (!child || !GTK_IS_COLUMN_VIEW(child)) {
+    return false;
+  }
+
+  GtkSorter *sorter = gtk_column_view_get_sorter(GTK_COLUMN_VIEW(child));
+  if (!sorter || !GTK_IS_COLUMN_VIEW_SORTER(sorter)) {
+    return false;
+  }
+
+  GtkColumnViewColumn *column = gtk_column_view_sorter_get_primary_sort_column(GTK_COLUMN_VIEW_SORTER(sorter));
+  if (!column) {
+    return false;
+  }
+
+  out_kind = static_cast<PackageColumnKind>(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(column), "dnfui-column-kind")));
+  out_order = gtk_column_view_sorter_get_primary_sort_order(GTK_COLUMN_VIEW_SORTER(sorter));
+  return true;
+}
+
+// Reapply the primary package table sort after rebuilding the GTK view.
+static void
+restore_package_view_sort_state(GtkColumnView *view, PackageColumnKind kind, GtkSortType order)
+{
+  if (!view) {
+    return;
+  }
+
+  GListModel *columns = gtk_column_view_get_columns(view);
+  guint n_columns = g_list_model_get_n_items(columns);
+
+  for (guint i = 0; i < n_columns; ++i) {
+    GObject *obj = G_OBJECT(g_list_model_get_item(columns, i));
+    GtkColumnViewColumn *column = GTK_COLUMN_VIEW_COLUMN(obj);
+    PackageColumnKind column_kind =
+        static_cast<PackageColumnKind>(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(column), "dnfui-column-kind")));
+
+    if (column_kind == kind) {
+      gtk_column_view_sort_by_column(view, column, order);
+      g_object_unref(obj);
+      return;
+    }
+
+    g_object_unref(obj);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -407,6 +465,10 @@ void
 fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
 {
   widgets->results.current_packages = items;
+
+  PackageColumnKind sort_kind = PackageColumnKind::STATUS;
+  GtkSortType sort_order = GTK_SORT_ASCENDING;
+  bool have_sort_state = get_package_view_sort_state(widgets, sort_kind, sort_order);
 
   GListStore *store = g_list_store_new(G_TYPE_OBJECT);
   for (const auto &row : items) {
@@ -464,6 +526,10 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                    widgets);
 
   gtk_column_view_set_model(view, GTK_SELECTION_MODEL(sel));
+
+  if (have_sort_state) {
+    restore_package_view_sort_state(view, sort_kind, sort_order);
+  }
 
   g_signal_connect(view,
                    "activate",
