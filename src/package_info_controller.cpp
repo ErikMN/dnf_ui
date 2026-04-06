@@ -55,6 +55,13 @@ info_task_result_free(gpointer p)
   g_free(r);
 }
 
+// Complete the package-info task when the user cancels the current request.
+static void
+return_package_info_task_cancelled(GTask *task)
+{
+  g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Package info load was cancelled.");
+}
+
 // Reset the details notebook after repopulating the main package view.
 void
 package_info_reset_details_view(SearchWidgets *widgets)
@@ -109,6 +116,7 @@ static void
 on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancellable)
 {
   if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+    return_package_info_task_cancelled(task);
     return;
   }
 
@@ -120,6 +128,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
 
     if (cancellable && g_cancellable_is_cancelled(cancellable)) {
       info_task_result_free(result);
+      return_package_info_task_cancelled(task);
       return;
     }
 
@@ -131,6 +140,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
 
     if (cancellable && g_cancellable_is_cancelled(cancellable)) {
       info_task_result_free(result);
+      return_package_info_task_cancelled(task);
       return;
     }
 
@@ -142,6 +152,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
 
     if (cancellable && g_cancellable_is_cancelled(cancellable)) {
       info_task_result_free(result);
+      return_package_info_task_cancelled(task);
       return;
     }
 
