@@ -12,7 +12,7 @@
 int
 main(int argc, char *argv[])
 {
-  return run_dnf_ui(argc, argv);
+  return app_run_dnf_ui(argc, argv);
 }
 
 // -----------------------------------------------------------------------------

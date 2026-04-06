@@ -83,7 +83,10 @@ summary_dialog_apply_data_free(gpointer p)
 // Show a modal dialog with selectable transaction error details.
 // -----------------------------------------------------------------------------
 void
-show_transaction_error_dialog(SearchWidgets *widgets, const char *title, const char *intro, const std::string &details)
+transaction_progress_show_error_dialog(SearchWidgets *widgets,
+                                       const char *title,
+                                       const char *intro,
+                                       const std::string &details)
 {
   if (!widgets || !title || !intro) {
     return;
@@ -159,7 +162,7 @@ show_transaction_error_dialog(SearchWidgets *widgets, const char *title, const c
 // Build the transaction popup used for streaming package install output
 // -----------------------------------------------------------------------------
 TransactionProgressWindow *
-create_transaction_progress_window(SearchWidgets *widgets, size_t pending_count)
+transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count)
 {
   auto *progress = new TransactionProgressWindow();
   progress->finished = false;
@@ -296,7 +299,7 @@ append_transaction_progress_line(TransactionProgressWindow *progress, const std:
 // Queue one or more transaction log lines onto the GTK main loop
 // -----------------------------------------------------------------------------
 void
-append_transaction_progress(TransactionProgressWindow *progress, const std::string &message)
+transaction_progress_append(TransactionProgressWindow *progress, const std::string &message)
 {
   if (!progress || message.empty()) {
     return;
@@ -316,14 +319,14 @@ append_transaction_progress(TransactionProgressWindow *progress, const std::stri
 // Update the popup when the package transaction finishes
 // -----------------------------------------------------------------------------
 void
-finish_transaction_progress(TransactionProgressWindow *progress, bool success, const std::string &summary)
+transaction_progress_finish(TransactionProgressWindow *progress, bool success, const std::string &summary)
 {
   if (!progress) {
     return;
   }
 
   if (!summary.empty()) {
-    append_transaction_progress(progress, summary);
+    transaction_progress_append(progress, summary);
   }
 
   progress->finished = true;
@@ -365,9 +368,9 @@ append_transaction_summary_section(GtkBox *parent, const char *title, const std:
 
 // Show the final confirmation dialog before starting the package transaction.
 void
-show_transaction_summary_dialog(SearchWidgets *widgets,
-                                const TransactionPreview &preview,
-                                TransactionApplyCallback on_apply)
+transaction_progress_show_summary_dialog(SearchWidgets *widgets,
+                                         const TransactionPreview &preview,
+                                         TransactionApplyCallback on_apply)
 {
   GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
   gtk_window_set_title(dialog, "Summary");

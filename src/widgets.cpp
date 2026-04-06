@@ -12,7 +12,7 @@
 
 // Shared cancellable helper used by background widget tasks.
 GCancellable *
-make_task_cancellable_for(GtkWidget *w)
+widgets_make_task_cancellable_for(GtkWidget *w)
 {
   GCancellable *c = g_cancellable_new();
   if (w) {
@@ -86,7 +86,7 @@ spinner_quark()
 }
 
 void
-spinner_acquire(GtkSpinner *spinner)
+widgets_spinner_acquire(GtkSpinner *spinner)
 {
   if (!spinner) {
     return;
@@ -104,7 +104,7 @@ spinner_acquire(GtkSpinner *spinner)
 }
 
 void
-spinner_release(GtkSpinner *spinner)
+widgets_spinner_release(GtkSpinner *spinner)
 {
   if (!spinner) {
     return;
@@ -130,7 +130,7 @@ spinner_release(GtkSpinner *spinner)
 // with the pending transaction state.
 // -----------------------------------------------------------------------------
 void
-refresh_current_package_view(SearchWidgets *widgets)
+widgets_refresh_current_package_view(SearchWidgets *widgets)
 {
   ScrollRestoreData *scroll = new ScrollRestoreData { nullptr, nullptr, 0.0, 0.0 };
 
@@ -146,7 +146,7 @@ refresh_current_package_view(SearchWidgets *widgets)
     scroll->vvalue = gtk_adjustment_get_value(vadj);
   }
 
-  fill_package_view(widgets, widgets->results.current_packages);
+  package_table_fill_package_view(widgets, widgets->results.current_packages);
 
   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, restore_scroll_position_idle, scroll, scroll_restore_data_free);
 }
@@ -156,7 +156,7 @@ refresh_current_package_view(SearchWidgets *widgets)
 // Runs BaseManager::rebuild() in a worker thread so GTK stays responsive
 // -----------------------------------------------------------------------------
 void
-on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *)
+widgets_on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *)
 {
   try {
     BaseManager::instance().rebuild();
@@ -170,7 +170,7 @@ on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *)
 // Async completion handler: Refresh repositories
 // -----------------------------------------------------------------------------
 void
-on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
+widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
   if (GCancellable *c = g_task_get_cancellable(task)) {
@@ -189,10 +189,10 @@ on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   if (success) {
     // Search caches are bound to the old Base generation and must be dropped
     // before the user can query against freshly refreshed repositories.
-    clear_search_cache();
-    set_status(widgets->query.status_label, "Repositories refreshed.", "green");
+    package_query_clear_search_cache();
+    ui_helpers_set_status(widgets->query.status_label, "Repositories refreshed.", "green");
   } else {
-    set_status(widgets->query.status_label, error ? error->message : "Repo refresh failed.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Repo refresh failed.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -205,19 +205,19 @@ on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 // so application setup code does not depend on widget-internal task helpers.
 // -----------------------------------------------------------------------------
 void
-on_refresh_button_clicked(GtkButton *, gpointer user_data)
+widgets_on_refresh_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
   // Once a rebuild starts, stop serving cached search results immediately so
   // the UI does not reuse rows from repo state that is actively changing.
-  clear_search_cache();
-  set_status(widgets->query.status_label, "Refreshing repositories...", "blue");
+  package_query_clear_search_cache();
+  ui_helpers_set_status(widgets->query.status_label, "Refreshing repositories...", "blue");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  GTask *task = g_task_new(nullptr, c, on_rebuild_task_finished, widgets);
-  g_task_run_in_thread(task, on_rebuild_task);
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GTask *task = g_task_new(nullptr, c, widgets_on_rebuild_task_finished, widgets);
+  g_task_run_in_thread(task, widgets_on_rebuild_task);
   g_object_unref(task);
   g_object_unref(c);
 }

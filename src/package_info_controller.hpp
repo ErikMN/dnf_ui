@@ -8,9 +8,9 @@ struct SearchWidgets;
 // -----------------------------------------------------------------------------
 // Package selection and details notebook controller helpers
 // -----------------------------------------------------------------------------
-void clear_selected_package_state(SearchWidgets *widgets);
-void load_selected_package_info(SearchWidgets *widgets, const PackageRow &selected);
-void reset_package_details_view(SearchWidgets *widgets);
+void package_info_clear_selected_package_state(SearchWidgets *widgets);
+void package_info_load_selected_package_info(SearchWidgets *widgets, const PackageRow &selected);
+void package_info_reset_details_view(SearchWidgets *widgets);
 
 // -----------------------------------------------------------------------------
 // EOF

@@ -111,7 +111,7 @@ package_query_cancelled(GCancellable *cancellable)
 
 // Search available packages and stop early when the task cancellable is set.
 std::vector<PackageRow>
-search_available_package_rows_interruptible(const std::string &pattern, GCancellable *cancellable)
+dnf_backend_search_available_package_rows_interruptible(const std::string &pattern, GCancellable *cancellable)
 {
   std::vector<PackageRow> packages;
 
@@ -184,7 +184,7 @@ search_available_package_rows_interruptible(const std::string &pattern, GCancell
 //   timers.
 // -----------------------------------------------------------------------------
 void
-refresh_installed_nevras()
+dnf_backend_refresh_installed_nevras()
 {
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -206,7 +206,7 @@ refresh_installed_nevras()
 
 // Return whether one package row is available, upgradeable, or installed exactly.
 PackageInstallState
-get_package_install_state(const PackageRow &row)
+dnf_backend_get_package_install_state(const PackageRow &row)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   if (g_installed_nevras.count(row.nevra) > 0) {
@@ -227,7 +227,7 @@ get_package_install_state(const PackageRow &row)
 //   updates if the worker task is cancelled midway through the scan.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow>
-get_installed_package_rows_interruptible(GCancellable *cancellable)
+dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 {
   std::vector<PackageRow> packages;
   std::set<std::string> installed_nevras;
@@ -270,7 +270,7 @@ get_installed_package_rows_interruptible(GCancellable *cancellable)
 //   shared installed-package caches. No locking is required here.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow>
-get_available_package_rows_interruptible(GCancellable *cancellable)
+dnf_backend_get_available_package_rows_interruptible(GCancellable *cancellable)
 {
   std::vector<PackageRow> packages;
 
@@ -292,7 +292,7 @@ get_available_package_rows_interruptible(GCancellable *cancellable)
 
 // Return installed package rows that exactly match one NEVRA.
 std::vector<PackageRow>
-get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
+dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
 {
   std::vector<PackageRow> packages;
 
@@ -310,7 +310,7 @@ get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
 
 // Return available package rows that exactly match one NEVRA.
 std::vector<PackageRow>
-get_available_package_rows_by_nevra(const std::string &pkg_nevra)
+dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra)
 {
   std::vector<PackageRow> packages;
 
@@ -340,7 +340,7 @@ get_available_package_rows_by_nevra(const std::string &pkg_nevra)
 //   shared global sets. No locking required.
 // -----------------------------------------------------------------------------
 std::string
-get_package_info(const std::string &pkg_nevra)
+dnf_backend_get_package_info(const std::string &pkg_nevra)
 {
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -416,7 +416,7 @@ get_package_info(const std::string &pkg_nevra)
 // Returns newline-separated file list or a friendly message if none.
 // -----------------------------------------------------------------------------
 std::string
-get_installed_package_files(const std::string &pkg_nevra)
+dnf_backend_get_installed_package_files(const std::string &pkg_nevra)
 {
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -449,7 +449,7 @@ get_installed_package_files(const std::string &pkg_nevra)
 // Returns a formatted string for display in the "Dependencies" tab
 // -----------------------------------------------------------------------------
 std::string
-get_package_deps(const std::string &pkg_nevra)
+dnf_backend_get_package_deps(const std::string &pkg_nevra)
 {
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -489,7 +489,7 @@ get_package_deps(const std::string &pkg_nevra)
 // Returns formatted changelog text or a friendly message if none available
 // -----------------------------------------------------------------------------
 std::string
-get_package_changelog(const std::string &pkg_nevra)
+dnf_backend_get_package_changelog(const std::string &pkg_nevra)
 {
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -834,11 +834,11 @@ append_preview_item(TransactionPreview &preview, const libdnf5::base::Transactio
 
 // Resolve the final transaction and group the resulting package actions for the summary dialog.
 bool
-preview_transaction(const std::vector<std::string> &install_nevras,
-                    const std::vector<std::string> &remove_nevras,
-                    const std::vector<std::string> &reinstall_nevras,
-                    TransactionPreview &preview,
-                    std::string &error_out)
+dnf_backend_preview_transaction(const std::vector<std::string> &install_nevras,
+                                const std::vector<std::string> &remove_nevras,
+                                const std::vector<std::string> &reinstall_nevras,
+                                TransactionPreview &preview,
+                                std::string &error_out)
 {
   error_out.clear();
   preview = TransactionPreview();
@@ -863,11 +863,11 @@ preview_transaction(const std::vector<std::string> &install_nevras,
 }
 
 bool
-apply_transaction(const std::vector<std::string> &install_nevras,
-                  const std::vector<std::string> &remove_nevras,
-                  const std::vector<std::string> &reinstall_nevras,
-                  std::string &error_out,
-                  const TransactionProgressCallback &progress_cb)
+dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
+                              const std::vector<std::string> &remove_nevras,
+                              const std::vector<std::string> &reinstall_nevras,
+                              std::string &error_out,
+                              const TransactionProgressCallback &progress_cb)
 {
   error_out.clear();
 

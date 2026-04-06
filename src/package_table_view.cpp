@@ -76,7 +76,7 @@ fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
 {
   // Keep Status sorting tied to the stable package state so marking a pending
   // action does not move the row away from the user in the current view.
-  PackageInstallState install_state = get_package_install_state(item.row);
+  PackageInstallState install_state = dnf_backend_get_package_install_state(item.row);
   item.status_rank = install_state_rank(install_state);
 
   for (const auto &a : widgets->transaction.actions) {
@@ -335,9 +335,9 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                        const PackageRow &row = package_item->row;
                        if (const char *pending_class = pending_css_class(widgets, row.nevra)) {
                          gtk_widget_add_css_class(label, pending_class);
-                       } else if (get_package_install_state(row) == PackageInstallState::INSTALLED) {
+                       } else if (dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED) {
                          gtk_widget_add_css_class(label, "package-status-installed");
-                       } else if (get_package_install_state(row) == PackageInstallState::UPGRADEABLE) {
+                       } else if (dnf_backend_get_package_install_state(row) == PackageInstallState::UPGRADEABLE) {
                          gtk_widget_add_css_class(label, "package-status-upgradeable");
                        } else {
                          gtk_widget_add_css_class(label, "package-status-available");
@@ -419,7 +419,7 @@ restore_package_view_sort_state(GtkColumnView *view, PackageColumnKind kind, Gtk
 // Helper: Retrieve the selected package row from the current package table
 // -----------------------------------------------------------------------------
 bool
-get_selected_package_row(SearchWidgets *widgets, PackageRow &out_pkg)
+package_table_get_selected_package_row(SearchWidgets *widgets, PackageRow &out_pkg)
 {
   if (!widgets || !widgets->results.list_scroller) {
     return false;
@@ -462,7 +462,7 @@ get_selected_package_row(SearchWidgets *widgets, PackageRow &out_pkg)
 // preserving the selected NEVRA across list refreshes when possible.
 // -----------------------------------------------------------------------------
 void
-fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
+package_table_fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
 {
   widgets->results.current_packages = items;
 
@@ -507,7 +507,7 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                      guint index = gtk_single_selection_get_selected(self);
 
                      if (index == GTK_INVALID_LIST_POSITION) {
-                       clear_selected_package_state(widgets);
+                       package_info_clear_selected_package_state(widgets);
                        return;
                      }
 
@@ -515,13 +515,13 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                      const PackageRow *row = package_row_from_object(obj);
                      if (!row) {
                        g_object_unref(obj);
-                       clear_selected_package_state(widgets);
+                       package_info_clear_selected_package_state(widgets);
                        return;
                      }
 
                      PackageRow selected = *row;
                      g_object_unref(obj);
-                     load_selected_package_info(widgets, selected);
+                     package_info_load_selected_package_info(widgets, selected);
                    }),
                    widgets);
 
@@ -557,14 +557,14 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
                        return;
                      }
 
-                     PackageInstallState install_state = get_package_install_state(*row);
+                     PackageInstallState install_state = dnf_backend_get_package_install_state(*row);
                      gtk_single_selection_set_selected(sel, position);
                      g_object_unref(obj);
 
                      if (install_state == PackageInstallState::INSTALLED) {
-                       on_remove_button_clicked(nullptr, widgets);
+                       pending_transaction_on_remove_button_clicked(nullptr, widgets);
                      } else {
-                       on_install_button_clicked(nullptr, widgets);
+                       pending_transaction_on_install_button_clicked(nullptr, widgets);
                      }
                    }),
                    widgets);
@@ -598,7 +598,7 @@ fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items)
   }
 
   if (!restored) {
-    clear_selected_package_state(widgets);
+    package_info_clear_selected_package_state(widgets);
   }
 
   g_object_unref(sort_model);

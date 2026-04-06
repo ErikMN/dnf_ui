@@ -91,7 +91,7 @@ static void on_backend_warmup_task_finished(GObject *source_object, GAsyncResult
 // Run GTK application and return process exit status
 // -----------------------------------------------------------------------------
 int
-run_dnf_ui(int argc, char **argv)
+app_run_dnf_ui(int argc, char **argv)
 {
   GtkApplication *app = gtk_application_new("com.fedora.dnfui", G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
@@ -110,7 +110,7 @@ create_window(GtkApplication *app)
 {
   GtkWidget *window = gtk_application_window_new(app);
   gtk_window_set_title(GTK_WINDOW(window), "DNF UI");
-  load_window_geometry(GTK_WINDOW(window));
+  config_load_window_geometry(GTK_WINDOW(window));
 
   return window;
 }
@@ -344,7 +344,7 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(vbox_main), inner_paned);
   gtk_widget_set_vexpand(inner_paned, TRUE);
   gtk_widget_set_hexpand(inner_paned, TRUE);
-  int pos = load_paned_position();
+  int pos = config_load_paned_position();
   if (pos < 100) {
     pos = 300;
   }
@@ -578,8 +578,8 @@ initialize_ui_state(SearchWidgets *widgets)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), FALSE);
 
-  set_status(widgets->query.status_label, "Ready.", "gray");
-  fill_package_view(widgets, {});
+  ui_helpers_set_status(widgets->query.status_label, "Ready.", "gray");
+  package_table_fill_package_view(widgets, {});
 }
 
 // -----------------------------------------------------------------------------
@@ -588,25 +588,29 @@ initialize_ui_state(SearchWidgets *widgets)
 static void
 connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
 {
+  g_signal_connect(ui->clear_cache_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *, gpointer) { package_query_clear_search_cache(); }),
+                   NULL);
+
+  g_signal_connect(ui->list_button, "clicked", G_CALLBACK(package_query_on_list_button_clicked), widgets);
+
   g_signal_connect(
-      ui->clear_cache_button, "clicked", G_CALLBACK(+[](GtkButton *, gpointer) { clear_search_cache(); }), NULL);
+      ui->list_available_button, "clicked", G_CALLBACK(package_query_on_list_available_button_clicked), widgets);
 
-  g_signal_connect(ui->list_button, "clicked", G_CALLBACK(on_list_button_clicked), widgets);
+  g_signal_connect(ui->install_button, "clicked", G_CALLBACK(pending_transaction_on_install_button_clicked), widgets);
 
-  g_signal_connect(ui->list_available_button, "clicked", G_CALLBACK(on_list_available_button_clicked), widgets);
+  g_signal_connect(
+      ui->reinstall_button, "clicked", G_CALLBACK(pending_transaction_on_reinstall_button_clicked), widgets);
 
-  g_signal_connect(ui->install_button, "clicked", G_CALLBACK(on_install_button_clicked), widgets);
+  g_signal_connect(ui->remove_button, "clicked", G_CALLBACK(pending_transaction_on_remove_button_clicked), widgets);
 
-  g_signal_connect(ui->reinstall_button, "clicked", G_CALLBACK(on_reinstall_button_clicked), widgets);
+  g_signal_connect(ui->clear_button, "clicked", G_CALLBACK(package_query_on_clear_button_clicked), widgets);
 
-  g_signal_connect(ui->remove_button, "clicked", G_CALLBACK(on_remove_button_clicked), widgets);
+  g_signal_connect(ui->search_button, "clicked", G_CALLBACK(package_query_on_search_button_clicked), widgets);
 
-  g_signal_connect(ui->clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), widgets);
-
-  g_signal_connect(ui->search_button, "clicked", G_CALLBACK(on_search_button_clicked), widgets);
-
-  g_signal_connect(ui->entry, "activate", G_CALLBACK(on_search_button_clicked), widgets);
-  g_signal_connect(ui->history_list, "row-selected", G_CALLBACK(on_history_row_selected), widgets);
+  g_signal_connect(ui->entry, "activate", G_CALLBACK(package_query_on_search_button_clicked), widgets);
+  g_signal_connect(ui->history_list, "row-selected", G_CALLBACK(package_query_on_history_row_selected), widgets);
 
   g_signal_connect(ui->toggle_history_button,
                    "clicked",
@@ -628,10 +632,11 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
                    }),
                    ui->notebook);
 
-  g_signal_connect(ui->apply_button, "clicked", G_CALLBACK(on_apply_button_clicked), widgets);
-  g_signal_connect(ui->clear_pending_button, "clicked", G_CALLBACK(on_clear_pending_button_clicked), widgets);
+  g_signal_connect(ui->apply_button, "clicked", G_CALLBACK(pending_transaction_on_apply_button_clicked), widgets);
+  g_signal_connect(
+      ui->clear_pending_button, "clicked", G_CALLBACK(pending_transaction_on_clear_pending_button_clicked), widgets);
 
-  g_signal_connect(ui->refresh_button, "clicked", G_CALLBACK(on_refresh_button_clicked), widgets);
+  g_signal_connect(ui->refresh_button, "clicked", G_CALLBACK(widgets_on_refresh_button_clicked), widgets);
 
   // Intercept window close so unapplied marked changes can be confirmed first.
   g_signal_connect(ui->window, "close-request", G_CALLBACK(on_main_window_close_request), widgets);
@@ -641,15 +646,15 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
                    "unrealize",
                    G_CALLBACK(+[](GtkWidget *widget, gpointer user_data) {
                      GtkWindow *w = GTK_WINDOW(widget);
-                     save_window_geometry(w);
-                     save_paned_position(GTK_PANED(user_data));
+                     config_save_window_geometry(w);
+                     config_save_paned_position(GTK_PANED(user_data));
                    }),
                    ui->inner_paned);
 
   // Live-update: save pane position whenever the user moves the divider
   g_signal_connect(ui->inner_paned,
                    "notify::position",
-                   G_CALLBACK(+[](GtkPaned *paned, GParamSpec *, gpointer) { save_paned_position(paned); }),
+                   G_CALLBACK(+[](GtkPaned *paned, GParamSpec *, gpointer) { config_save_paned_position(paned); }),
                    NULL);
 }
 
@@ -757,9 +762,9 @@ on_main_window_close_request(GtkWindow *window, gpointer user_data)
 
   // TODO: FIXME: This is broken
   // Save paned position on close
-  save_window_geometry(window);
+  config_save_window_geometry(window);
   if (widgets && widgets->results.inner_paned) {
-    save_paned_position(widgets->results.inner_paned);
+    config_save_paned_position(widgets->results.inner_paned);
   }
 
   if (!widgets || widgets->window_state.allow_close_with_pending) {
@@ -809,7 +814,7 @@ setup_periodic_tasks(void)
   g_timeout_add_seconds(
       300, // 5 minutes
       [](gpointer) -> gboolean {
-        refresh_installed_nevras();
+        dnf_backend_refresh_installed_nevras();
         return TRUE; // keep repeating
       },
       nullptr);

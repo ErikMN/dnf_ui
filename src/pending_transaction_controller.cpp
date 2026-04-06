@@ -54,21 +54,22 @@ show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
   std::vector<PackageRow> rows;
   switch (action.type) {
   case PendingAction::INSTALL:
-    rows = get_available_package_rows_by_nevra(action.nevra);
+    rows = dnf_backend_get_available_package_rows_by_nevra(action.nevra);
     break;
   case PendingAction::REMOVE:
   case PendingAction::REINSTALL:
-    rows = get_installed_package_rows_by_nevra(action.nevra);
+    rows = dnf_backend_get_installed_package_rows_by_nevra(action.nevra);
     break;
   }
 
   if (rows.empty()) {
-    set_status(widgets->query.status_label, "Pending package could not be found in current package data.", "red");
+    ui_helpers_set_status(
+        widgets->query.status_label, "Pending package could not be found in current package data.", "red");
     return;
   }
 
   widgets->results.selected_nevra = action.nevra;
-  fill_package_view(widgets, rows);
+  package_table_fill_package_view(widgets, rows);
 }
 
 // Split the pending queue into install, remove, and reinstall transaction specs.
@@ -227,20 +228,20 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gboolean ok = g_task_propagate_boolean(task, &error);
 
   if (!ok && error) {
-    set_status(widgets->query.status_label, error->message, "red");
+    ui_helpers_set_status(widgets->query.status_label, error->message, "red");
     g_error_free(error);
     return;
   }
 
   // Transaction follow-up rebuilds produce a new Base generation, so any
   // cached search result rows must be discarded before the next search.
-  clear_search_cache();
+  package_query_clear_search_cache();
 
   // Refresh installed state and rebind the current package rows.
-  refresh_installed_nevras();
+  dnf_backend_refresh_installed_nevras();
 
   if (!widgets->results.current_packages.empty()) {
-    refresh_current_package_view(widgets);
+    widgets_refresh_current_package_view(widgets);
   }
 }
 
@@ -249,11 +250,11 @@ rebuild_after_tx_async(SearchWidgets *widgets)
 {
   // Once the post-transaction rebuild begins, stop serving cached search
   // results from the pre-transaction Base generation.
-  clear_search_cache();
+  package_query_clear_search_cache();
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   GTask *task = g_task_new(nullptr, c, rebuild_after_tx_finished, widgets);
-  g_task_run_in_thread(task, on_rebuild_task);
+  g_task_run_in_thread(task, widgets_on_rebuild_task);
   g_object_unref(task);
   g_object_unref(c);
 }
@@ -262,14 +263,14 @@ rebuild_after_tx_async(SearchWidgets *widgets)
 // Async: Install selected package
 // -----------------------------------------------------------------------------
 void
-on_install_button_clicked(GtkButton *, gpointer user_data)
+pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
   // Determine the selected package from the current package table.
   PackageRow pkg;
-  if (!get_selected_package_row(widgets, pkg)) {
-    set_status(widgets->query.status_label, "No package selected.", "gray");
+  if (!package_table_get_selected_package_row(widgets, pkg)) {
+    ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
     return;
   }
 
@@ -279,32 +280,32 @@ on_install_button_clicked(GtkButton *, gpointer user_data)
   if (has_existing && existing_type == PendingAction::INSTALL) {
     remove_pending_action(widgets, pkg.nevra);
     refresh_pending_tab(widgets);
-    set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
+    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
   } else {
     // If it was pending REMOVE (or anything else), replace it with INSTALL
     remove_pending_action(widgets, pkg.nevra);
     widgets->transaction.actions.push_back({ PendingAction::INSTALL, pkg.nevra });
     refresh_pending_tab(widgets);
-    set_status(widgets->query.status_label, ("Marked for install: " + pkg.name).c_str(), "blue");
+    ui_helpers_set_status(widgets->query.status_label, ("Marked for install: " + pkg.name).c_str(), "blue");
   }
-  update_action_button_labels(widgets, pkg.nevra);
+  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
 
   // Refresh the package table to apply pending-state badges.
-  refresh_current_package_view(widgets);
+  widgets_refresh_current_package_view(widgets);
 }
 
 // -----------------------------------------------------------------------------
 // Async: Remove selected package
 // -----------------------------------------------------------------------------
 void
-on_remove_button_clicked(GtkButton *, gpointer user_data)
+pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
   // Determine the selected package from the current package table.
   PackageRow pkg;
-  if (!get_selected_package_row(widgets, pkg)) {
-    set_status(widgets->query.status_label, "No package selected.", "gray");
+  if (!package_table_get_selected_package_row(widgets, pkg)) {
+    ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
     return;
   }
 
@@ -314,31 +315,31 @@ on_remove_button_clicked(GtkButton *, gpointer user_data)
   if (has_existing && existing_type == PendingAction::REMOVE) {
     remove_pending_action(widgets, pkg.nevra);
     refresh_pending_tab(widgets);
-    set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
+    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
   } else {
     // If it was pending INSTALL (or anything else), replace it with REMOVE
     remove_pending_action(widgets, pkg.nevra);
     widgets->transaction.actions.push_back({ PendingAction::REMOVE, pkg.nevra });
     refresh_pending_tab(widgets);
-    set_status(widgets->query.status_label, ("Marked for removal: " + pkg.name).c_str(), "blue");
+    ui_helpers_set_status(widgets->query.status_label, ("Marked for removal: " + pkg.name).c_str(), "blue");
   }
-  update_action_button_labels(widgets, pkg.nevra);
+  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
 
   // Refresh the package table to apply pending-state badges.
-  refresh_current_package_view(widgets);
+  widgets_refresh_current_package_view(widgets);
 }
 
 // -----------------------------------------------------------------------------
 // Async: Reinstall selected package
 // -----------------------------------------------------------------------------
 void
-on_reinstall_button_clicked(GtkButton *, gpointer user_data)
+pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
   PackageRow pkg;
-  if (!get_selected_package_row(widgets, pkg)) {
-    set_status(widgets->query.status_label, "No package selected.", "gray");
+  if (!package_table_get_selected_package_row(widgets, pkg)) {
+    ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
     return;
   }
 
@@ -347,28 +348,28 @@ on_reinstall_button_clicked(GtkButton *, gpointer user_data)
   if (has_existing && existing_type == PendingAction::REINSTALL) {
     remove_pending_action(widgets, pkg.nevra);
     refresh_pending_tab(widgets);
-    set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
+    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
   } else {
     remove_pending_action(widgets, pkg.nevra);
     widgets->transaction.actions.push_back({ PendingAction::REINSTALL, pkg.nevra });
     refresh_pending_tab(widgets);
-    set_status(widgets->query.status_label, ("Marked for reinstall: " + pkg.name).c_str(), "blue");
+    ui_helpers_set_status(widgets->query.status_label, ("Marked for reinstall: " + pkg.name).c_str(), "blue");
   }
-  update_action_button_labels(widgets, pkg.nevra);
+  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
 
-  refresh_current_package_view(widgets);
+  widgets_refresh_current_package_view(widgets);
 }
 
 // -----------------------------------------------------------------------------
 // Clears all pending install, remove, and reinstall actions without applying them
 // -----------------------------------------------------------------------------
 void
-on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
+pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
   if (widgets->transaction.actions.empty()) {
-    set_status(widgets->query.status_label, "No pending actions to clear.", "blue");
+    ui_helpers_set_status(widgets->query.status_label, "No pending actions to clear.", "blue");
     return;
   }
 
@@ -377,11 +378,11 @@ on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
   refresh_pending_tab(widgets);
 
   // Refresh the package table to remove pending-state badges.
-  refresh_current_package_view(widgets);
+  widgets_refresh_current_package_view(widgets);
 
   char msg[256];
   snprintf(msg, sizeof(msg), "Cleared %zu pending action%s.", count, count == 1 ? "" : "s");
-  set_status(widgets->query.status_label, msg, "green");
+  ui_helpers_set_status(widgets->query.status_label, msg, "green");
 }
 
 // -----------------------------------------------------------------------------
@@ -392,13 +393,14 @@ start_apply_transaction(SearchWidgets *widgets)
 {
   ApplyTaskData *td = new ApplyTaskData;
   build_pending_transaction_specs(widgets, td->install, td->remove, td->reinstall);
-  td->progress_window = create_transaction_progress_window(widgets, widgets->transaction.actions.size());
+  td->progress_window = transaction_progress_create_window(widgets, widgets->transaction.actions.size());
 
-  append_transaction_progress(td->progress_window, "Queued transaction request.");
-  set_status(widgets->query.status_label, "Applying pending changes. See transaction window for details.", "blue");
-  spinner_acquire(widgets->query.spinner);
+  transaction_progress_append(td->progress_window, "Queued transaction request.");
+  ui_helpers_set_status(
+      widgets->query.status_label, "Applying pending changes. See transaction window for details.", "blue");
+  widgets_spinner_acquire(widgets->query.spinner);
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   GTask *task = g_task_new(
       nullptr,
       c,
@@ -415,27 +417,27 @@ start_apply_transaction(SearchWidgets *widgets)
         gboolean success = g_task_propagate_boolean(task, &error);
 
         // Stop spinner (ref-counted)
-        spinner_release(widgets->query.spinner);
+        widgets_spinner_release(widgets->query.spinner);
 
-        finish_transaction_progress(td ? td->progress_window : nullptr, success, "");
+        transaction_progress_finish(td ? td->progress_window : nullptr, success, "");
 
         if (success) {
           // Clear pending queue and refresh tab
           widgets->transaction.actions.clear();
           refresh_pending_tab(widgets);
 
-          set_status(widgets->query.status_label, "Transaction successful.", "green");
+          ui_helpers_set_status(widgets->query.status_label, "Transaction successful.", "green");
 
           // Rebuild base and refresh installed highlighting asynchronously
           rebuild_after_tx_async(widgets);
         } else {
           std::string details = error ? error->message : "Transaction failed.";
-          set_status(widgets->query.status_label, details.c_str(), "red");
+          ui_helpers_set_status(widgets->query.status_label, details.c_str(), "red");
           // Show the full backend error in a copyable dialog instead of only in the status bar.
-          show_transaction_error_dialog(widgets,
-                                        "Transaction Failed",
-                                        "The transaction could not be completed. Review the details below.",
-                                        details);
+          transaction_progress_show_error_dialog(widgets,
+                                                 "Transaction Failed",
+                                                 "The transaction could not be completed. Review the details below.",
+                                                 details);
           if (error) {
             g_error_free(error);
           }
@@ -449,9 +451,10 @@ start_apply_transaction(SearchWidgets *widgets)
       task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
         ApplyTaskData *td = static_cast<ApplyTaskData *>(task_data);
         std::string err;
-        bool ok = apply_transaction(td->install, td->remove, td->reinstall, err, [td](const std::string &message) {
-          append_transaction_progress(td->progress_window, message);
-        });
+        bool ok = dnf_backend_apply_transaction(
+            td->install, td->remove, td->reinstall, err, [td](const std::string &message) {
+              transaction_progress_append(td->progress_window, message);
+            });
         if (ok) {
           g_task_return_boolean(t, TRUE);
         } else {
@@ -467,12 +470,12 @@ start_apply_transaction(SearchWidgets *widgets)
 // Apply pending actions in a single libdnf5 transaction (async via backend)
 // -----------------------------------------------------------------------------
 void
-on_apply_button_clicked(GtkButton *, gpointer user_data)
+pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
   if (widgets->transaction.actions.empty()) {
-    set_status(widgets->query.status_label, "No pending changes.", "gray");
+    ui_helpers_set_status(widgets->query.status_label, "No pending changes.", "gray");
     return;
   }
 
@@ -484,18 +487,18 @@ on_apply_button_clicked(GtkButton *, gpointer user_data)
   // Resolve the full transaction first so the summary includes dependency-driven changes too.
   TransactionPreview preview;
   std::string error;
-  if (!preview_transaction(install, remove, reinstall, preview, error)) {
+  if (!dnf_backend_preview_transaction(install, remove, reinstall, preview, error)) {
     const char *status_message = error.empty() ? "Unable to prepare transaction preview." : error.c_str();
-    set_status(widgets->query.status_label, status_message, "red");
+    ui_helpers_set_status(widgets->query.status_label, status_message, "red");
     // Show the solver error in a copyable dialog before the transaction starts.
-    show_transaction_error_dialog(widgets,
-                                  "Transaction Preview Failed",
-                                  "The transaction could not be prepared. Review the details below.",
-                                  error.empty() ? std::string(status_message) : error);
+    transaction_progress_show_error_dialog(widgets,
+                                           "Transaction Preview Failed",
+                                           "The transaction could not be prepared. Review the details below.",
+                                           error.empty() ? std::string(status_message) : error);
     return;
   }
 
-  show_transaction_summary_dialog(widgets, preview, start_apply_transaction);
+  transaction_progress_show_summary_dialog(widgets, preview, start_apply_transaction);
 }
 
 // -----------------------------------------------------------------------------

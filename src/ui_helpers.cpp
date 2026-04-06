@@ -12,7 +12,7 @@
 // Helper: Update status label with color
 // -----------------------------------------------------------------------------
 void
-set_status(GtkLabel *label, const std::string &text, const std::string &color)
+ui_helpers_set_status(GtkLabel *label, const std::string &text, const std::string &color)
 {
   std::string bg;
   if (color == "green")
@@ -37,7 +37,7 @@ set_status(GtkLabel *label, const std::string &text, const std::string &color)
 // Helper: Update transaction action button labels based on pending actions
 // -----------------------------------------------------------------------------
 void
-update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
+ui_helpers_update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)
 {
   bool pending_install = false;
   bool pending_remove = false;

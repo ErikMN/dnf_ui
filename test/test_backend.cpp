@@ -44,7 +44,7 @@ TEST_CASE("Installed package cache matches returned list")
 {
   reset_backend_globals();
 
-  auto list = get_installed_package_rows_interruptible(nullptr);
+  auto list = dnf_backend_get_installed_package_rows_interruptible(nullptr);
 
   std::lock_guard<std::mutex> lock(g_installed_mutex);
 
@@ -56,11 +56,11 @@ TEST_CASE("Installed package cache matches returned list")
   }
 }
 
-TEST_CASE("refresh_installed_nevras populates global sets")
+TEST_CASE("dnf_backend_refresh_installed_nevras populates global sets")
 {
   reset_backend_globals();
 
-  refresh_installed_nevras();
+  dnf_backend_refresh_installed_nevras();
 
   std::lock_guard<std::mutex> lock(g_installed_mutex);
 
@@ -79,7 +79,8 @@ TEST_CASE("Searching for impossible package name returns empty result")
   g_search_in_description = false;
   g_exact_match = false;
 
-  auto results = search_available_package_rows_interruptible("___definitely_not_a_real_package_123456___", nullptr);
+  auto results =
+      dnf_backend_search_available_package_rows_interruptible("___definitely_not_a_real_package_123456___", nullptr);
 
   REQUIRE(results.empty());
 }
@@ -91,10 +92,10 @@ TEST_CASE("Exact match results are subset of contains results")
   g_search_in_description = false;
 
   g_exact_match = false;
-  auto contains = search_available_package_rows_interruptible("bash", nullptr);
+  auto contains = dnf_backend_search_available_package_rows_interruptible("bash", nullptr);
 
   g_exact_match = true;
-  auto exact = search_available_package_rows_interruptible("bash", nullptr);
+  auto exact = dnf_backend_search_available_package_rows_interruptible("bash", nullptr);
 
   auto contains_nevras = package_row_nevras(contains);
   REQUIRE(contains.size() >= exact.size());
@@ -111,10 +112,10 @@ TEST_CASE("Description search returns superset of name-only search")
   g_exact_match = false;
 
   g_search_in_description = false;
-  auto name_only = search_available_package_rows_interruptible("shell", nullptr);
+  auto name_only = dnf_backend_search_available_package_rows_interruptible("shell", nullptr);
 
   g_search_in_description = true;
-  auto desc_search = search_available_package_rows_interruptible("shell", nullptr);
+  auto desc_search = dnf_backend_search_available_package_rows_interruptible("shell", nullptr);
 
   auto desc_search_nevras = package_row_nevras(desc_search);
   REQUIRE(desc_search.size() >= name_only.size());
@@ -134,7 +135,7 @@ TEST_CASE("Cancelled search returns no results")
   GCancellable *cancellable = g_cancellable_new();
   g_cancellable_cancel(cancellable);
 
-  auto results = search_available_package_rows_interruptible("bash", cancellable);
+  auto results = dnf_backend_search_available_package_rows_interruptible("bash", cancellable);
 
   REQUIRE(results.empty());
   g_object_unref(cancellable);
@@ -146,7 +147,7 @@ TEST_CASE("Cancelled search returns no results")
 
 TEST_CASE("Invalid NEVRA returns friendly message")
 {
-  auto info = get_package_info("invalid-0-0.x86_64");
+  auto info = dnf_backend_get_package_info("invalid-0-0.x86_64");
 
   REQUIRE(info.find("No details found") != std::string::npos);
 }
@@ -155,10 +156,10 @@ TEST_CASE("Package info formatting contains expected fields")
 {
   reset_backend_globals();
 
-  auto results = search_available_package_rows_interruptible("bash", nullptr);
+  auto results = dnf_backend_search_available_package_rows_interruptible("bash", nullptr);
   REQUIRE(!results.empty());
 
-  auto info = get_package_info(results.front().nevra);
+  auto info = dnf_backend_get_package_info(results.front().nevra);
 
   REQUIRE(info.find("Name: ") != std::string::npos);
   REQUIRE(info.find("Package ID: ") != std::string::npos);
@@ -177,7 +178,7 @@ TEST_CASE("Structured package rows expose searchable metadata")
 {
   reset_backend_globals();
 
-  auto results = search_available_package_rows_interruptible("bash", nullptr);
+  auto results = dnf_backend_search_available_package_rows_interruptible("bash", nullptr);
   REQUIRE(!results.empty());
 
   const auto &row = results.front();
@@ -197,7 +198,7 @@ TEST_CASE("Search results keep one visible EVR per package name and architecture
   g_search_in_description = false;
   g_exact_match = false;
 
-  auto results = search_available_package_rows_interruptible("bash", nullptr);
+  auto results = dnf_backend_search_available_package_rows_interruptible("bash", nullptr);
   REQUIRE(!results.empty());
 
   std::map<std::string, std::set<std::string>> versions_by_name_arch;
@@ -219,10 +220,10 @@ TEST_CASE("Dependency info contains expected section headers")
 {
   reset_backend_globals();
 
-  auto results = search_available_package_rows_interruptible("bash", nullptr);
+  auto results = dnf_backend_search_available_package_rows_interruptible("bash", nullptr);
   REQUIRE(!results.empty());
 
-  auto deps = get_package_deps(results.front().nevra);
+  auto deps = dnf_backend_get_package_deps(results.front().nevra);
 
   REQUIRE(deps.find("Requires:") != std::string::npos);
   REQUIRE(deps.find("Provides:") != std::string::npos);
@@ -234,10 +235,10 @@ TEST_CASE("File list query is safe and returns valid state")
 {
   reset_backend_globals();
 
-  auto results = search_available_package_rows_interruptible("bash", nullptr);
+  auto results = dnf_backend_search_available_package_rows_interruptible("bash", nullptr);
   REQUIRE(!results.empty());
 
-  auto files = get_installed_package_files(results.front().nevra);
+  auto files = dnf_backend_get_installed_package_files(results.front().nevra);
 
   // Either it is installed (returns file list)
   // or not installed (returns friendly message).

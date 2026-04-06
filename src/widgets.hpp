@@ -107,18 +107,18 @@ struct SearchWidgets {
   MainWindowState window_state;
 };
 
-void on_list_button_clicked(GtkButton *, gpointer user_data);
-void on_list_available_button_clicked(GtkButton *, gpointer user_data);
-void on_search_button_clicked(GtkButton *, gpointer user_data);
-void on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data);
-void on_clear_button_clicked(GtkButton *, gpointer user_data);
-void on_refresh_button_clicked(GtkButton *, gpointer user_data);
-void on_install_button_clicked(GtkButton *, gpointer user_data);
-void on_remove_button_clicked(GtkButton *, gpointer user_data);
-void on_reinstall_button_clicked(GtkButton *, gpointer user_data);
-void on_apply_button_clicked(GtkButton *, gpointer user_data);
-void on_clear_pending_button_clicked(GtkButton *, gpointer user_data);
-void clear_search_cache();
+void package_query_on_list_button_clicked(GtkButton *, gpointer user_data);
+void package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data);
+void package_query_on_search_button_clicked(GtkButton *, gpointer user_data);
+void package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data);
+void package_query_on_clear_button_clicked(GtkButton *, gpointer user_data);
+void package_query_clear_search_cache();
+void pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data);
+void pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data);
+void pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data);
+void pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data);
+void pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_data);
+void widgets_on_refresh_button_clicked(GtkButton *, gpointer user_data);
 
 // -----------------------------------------------------------------------------
 // EOF

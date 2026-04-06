@@ -57,7 +57,7 @@ info_task_result_free(gpointer p)
 
 // Reset the details notebook after repopulating the main package view.
 void
-reset_package_details_view(SearchWidgets *widgets)
+package_info_reset_details_view(SearchWidgets *widgets)
 {
   if (!widgets) {
     return;
@@ -71,7 +71,7 @@ reset_package_details_view(SearchWidgets *widgets)
 
 // Disable transaction actions when no package row is currently selected.
 void
-clear_selected_package_state(SearchWidgets *widgets)
+package_info_clear_selected_package_state(SearchWidgets *widgets)
 {
   if (!widgets) {
     return;
@@ -81,7 +81,7 @@ clear_selected_package_state(SearchWidgets *widgets)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button), FALSE);
-  update_action_button_labels(widgets, "");
+  ui_helpers_update_action_button_labels(widgets, "");
 }
 
 // Enable only the transaction actions that make sense for the selected row.
@@ -90,7 +90,7 @@ update_selected_package_actions(SearchWidgets *widgets, const PackageRow &select
 {
   // Enable install for new packages and upgrade candidates, while
   // remove and reinstall stay reserved for the exact installed row.
-  PackageInstallState install_state = get_package_install_state(selected);
+  PackageInstallState install_state = dnf_backend_get_package_install_state(selected);
 
   // FIXME: Replace with Polkit:
   bool is_root = (geteuid() == 0);
@@ -101,7 +101,7 @@ update_selected_package_actions(SearchWidgets *widgets, const PackageRow &select
                            is_root && install_state == PackageInstallState::INSTALLED);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
                            is_root && install_state == PackageInstallState::INSTALLED);
-  update_action_button_labels(widgets, selected.nevra);
+  ui_helpers_update_action_button_labels(widgets, selected.nevra);
 }
 
 // Async worker: load the package notebook text in the background.
@@ -116,7 +116,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
   try {
     InfoTaskResult *result = static_cast<InfoTaskResult *>(g_malloc0(sizeof *result));
 
-    result->info = g_strdup(get_package_info(td->nevra).c_str());
+    result->info = g_strdup(dnf_backend_get_package_info(td->nevra).c_str());
 
     if (cancellable && g_cancellable_is_cancelled(cancellable)) {
       info_task_result_free(result);
@@ -124,7 +124,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
     }
 
     try {
-      result->files = g_strdup(get_installed_package_files(td->nevra).c_str());
+      result->files = g_strdup(dnf_backend_get_installed_package_files(td->nevra).c_str());
     } catch (const std::exception &e) {
       result->files = g_strdup(e.what());
     }
@@ -135,7 +135,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
     }
 
     try {
-      result->deps = g_strdup(get_package_deps(td->nevra).c_str());
+      result->deps = g_strdup(dnf_backend_get_package_deps(td->nevra).c_str());
     } catch (const std::exception &e) {
       result->deps = g_strdup(e.what());
     }
@@ -146,7 +146,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
     }
 
     try {
-      result->changelog = g_strdup(get_package_changelog(td->nevra).c_str());
+      result->changelog = g_strdup(dnf_backend_get_package_changelog(td->nevra).c_str());
     } catch (const std::exception &e) {
       result->changelog = g_strdup(e.what());
     }
@@ -194,7 +194,7 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (!result) {
-    set_status(widgets->query.status_label, error ? error->message : "Error loading info.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error loading info.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -216,23 +216,23 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   gtk_label_set_text(widgets->results.changelog_label,
                      result->changelog ? result->changelog : "Select a package to view its changelog.");
 
-  set_status(widgets->query.status_label, "Package info loaded.", "green");
+  ui_helpers_set_status(widgets->query.status_label, "Package info loaded.", "green");
   info_task_result_free(result);
 }
 
 // Start the async package info load for the newly selected package row.
 void
-load_selected_package_info(SearchWidgets *widgets, const PackageRow &selected)
+package_info_load_selected_package_info(SearchWidgets *widgets, const PackageRow &selected)
 {
   if (!widgets) {
     return;
   }
 
   widgets->results.selected_nevra = selected.nevra;
-  set_status(widgets->query.status_label, "Fetching package info...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, "Fetching package info...", "blue");
   update_selected_package_actions(widgets, selected);
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   GTask *task = g_task_new(nullptr, c, on_package_info_task_finished, widgets);
 
   // Pass package NEVRA to background task

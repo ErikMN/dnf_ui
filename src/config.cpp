@@ -17,7 +17,7 @@
 // Config helpers for saving/restoring user settings
 // -----------------------------------------------------------------------------
 std::map<std::string, std::string>
-load_config_map()
+config_load_map()
 {
   std::map<std::string, std::string> config;
   const char *home = g_get_home_dir();
@@ -45,7 +45,7 @@ load_config_map()
 }
 
 void
-save_config_map(const std::map<std::string, std::string> &config)
+config_save_map(const std::map<std::string, std::string> &config)
 {
   const char *home = g_get_home_dir();
   std::string config_dir = std::string(home ? home : "") + "/.config";
@@ -57,9 +57,9 @@ save_config_map(const std::map<std::string, std::string> &config)
 }
 
 int
-load_paned_position()
+config_load_paned_position()
 {
-  auto config = load_config_map();
+  auto config = config_load_map();
   if (config.count("paned_position")) {
     return std::stoi(config["paned_position"]);
   }
@@ -68,17 +68,17 @@ load_paned_position()
 }
 
 void
-save_paned_position(GtkPaned *paned)
+config_save_paned_position(GtkPaned *paned)
 {
-  auto config = load_config_map();
+  auto config = config_load_map();
   config["paned_position"] = std::to_string(gtk_paned_get_position(paned));
-  save_config_map(config);
+  config_save_map(config);
 }
 
 void
-load_window_geometry(GtkWindow *window)
+config_load_window_geometry(GtkWindow *window)
 {
-  auto config = load_config_map();
+  auto config = config_load_map();
   int w = 1200, h = 820;
   if (config.count("window_width"))
     w = std::stoi(config["window_width"]);
@@ -92,9 +92,9 @@ load_window_geometry(GtkWindow *window)
 }
 
 void
-save_window_geometry(GtkWindow *window)
+config_save_window_geometry(GtkWindow *window)
 {
-  auto config = load_config_map();
+  auto config = config_load_map();
   int w = 1200, h = 820;
 
   // GTK4 build: use gtk_window_get_default_size() and gtk_widget_compute_bounds()
@@ -115,7 +115,7 @@ save_window_geometry(GtkWindow *window)
 
   config["window_width"] = std::to_string(w);
   config["window_height"] = std::to_string(h);
-  save_config_map(config);
+  config_save_map(config);
 }
 
 // -----------------------------------------------------------------------------

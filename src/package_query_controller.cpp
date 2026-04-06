@@ -186,9 +186,9 @@ cancel_active_package_list_request(SearchWidgets *widgets)
 
   // Release only the spinner slot owned by this request so other running tasks
   // can keep their progress indication visible.
-  spinner_release(widgets->query.spinner);
+  widgets_spinner_release(widgets->query.spinner);
   restore_package_list_controls(widgets);
-  set_status(widgets->query.status_label, package_list_cancelled_status(kind), "gray");
+  ui_helpers_set_status(widgets->query.status_label, package_list_cancelled_status(kind), "gray");
 }
 
 // -----------------------------------------------------------------------------
@@ -196,7 +196,7 @@ cancel_active_package_list_request(SearchWidgets *widgets)
 // Used both by the Clear Cache button and after successful Base rebuilds.
 // -----------------------------------------------------------------------------
 void
-clear_search_cache()
+package_query_clear_search_cache()
 {
   std::lock_guard<std::mutex> lock(g_cache_mutex);
   g_search_cache.clear();
@@ -244,7 +244,7 @@ on_list_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
   try {
     // Query all installed packages
-    auto *results = new std::vector<PackageRow>(get_installed_package_rows_interruptible(cancellable));
+    auto *results = new std::vector<PackageRow>(dnf_backend_get_installed_package_rows_interruptible(cancellable));
     // Ensure results are freed if never propagated (stale/cancel path).
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
@@ -277,7 +277,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   // Drop stale results if the backend Base changed while the worker was running.
   // This prevents rendering a list that no longer matches the current repo/system state.
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    spinner_release(widgets->query.spinner);
+    widgets_spinner_release(widgets->query.spinner);
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
     return;
   }
@@ -286,7 +286,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
-  spinner_release(widgets->query.spinner);
+  widgets_spinner_release(widgets->query.spinner);
 
   if (td) {
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
@@ -295,14 +295,14 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   if (packages) {
     // Populate the package table and update status
     widgets->results.selected_nevra.clear();
-    fill_package_view(widgets, *packages);
+    package_table_fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages->size());
-    set_status(widgets->query.status_label, msg, "green");
-    reset_package_details_view(widgets);
+    ui_helpers_set_status(widgets->query.status_label, msg, "green");
+    package_info_reset_details_view(widgets);
     delete packages;
   } else {
-    set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -319,7 +319,7 @@ static void
 on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
   try {
-    auto *results = new std::vector<PackageRow>(get_available_package_rows_interruptible(cancellable));
+    auto *results = new std::vector<PackageRow>(dnf_backend_get_available_package_rows_interruptible(cancellable));
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
@@ -349,7 +349,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    spinner_release(widgets->query.spinner);
+    widgets_spinner_release(widgets->query.spinner);
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
     return;
   }
@@ -358,24 +358,25 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
-  spinner_release(widgets->query.spinner);
+  widgets_spinner_release(widgets->query.spinner);
 
   if (td) {
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
   }
 
   if (packages) {
-    refresh_installed_nevras();
+    dnf_backend_refresh_installed_nevras();
 
     widgets->results.selected_nevra.clear();
-    fill_package_view(widgets, *packages);
+    package_table_fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu available packages.", packages->size());
-    set_status(widgets->query.status_label, msg, "green");
-    reset_package_details_view(widgets);
+    ui_helpers_set_status(widgets->query.status_label, msg, "green");
+    package_info_reset_details_view(widgets);
     delete packages;
   } else {
-    set_status(widgets->query.status_label, error ? error->message : "Error listing available packages.", "red");
+    ui_helpers_set_status(
+        widgets->query.status_label, error ? error->message : "Error listing available packages.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -394,7 +395,8 @@ on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancella
   const SearchTaskData *td = static_cast<const SearchTaskData *>(task_data);
   const char *pattern = td ? td->term : "";
   try {
-    auto *results = new std::vector<PackageRow>(search_available_package_rows_interruptible(pattern, cancellable));
+    auto *results =
+        new std::vector<PackageRow>(dnf_backend_search_available_package_rows_interruptible(pattern, cancellable));
     // Ensure results are freed if never propagated (stale/cancel path).
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
@@ -422,7 +424,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    spinner_release(widgets->query.spinner);
+    widgets_spinner_release(widgets->query.spinner);
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
     return;
   }
@@ -431,7 +433,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
   // Stop spinner (ref-counted)
-  spinner_release(widgets->query.spinner);
+  widgets_spinner_release(widgets->query.spinner);
 
   if (td) {
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
@@ -446,18 +448,18 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
       g_search_cache[td->cache_key] = CachedSearchResults { td->generation, *packages };
     }
 
-    refresh_installed_nevras();
+    dnf_backend_refresh_installed_nevras();
 
     // Fill the package table and display result count
     widgets->results.selected_nevra.clear();
-    fill_package_view(widgets, *packages);
+    package_table_fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
-    set_status(widgets->query.status_label, msg, "green");
-    reset_package_details_view(widgets);
+    ui_helpers_set_status(widgets->query.status_label, msg, "green");
+    package_info_reset_details_view(widgets);
     delete packages;
   } else {
-    set_status(widgets->query.status_label, error ? error->message : "Error or no results.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error or no results.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -470,7 +472,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 // The same button changes to Stop while the worker task is running.
 // -----------------------------------------------------------------------------
 void
-on_list_button_clicked(GtkButton *, gpointer user_data)
+package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
@@ -480,13 +482,13 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  set_status(widgets->query.status_label, "Listing installed packages...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, "Listing installed packages...", "blue");
 
   // Show spinner (ref-counted)
-  spinner_acquire(widgets->query.spinner);
+  widgets_spinner_acquire(widgets->query.spinner);
 
   // Run query asynchronously
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   // Store generation snapshot so completion can reject stale results.
   PackageListTaskData *td = new PackageListTaskData;
   td->request_id = widgets->query_state.next_package_list_request_id++;
@@ -509,7 +511,7 @@ on_list_button_clicked(GtkButton *, gpointer user_data)
 // The same button changes to Stop while the worker task is running.
 // -----------------------------------------------------------------------------
 void
-on_list_available_button_clicked(GtkButton *, gpointer user_data)
+package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
@@ -519,12 +521,12 @@ on_list_available_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  set_status(widgets->query.status_label, "Listing available packages...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, "Listing available packages...", "blue");
 
   // Show spinner (ref-counted)
-  spinner_acquire(widgets->query.spinner);
+  widgets_spinner_acquire(widgets->query.spinner);
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   PackageListTaskData *td = new PackageListTaskData;
   td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
@@ -546,7 +548,7 @@ on_list_available_button_clicked(GtkButton *, gpointer user_data)
 // The same button acts as Stop while a search worker task is running.
 // -----------------------------------------------------------------------------
 void
-on_search_button_clicked(GtkButton *, gpointer user_data)
+package_query_on_search_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
@@ -575,7 +577,7 @@ on_search_button_clicked(GtkButton *, gpointer user_data)
 // UI callback: Selecting a search term from the history list
 // -----------------------------------------------------------------------------
 void
-on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
+package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
 {
   if (!row) {
     return;
@@ -592,17 +594,17 @@ on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
 // Clears all displayed results, details and file info
 // -----------------------------------------------------------------------------
 void
-on_clear_button_clicked(GtkButton *, gpointer user_data)
+package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   widgets->results.current_packages.clear();
   widgets->results.selected_nevra.clear();
-  fill_package_view(widgets, {});
+  package_table_fill_package_view(widgets, {});
 
   // Reset UI labels and actions
-  set_status(widgets->query.status_label, "Ready.", "gray");
-  reset_package_details_view(widgets);
-  update_action_button_labels(widgets, "");
+  ui_helpers_set_status(widgets->query.status_label, "Ready.", "gray");
+  package_info_reset_details_view(widgets);
+  ui_helpers_update_action_button_labels(widgets, "");
 }
 
 // -----------------------------------------------------------------------------
@@ -644,7 +646,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox));
 
   gtk_editable_set_text(GTK_EDITABLE(widgets->query.entry), term.c_str());
-  set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
+  ui_helpers_set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
   widgets->results.selected_nevra.clear();
 
   // Check cache first.
@@ -659,12 +661,12 @@ perform_search(SearchWidgets *widgets, const std::string &term)
         g_search_cache.erase(it);
       } else {
         // Use cached results and skip background thread.
-        fill_package_view(widgets, it->second.packages);
+        package_table_fill_package_view(widgets, it->second.packages);
 
         char msg[256];
         snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.packages.size());
-        set_status(widgets->query.status_label, msg, "gray");
-        reset_package_details_view(widgets);
+        ui_helpers_set_status(widgets->query.status_label, msg, "gray");
+        package_info_reset_details_view(widgets);
 
         return;
       }
@@ -672,7 +674,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   }
 
   // Otherwise perform real background search
-  spinner_acquire(widgets->query.spinner);
+  widgets_spinner_acquire(widgets->query.spinner);
 
   const std::string key = cache_key_for(term);
   SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
@@ -681,7 +683,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
-  GCancellable *c = make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   // The shared request helper owns disabling the search controls and flipping
   // the initiating Search button to Stop.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::SEARCH);
