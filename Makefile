@@ -52,7 +52,7 @@ ifeq ($(FINAL), y)
   LDFLAGS += -s
   CXXFLAGS += -DNDEBUG_BUILD -g0 -O2
   CXXFLAGS += -Wpedantic -Wextra -Wmaybe-uninitialized
-  CXXFLAGS += -W -Wformat=2 -Wpointer-arith -Winline
+  CXXFLAGS += -W -Wformat=2 -Wpointer-arith
   CXXFLAGS += -Wdisabled-optimization -Wfloat-equal -Wall
 else
   # ASAN=y
