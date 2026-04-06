@@ -41,6 +41,9 @@ struct PackageItem {
   int status_rank;
 };
 
+// -----------------------------------------------------------------------------
+// Package status helpers
+// -----------------------------------------------------------------------------
 static const char *
 install_state_text(PackageInstallState state)
 {
@@ -99,6 +102,38 @@ fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
   item.status_text = install_state_text(install_state);
 }
 
+static const char *
+pending_css_class(SearchWidgets *widgets, const std::string &nevra)
+{
+  for (const auto &a : widgets->transaction.actions) {
+    if (a.nevra == nevra) {
+      switch (a.type) {
+      case PendingAction::INSTALL:
+        return "package-status-pending-install";
+      case PendingAction::REINSTALL:
+        return "package-status-pending-reinstall";
+      case PendingAction::REMOVE:
+        return "package-status-pending-remove";
+      }
+    }
+  }
+  return nullptr;
+}
+
+static void
+clear_status_css(GtkWidget *label)
+{
+  gtk_widget_remove_css_class(label, "package-status-available");
+  gtk_widget_remove_css_class(label, "package-status-installed");
+  gtk_widget_remove_css_class(label, "package-status-upgradeable");
+  gtk_widget_remove_css_class(label, "package-status-pending-install");
+  gtk_widget_remove_css_class(label, "package-status-pending-reinstall");
+  gtk_widget_remove_css_class(label, "package-status-pending-remove");
+}
+
+// -----------------------------------------------------------------------------
+// Package row object helpers
+// -----------------------------------------------------------------------------
 // Wrap one package row in a GObject so GTK list models can sort and select it.
 static GObject *
 make_package_object(SearchWidgets *widgets, const PackageRow &row)
@@ -134,37 +169,8 @@ package_row_from_object(GObject *obj)
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Pending action CSS class (used by the status column)
+// Column sorter helpers
 // -----------------------------------------------------------------------------
-static const char *
-pending_css_class(SearchWidgets *widgets, const std::string &nevra)
-{
-  for (const auto &a : widgets->transaction.actions) {
-    if (a.nevra == nevra) {
-      switch (a.type) {
-      case PendingAction::INSTALL:
-        return "package-status-pending-install";
-      case PendingAction::REINSTALL:
-        return "package-status-pending-reinstall";
-      case PendingAction::REMOVE:
-        return "package-status-pending-remove";
-      }
-    }
-  }
-  return nullptr;
-}
-
-static void
-clear_status_css(GtkWidget *label)
-{
-  gtk_widget_remove_css_class(label, "package-status-available");
-  gtk_widget_remove_css_class(label, "package-status-installed");
-  gtk_widget_remove_css_class(label, "package-status-upgradeable");
-  gtk_widget_remove_css_class(label, "package-status-pending-install");
-  gtk_widget_remove_css_class(label, "package-status-pending-reinstall");
-  gtk_widget_remove_css_class(label, "package-status-pending-remove");
-}
-
 // Return the visible text for one package table cell.
 static std::string
 column_text(const PackageItem &item, PackageColumnKind kind)
