@@ -30,7 +30,7 @@ package_row_quark()
 {
   static GQuark q = 0;
   if (G_UNLIKELY(q == 0)) {
-    q = g_quark_from_static_string("dnfui-package-row");
+    q = g_quark_from_static_string("package-table-row");
   }
 
   return q;
@@ -433,15 +433,15 @@ static GtkColumnViewColumn *
 create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind kind, int fixed_width, bool expand)
 {
   GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
-  g_object_set_data(G_OBJECT(factory), "dnfui-column-kind", GINT_TO_POINTER(static_cast<int>(kind)));
-  g_object_set_data(G_OBJECT(factory), "dnfui-search-widgets", widgets);
+  g_object_set_data(G_OBJECT(factory), "package-column-kind", GINT_TO_POINTER(static_cast<int>(kind)));
+  g_object_set_data(G_OBJECT(factory), "package-table-widgets", widgets);
 
   g_signal_connect(
       factory,
       "setup",
       G_CALLBACK(+[](GtkSignalListItemFactory *factory, GtkListItem *item, gpointer) {
-        PackageColumnKind kind =
-            static_cast<PackageColumnKind>(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(factory), "dnfui-column-kind")));
+        PackageColumnKind kind = static_cast<PackageColumnKind>(
+            GPOINTER_TO_INT(g_object_get_data(G_OBJECT(factory), "package-column-kind")));
 
         GtkWidget *label = gtk_label_new(nullptr);
         gtk_widget_set_margin_start(label, 6);
@@ -478,7 +478,7 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
 
                            show_package_context_menu(label, widgets, *row, x, y);
                          }),
-                         g_object_get_data(G_OBJECT(factory), "dnfui-search-widgets"));
+                         g_object_get_data(G_OBJECT(factory), "package-table-widgets"));
         gtk_widget_add_controller(label, GTK_EVENT_CONTROLLER(context_click));
 
         gtk_list_item_set_child(item, label);
@@ -489,9 +489,9 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                    "bind",
                    G_CALLBACK(+[](GtkSignalListItemFactory *factory, GtkListItem *item, gpointer) {
                      SearchWidgets *widgets =
-                         static_cast<SearchWidgets *>(g_object_get_data(G_OBJECT(factory), "dnfui-search-widgets"));
+                         static_cast<SearchWidgets *>(g_object_get_data(G_OBJECT(factory), "package-table-widgets"));
                      PackageColumnKind kind = static_cast<PackageColumnKind>(
-                         GPOINTER_TO_INT(g_object_get_data(G_OBJECT(factory), "dnfui-column-kind")));
+                         GPOINTER_TO_INT(g_object_get_data(G_OBJECT(factory), "package-column-kind")));
 
                      GtkWidget *label = gtk_list_item_get_child(item);
                      GObject *obj = G_OBJECT(gtk_list_item_get_item(item));
@@ -531,7 +531,7 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                    nullptr);
 
   GtkColumnViewColumn *column = gtk_column_view_column_new(title, factory);
-  g_object_set_data(G_OBJECT(column), "dnfui-column-kind", GINT_TO_POINTER(static_cast<int>(kind)));
+  g_object_set_data(G_OBJECT(column), "package-column-kind", GINT_TO_POINTER(static_cast<int>(kind)));
   gtk_column_view_column_set_resizable(column, TRUE);
   gtk_column_view_column_set_expand(column, expand);
   gtk_column_view_column_set_sorter(
@@ -567,7 +567,8 @@ get_package_view_sort_state(SearchWidgets *widgets, PackageColumnKind &out_kind,
     return false;
   }
 
-  out_kind = static_cast<PackageColumnKind>(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(column), "dnfui-column-kind")));
+  out_kind =
+      static_cast<PackageColumnKind>(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(column), "package-column-kind")));
   out_order = gtk_column_view_sorter_get_primary_sort_order(GTK_COLUMN_VIEW_SORTER(sorter));
   return true;
 }
@@ -587,7 +588,7 @@ restore_package_view_sort_state(GtkColumnView *view, PackageColumnKind kind, Gtk
     GObject *obj = G_OBJECT(g_list_model_get_item(columns, i));
     GtkColumnViewColumn *column = GTK_COLUMN_VIEW_COLUMN(obj);
     PackageColumnKind column_kind =
-        static_cast<PackageColumnKind>(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(column), "dnfui-column-kind")));
+        static_cast<PackageColumnKind>(GPOINTER_TO_INT(g_object_get_data(G_OBJECT(column), "package-column-kind")));
 
     if (column_kind == kind) {
       gtk_column_view_sort_by_column(view, column, order);
