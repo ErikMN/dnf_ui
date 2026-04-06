@@ -14,7 +14,6 @@ reset_backend_globals()
 
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   g_installed_nevras.clear();
-  g_installed_names.clear();
 }
 
 inline std::set<std::string>

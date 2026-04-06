@@ -37,10 +37,9 @@
 // Global state used by UI highlighting and query filters
 // -----------------------------------------------------------------------------
 std::set<std::string> g_installed_nevras;            // Cached NEVRAs of installed packages for UI highlighting
-std::set<std::string> g_installed_names;             // Cached package names for name-based lookups
-std::mutex g_installed_mutex;                        // Mutex for thread-safe access to global sets
+std::mutex g_installed_mutex;                        // Mutex for thread-safe access to global installed-package cache
 std::atomic<bool> g_search_in_description { false }; // Global flag: include description field in search
-std::atomic<bool> g_exact_match { false };           // Global flag: match package name/desc exactly
+std::atomic<bool> g_exact_match { false };           // Global flag: match package name or description exactly
 static std::map<std::string, PackageRow> g_installed_rows_by_name_arch; // Cached installed rows keyed by name and arch
 
 // Keep the newest installed row for one package name and architecture tuple.
@@ -179,7 +178,7 @@ dnf_backend_search_available_package_rows_interruptible(const std::string &patte
 //
 // Thread-safety:
 //   This function takes g_installed_mutex for the entire duration of clearing
-//   and repopulating g_installed_nevras and g_installed_names to prevent
+//   and repopulating g_installed_nevras to prevent
 //   concurrent reads or writes from GTK worker threads or periodic refresh
 //   timers.
 // -----------------------------------------------------------------------------
@@ -190,16 +189,14 @@ dnf_backend_refresh_installed_nevras()
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
 
-  // Acquire exclusive lock before modifying global sets.
+  // Acquire exclusive lock before modifying the installed-package cache.
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   g_installed_nevras.clear();
-  g_installed_names.clear();
   g_installed_rows_by_name_arch.clear();
 
   for (auto pkg : query) {
     PackageRow row = make_package_row(pkg);
     g_installed_nevras.insert(row.nevra);
-    g_installed_names.insert(row.name);
     remember_installed_row(g_installed_rows_by_name_arch, row);
   }
 }
@@ -231,7 +228,6 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 {
   std::vector<PackageRow> packages;
   std::set<std::string> installed_nevras;
-  std::set<std::string> installed_names;
   std::map<std::string, PackageRow> installed_rows_by_name_arch;
 
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
@@ -245,7 +241,6 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 
     PackageRow row = make_package_row(pkg);
     installed_nevras.insert(row.nevra);
-    installed_names.insert(row.name);
     remember_installed_row(installed_rows_by_name_arch, row);
     packages.push_back(row);
   }
@@ -253,7 +248,6 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
   // Publish the new installed-package cache only after a complete uncancelled scan.
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   g_installed_nevras.swap(installed_nevras);
-  g_installed_names.swap(installed_names);
   g_installed_rows_by_name_arch.swap(installed_rows_by_name_arch);
 
   return packages;
@@ -326,7 +320,6 @@ dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra)
   return packages;
 }
 
-// -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // Helper: Retrieve detailed package information
 // Fetches and formats detailed info for a single package, including:

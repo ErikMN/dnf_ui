@@ -81,7 +81,6 @@ extern std::atomic<bool> g_search_in_description;
 extern std::atomic<bool> g_exact_match;
 extern std::mutex g_installed_mutex;
 extern std::set<std::string> g_installed_nevras;
-extern std::set<std::string> g_installed_names;
 
 void dnf_backend_refresh_installed_nevras();
 PackageInstallState dnf_backend_get_package_install_state(const PackageRow &row);
@@ -94,7 +93,7 @@ std::vector<PackageRow> dnf_backend_search_available_package_rows_interruptible(
                                                                                 GCancellable *cancellable);
 std::vector<PackageRow> dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra);
 std::vector<PackageRow> dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra);
-std::string dnf_backend_get_package_info(const std::string &pkg_name);
+std::string dnf_backend_get_package_info(const std::string &pkg_nevra);
 std::string dnf_backend_get_installed_package_files(const std::string &pkg_nevra);
 std::string dnf_backend_get_package_deps(const std::string &pkg_nevra);
 std::string dnf_backend_get_package_changelog(const std::string &pkg_nevra);

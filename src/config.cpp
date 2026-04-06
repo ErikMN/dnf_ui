@@ -5,7 +5,7 @@
 // The configuration is stored as key=value pairs in:
 //   ~/.config/dnf_ui.conf
 //
-// TODO: FIXME: Consider switching to GKeyFile or JSON for more structured data
+// TODO: Consider switching to GKeyFile or JSON for more structured data
 // -----------------------------------------------------------------------------
 #include "config.hpp"
 #include <fstream>

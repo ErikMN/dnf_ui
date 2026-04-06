@@ -52,11 +52,10 @@ TEST_CASE("Installed package cache matches returned list")
 
   for (const auto &row : list) {
     REQUIRE(g_installed_nevras.count(row.nevra) == 1);
-    REQUIRE(g_installed_names.count(row.name) == 1);
   }
 }
 
-TEST_CASE("dnf_backend_refresh_installed_nevras populates global sets")
+TEST_CASE("dnf_backend_refresh_installed_nevras populates installed NEVRA cache")
 {
   reset_backend_globals();
 
@@ -65,7 +64,6 @@ TEST_CASE("dnf_backend_refresh_installed_nevras populates global sets")
   std::lock_guard<std::mutex> lock(g_installed_mutex);
 
   REQUIRE(!g_installed_nevras.empty());
-  REQUIRE(!g_installed_names.empty());
 }
 
 // -----------------------------------------------------------------------------
