@@ -9,6 +9,8 @@
 #include "package_info_controller.hpp"
 #include "widgets.hpp"
 
+#include <unistd.h>
+
 #include <string>
 
 // -----------------------------------------------------------------------------
@@ -275,6 +277,156 @@ column_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_da
 }
 
 // -----------------------------------------------------------------------------
+// Package context menu helpers
+// -----------------------------------------------------------------------------
+
+// Select the package row that owns the context menu action.
+static bool
+select_package_table_row(GtkColumnView *view, const std::string &nevra)
+{
+  if (!view) {
+    return false;
+  }
+
+  GtkSelectionModel *model = gtk_column_view_get_model(view);
+  if (!model || !GTK_IS_SINGLE_SELECTION(model)) {
+    return false;
+  }
+
+  GtkSingleSelection *selection = GTK_SINGLE_SELECTION(model);
+  GListModel *items_model = gtk_single_selection_get_model(selection);
+  if (!items_model) {
+    return false;
+  }
+
+  guint n_items = g_list_model_get_n_items(items_model);
+  for (guint i = 0; i < n_items; ++i) {
+    GObject *obj = G_OBJECT(g_list_model_get_item(items_model, i));
+    const PackageRow *row = package_row_from_object(obj);
+    bool match = row && row->nevra == nevra;
+    g_object_unref(obj);
+
+    if (match) {
+      gtk_single_selection_set_selected(selection, i);
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Find the pending action for the clicked package row, if one exists.
+static bool
+get_context_menu_pending_action(SearchWidgets *widgets, const std::string &nevra, PendingAction::Type &out_type)
+{
+  for (const auto &action : widgets->transaction.actions) {
+    if (action.nevra == nevra) {
+      out_type = action.type;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// Add one transaction action to the package context menu.
+static void
+append_context_menu_action(GtkBox *box,
+                           const char *label,
+                           gboolean sensitive,
+                           GCallback callback,
+                           SearchWidgets *widgets)
+{
+  GtkWidget *button = gtk_button_new_with_label(label);
+  gtk_widget_set_halign(button, GTK_ALIGN_FILL);
+  gtk_widget_set_sensitive(button, sensitive);
+  g_signal_connect(button, "clicked", callback, widgets);
+  gtk_box_append(box, button);
+}
+
+// Show the package transaction menu at the clicked table cell.
+static void
+show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const PackageRow &row, double x, double y)
+{
+  if (!anchor || !widgets) {
+    return;
+  }
+
+  GtkWidget *view = gtk_widget_get_ancestor(anchor, GTK_TYPE_COLUMN_VIEW);
+  if (!view || !GTK_IS_COLUMN_VIEW(view)) {
+    return;
+  }
+
+  if (!select_package_table_row(GTK_COLUMN_VIEW(view), row.nevra)) {
+    return;
+  }
+
+  GtkWidget *popover = gtk_popover_new();
+  gtk_widget_set_parent(popover, anchor);
+  gtk_popover_set_has_arrow(GTK_POPOVER(popover), FALSE);
+
+  GdkRectangle rect = { static_cast<int>(x), static_cast<int>(y), 1, 1 };
+  gtk_popover_set_pointing_to(GTK_POPOVER(popover), &rect);
+
+  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
+  gtk_popover_set_child(GTK_POPOVER(popover), box);
+
+  PackageInstallState install_state = dnf_backend_get_package_install_state(row);
+  bool is_root = (geteuid() == 0);
+
+  PendingAction::Type pending_type;
+  bool has_pending = get_context_menu_pending_action(widgets, row.nevra, pending_type);
+
+  // Keep context menu actions aligned with the normal package action buttons.
+  const char *install_label =
+      has_pending && pending_type == PendingAction::INSTALL ? "Unmark Install" : "Mark for Install";
+  const char *remove_label =
+      has_pending && pending_type == PendingAction::REMOVE ? "Unmark Removal" : "Mark for Removal";
+  const char *reinstall_label =
+      has_pending && pending_type == PendingAction::REINSTALL ? "Unmark Reinstall" : "Mark for Reinstall";
+
+  append_context_menu_action(GTK_BOX(box),
+                             install_label,
+                             is_root && install_state != PackageInstallState::INSTALLED,
+                             G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+                               if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
+                                 gtk_popover_popdown(GTK_POPOVER(popover));
+                               }
+                               pending_transaction_on_install_button_clicked(button, user_data);
+                             }),
+                             widgets);
+
+  append_context_menu_action(GTK_BOX(box),
+                             remove_label,
+                             is_root && install_state == PackageInstallState::INSTALLED,
+                             G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+                               if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
+                                 gtk_popover_popdown(GTK_POPOVER(popover));
+                               }
+                               pending_transaction_on_remove_button_clicked(button, user_data);
+                             }),
+                             widgets);
+
+  append_context_menu_action(GTK_BOX(box),
+                             reinstall_label,
+                             is_root && install_state == PackageInstallState::INSTALLED,
+                             G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+                               if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
+                                 gtk_popover_popdown(GTK_POPOVER(popover));
+                               }
+                               pending_transaction_on_reinstall_button_clicked(button, user_data);
+                             }),
+                             widgets);
+
+  g_signal_connect(popover,
+                   "closed",
+                   G_CALLBACK(+[](GtkPopover *popover, gpointer) { gtk_widget_unparent(GTK_WIDGET(popover)); }),
+                   nullptr);
+
+  gtk_popover_popup(GTK_POPOVER(popover));
+}
+
+// -----------------------------------------------------------------------------
 // Helper: Build one text column for the package table
 // -----------------------------------------------------------------------------
 static GtkColumnViewColumn *
@@ -310,6 +462,25 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
           gtk_widget_add_css_class(label, "package-summary");
         }
 
+        // Right-click opens the same package actions as the main buttons.
+        GtkGesture *context_click = gtk_gesture_click_new();
+        gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(context_click), GDK_BUTTON_SECONDARY);
+        g_signal_connect(context_click,
+                         "pressed",
+                         G_CALLBACK(+[](GtkGestureClick *gesture, int, double x, double y, gpointer user_data) {
+                           SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+                           GtkWidget *label = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(gesture));
+                           PackageRow *row =
+                               static_cast<PackageRow *>(g_object_get_data(G_OBJECT(label), "package-context-row"));
+                           if (!row) {
+                             return;
+                           }
+
+                           show_package_context_menu(label, widgets, *row, x, y);
+                         }),
+                         g_object_get_data(G_OBJECT(factory), "dnfui-search-widgets"));
+        gtk_widget_add_controller(label, GTK_EVENT_CONTROLLER(context_click));
+
         gtk_list_item_set_child(item, label);
       }),
       nullptr);
@@ -329,8 +500,15 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                      if (!package_item) {
                        gtk_label_set_text(GTK_LABEL(label), "");
                        clear_status_css(label);
+                       g_object_set_data_full(G_OBJECT(label), "package-context-row", nullptr, nullptr);
                        return;
                      }
+
+                     // Store the package row currently bound to this reused table cell.
+                     g_object_set_data_full(
+                         G_OBJECT(label), "package-context-row", new PackageRow(package_item->row), +[](gpointer p) {
+                           delete static_cast<PackageRow *>(p);
+                         });
 
                      std::string text = column_text(*package_item, kind);
                      gtk_label_set_text(GTK_LABEL(label), text.c_str());
