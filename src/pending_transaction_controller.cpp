@@ -12,9 +12,6 @@
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
 
-// Forward declarations
-static void start_apply_transaction(SearchWidgets *widgets);
-
 // Task payload for the async apply transaction worker.
 struct ApplyTaskData {
   std::vector<std::string> install;
@@ -70,36 +67,6 @@ show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
 
   widgets->results.selected_nevra = action.nevra;
   package_table_fill_package_view(widgets, rows);
-}
-
-// Split the pending queue into install, remove, and reinstall transaction specs.
-static void
-build_pending_transaction_specs(const SearchWidgets *widgets,
-                                std::vector<std::string> &install,
-                                std::vector<std::string> &remove,
-                                std::vector<std::string> &reinstall)
-{
-  install.clear();
-  remove.clear();
-  reinstall.clear();
-
-  if (!widgets) {
-    return;
-  }
-
-  install.reserve(widgets->transaction.actions.size());
-  remove.reserve(widgets->transaction.actions.size());
-  reinstall.reserve(widgets->transaction.actions.size());
-
-  for (const auto &action : widgets->transaction.actions) {
-    if (action.type == PendingAction::INSTALL) {
-      install.push_back(action.nevra);
-    } else if (action.type == PendingAction::REINSTALL) {
-      reinstall.push_back(action.nevra);
-    } else {
-      remove.push_back(action.nevra);
-    }
-  }
 }
 
 // -----------------------------------------------------------------------------
@@ -211,6 +178,36 @@ get_pending_action_type(SearchWidgets *widgets, const std::string &nevra, Pendin
   return false;
 }
 
+// Split the pending queue into install, remove, and reinstall transaction specs.
+static void
+build_pending_transaction_specs(const SearchWidgets *widgets,
+                                std::vector<std::string> &install,
+                                std::vector<std::string> &remove,
+                                std::vector<std::string> &reinstall)
+{
+  install.clear();
+  remove.clear();
+  reinstall.clear();
+
+  if (!widgets) {
+    return;
+  }
+
+  install.reserve(widgets->transaction.actions.size());
+  remove.reserve(widgets->transaction.actions.size());
+  reinstall.reserve(widgets->transaction.actions.size());
+
+  for (const auto &action : widgets->transaction.actions) {
+    if (action.type == PendingAction::INSTALL) {
+      install.push_back(action.nevra);
+    } else if (action.type == PendingAction::REINSTALL) {
+      reinstall.push_back(action.nevra);
+    } else {
+      remove.push_back(action.nevra);
+    }
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Helper: Rebuild base asynchronously and refresh installed highlights afterwards
 // -----------------------------------------------------------------------------
@@ -255,6 +252,87 @@ rebuild_after_tx_async(SearchWidgets *widgets)
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   GTask *task = g_task_new(nullptr, c, rebuild_after_tx_finished, widgets);
   g_task_run_in_thread(task, widgets_on_rebuild_task);
+  g_object_unref(task);
+  g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
+// Start the async apply flow after the user confirms the transaction summary.
+// -----------------------------------------------------------------------------
+static void
+start_apply_transaction(SearchWidgets *widgets)
+{
+  ApplyTaskData *td = new ApplyTaskData;
+  build_pending_transaction_specs(widgets, td->install, td->remove, td->reinstall);
+  td->progress_window = transaction_progress_create_window(widgets, widgets->transaction.actions.size());
+
+  transaction_progress_append(td->progress_window, "Queued transaction request.");
+  ui_helpers_set_status(
+      widgets->query.status_label, "Applying pending changes. See transaction window for details.", "blue");
+  widgets_spinner_acquire(widgets->query.spinner);
+
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GTask *task = g_task_new(
+      nullptr,
+      c,
+      +[](GObject *, GAsyncResult *res, gpointer user_data) {
+        GTask *task = G_TASK(res);
+        ApplyTaskData *td = static_cast<ApplyTaskData *>(g_task_get_task_data(task));
+        if (GCancellable *c = g_task_get_cancellable(task)) {
+          if (g_cancellable_is_cancelled(c)) {
+            return;
+          }
+        }
+        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+        GError *error = nullptr;
+        gboolean success = g_task_propagate_boolean(task, &error);
+
+        // Stop spinner (ref-counted)
+        widgets_spinner_release(widgets->query.spinner);
+
+        transaction_progress_finish(td ? td->progress_window : nullptr, success, "");
+
+        if (success) {
+          // Clear pending queue and refresh tab
+          widgets->transaction.actions.clear();
+          refresh_pending_tab(widgets);
+
+          ui_helpers_set_status(widgets->query.status_label, "Transaction successful.", "green");
+
+          // Rebuild base and refresh installed highlighting asynchronously
+          rebuild_after_tx_async(widgets);
+        } else {
+          std::string details = error ? error->message : "Transaction failed.";
+          ui_helpers_set_status(widgets->query.status_label, details.c_str(), "red");
+          // Show the full backend error in a copyable dialog instead of only in the status bar.
+          transaction_progress_show_error_dialog(widgets,
+                                                 "Transaction Failed",
+                                                 "The transaction could not be completed. Review the details below.",
+                                                 details);
+          if (error) {
+            g_error_free(error);
+          }
+        }
+      },
+      widgets);
+
+  g_task_set_task_data(task, td, apply_task_data_free);
+
+  g_task_run_in_thread(
+      task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
+        ApplyTaskData *td = static_cast<ApplyTaskData *>(task_data);
+        std::string err;
+        bool ok = dnf_backend_apply_transaction(
+            td->install, td->remove, td->reinstall, err, [td](const std::string &message) {
+              transaction_progress_append(td->progress_window, message);
+            });
+        if (ok) {
+          g_task_return_boolean(t, TRUE);
+        } else {
+          g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, err.c_str()));
+        }
+      });
+
   g_object_unref(task);
   g_object_unref(c);
 }
@@ -383,87 +461,6 @@ pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_d
   char msg[256];
   snprintf(msg, sizeof(msg), "Cleared %zu pending action%s.", count, count == 1 ? "" : "s");
   ui_helpers_set_status(widgets->query.status_label, msg, "green");
-}
-
-// -----------------------------------------------------------------------------
-// Start the async apply flow after the user confirms the transaction summary.
-// -----------------------------------------------------------------------------
-static void
-start_apply_transaction(SearchWidgets *widgets)
-{
-  ApplyTaskData *td = new ApplyTaskData;
-  build_pending_transaction_specs(widgets, td->install, td->remove, td->reinstall);
-  td->progress_window = transaction_progress_create_window(widgets, widgets->transaction.actions.size());
-
-  transaction_progress_append(td->progress_window, "Queued transaction request.");
-  ui_helpers_set_status(
-      widgets->query.status_label, "Applying pending changes. See transaction window for details.", "blue");
-  widgets_spinner_acquire(widgets->query.spinner);
-
-  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  GTask *task = g_task_new(
-      nullptr,
-      c,
-      +[](GObject *, GAsyncResult *res, gpointer user_data) {
-        GTask *task = G_TASK(res);
-        ApplyTaskData *td = static_cast<ApplyTaskData *>(g_task_get_task_data(task));
-        if (GCancellable *c = g_task_get_cancellable(task)) {
-          if (g_cancellable_is_cancelled(c)) {
-            return;
-          }
-        }
-        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-        GError *error = nullptr;
-        gboolean success = g_task_propagate_boolean(task, &error);
-
-        // Stop spinner (ref-counted)
-        widgets_spinner_release(widgets->query.spinner);
-
-        transaction_progress_finish(td ? td->progress_window : nullptr, success, "");
-
-        if (success) {
-          // Clear pending queue and refresh tab
-          widgets->transaction.actions.clear();
-          refresh_pending_tab(widgets);
-
-          ui_helpers_set_status(widgets->query.status_label, "Transaction successful.", "green");
-
-          // Rebuild base and refresh installed highlighting asynchronously
-          rebuild_after_tx_async(widgets);
-        } else {
-          std::string details = error ? error->message : "Transaction failed.";
-          ui_helpers_set_status(widgets->query.status_label, details.c_str(), "red");
-          // Show the full backend error in a copyable dialog instead of only in the status bar.
-          transaction_progress_show_error_dialog(widgets,
-                                                 "Transaction Failed",
-                                                 "The transaction could not be completed. Review the details below.",
-                                                 details);
-          if (error) {
-            g_error_free(error);
-          }
-        }
-      },
-      widgets);
-
-  g_task_set_task_data(task, td, apply_task_data_free);
-
-  g_task_run_in_thread(
-      task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
-        ApplyTaskData *td = static_cast<ApplyTaskData *>(task_data);
-        std::string err;
-        bool ok = dnf_backend_apply_transaction(
-            td->install, td->remove, td->reinstall, err, [td](const std::string &message) {
-              transaction_progress_append(td->progress_window, message);
-            });
-        if (ok) {
-          g_task_return_boolean(t, TRUE);
-        } else {
-          g_task_return_error(t, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, err.c_str()));
-        }
-      });
-
-  g_object_unref(task);
-  g_object_unref(c);
 }
 
 // -----------------------------------------------------------------------------
