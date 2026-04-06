@@ -45,7 +45,8 @@ struct PackageResultsWidgets {
   GtkScrolledWindow *list_scroller = nullptr;
   GtkPaned *inner_paned = nullptr;
   GtkLabel *details_label = nullptr;
-  GtkLabel *files_label = nullptr;
+  // Text buffer owned by the Files tab text view.
+  GtkTextBuffer *files_buffer = nullptr;
   GtkLabel *deps_label = nullptr;
   GtkLabel *changelog_label = nullptr;
   GtkLabel *count_label = nullptr;
