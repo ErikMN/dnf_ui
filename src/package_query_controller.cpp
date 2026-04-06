@@ -16,11 +16,6 @@
 #include <map>
 #include <mutex>
 
-// Forward declarations
-static void add_to_history(SearchWidgets *widgets, const std::string &term);
-static void perform_search(SearchWidgets *widgets, const std::string &term);
-static void cancel_active_package_list_request(SearchWidgets *widgets);
-
 // Cache one visible result set per search term and flag combination.
 // Entries are tied to the BaseManager generation that produced them so a Base
 // rebuild cannot serve stale package metadata back into the UI.
@@ -33,7 +28,31 @@ static std::map<std::string, CachedSearchResults> g_search_cache;
 static std::mutex g_cache_mutex; // Protects g_search_cache
 
 // -----------------------------------------------------------------------------
-// Task payload helpers for background search requests
+// Clear cached search results.
+// Used both by the Clear Cache button and after successful Base rebuilds.
+// -----------------------------------------------------------------------------
+void
+package_query_clear_search_cache()
+{
+  std::lock_guard<std::mutex> lock(g_cache_mutex);
+  g_search_cache.clear();
+}
+
+// -----------------------------------------------------------------------------
+// Helper: Build a unique cache key based on search flags and term
+// -----------------------------------------------------------------------------
+static std::string
+cache_key_for(const std::string &term)
+{
+  std::string key = (g_search_in_description.load() ? "desc:" : "name:");
+  key += (g_exact_match.load() ? "exact:" : "contains:");
+  key += term;
+
+  return key;
+}
+
+// -----------------------------------------------------------------------------
+// Task payload helpers for background package queries
 // -----------------------------------------------------------------------------
 struct SearchTaskData {
   char *term;
@@ -55,6 +74,16 @@ search_task_data_free(gpointer p)
   g_free(d->cache_key);
   g_free(d);
 }
+
+// Task data for package-list operations started from the main action buttons.
+// We snapshot the BaseManager generation at dispatch time so the UI can ignore
+// results produced against an older Base after a rebuild or transaction.
+// request_id keeps the active Stop button state matched to the task that
+// currently owns it.
+struct PackageListTaskData {
+  uint64_t request_id;
+  uint64_t generation;
+};
 
 // Return true when the shared package-list request state currently owns a running task.
 static bool
@@ -192,30 +221,6 @@ cancel_active_package_list_request(SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Clear cached search results.
-// Used both by the Clear Cache button and after successful Base rebuilds.
-// -----------------------------------------------------------------------------
-void
-package_query_clear_search_cache()
-{
-  std::lock_guard<std::mutex> lock(g_cache_mutex);
-  g_search_cache.clear();
-}
-
-// -----------------------------------------------------------------------------
-// Helper: Build a unique cache key based on search flags and term
-// -----------------------------------------------------------------------------
-static std::string
-cache_key_for(const std::string &term)
-{
-  std::string key = (g_search_in_description.load() ? "desc:" : "name:");
-  key += (g_exact_match.load() ? "exact:" : "contains:");
-  key += term;
-
-  return key;
-}
-
-// -----------------------------------------------------------------------------
 // Async Operations
 // GTK4 uses GTask for running expensive libdnf5 operations in worker threads
 // without freezing the UI. These functions handle installed and available
@@ -228,16 +233,6 @@ cache_key_for(const std::string &term)
 // packages. Runs in a worker thread via GTask to avoid blocking the GTK UI.
 // Returns a std::vector<PackageRow> containing structured package metadata.
 // -----------------------------------------------------------------------------
-
-// Task data for package-list operations started from the main action buttons.
-// We snapshot the BaseManager generation at dispatch time so the UI can ignore
-// results produced against an older Base after a rebuild or transaction.
-// request_id keeps the active Stop button state matched to the task that
-// currently owns it.
-struct PackageListTaskData {
-  uint64_t request_id;
-  uint64_t generation;
-};
 
 static void
 on_list_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
@@ -467,6 +462,93 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
+// Add new search term to search history if not already present
+// -----------------------------------------------------------------------------
+static void
+add_to_history(SearchWidgets *widgets, const std::string &term)
+{
+  if (term.empty()) {
+    return;
+  }
+
+  // Prevent duplicates in history
+  for (const auto &s : widgets->query_state.history) {
+    if (s == term) {
+      return;
+    }
+  }
+
+  // Append new term to internal list and UI widget
+  widgets->query_state.history.push_back(term);
+  GtkWidget *row = gtk_label_new(term.c_str());
+  gtk_label_set_xalign(GTK_LABEL(row), 0.0);
+  gtk_list_box_append(widgets->query.history_list, row);
+}
+
+// -----------------------------------------------------------------------------
+// Perform search operation (cached or live)
+// -----------------------------------------------------------------------------
+static void
+perform_search(SearchWidgets *widgets, const std::string &term)
+{
+  if (term.empty()) {
+    return;
+  }
+
+  // Ensure cache key reflects current checkboxes even when triggered from history
+  g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox));
+  g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox));
+
+  gtk_editable_set_text(GTK_EDITABLE(widgets->query.entry), term.c_str());
+  ui_helpers_set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
+  widgets->results.selected_nevra.clear();
+
+  // Check cache first.
+  // Reuse only results produced from the current Base generation so refreshes
+  // and transaction rebuilds cannot surface outdated package metadata.
+  {
+    std::lock_guard<std::mutex> lock(g_cache_mutex);
+    uint64_t generation = BaseManager::instance().current_generation();
+    auto it = g_search_cache.find(cache_key_for(term));
+    if (it != g_search_cache.end()) {
+      if (it->second.generation != generation) {
+        g_search_cache.erase(it);
+      } else {
+        // Use cached results and skip background thread.
+        package_table_fill_package_view(widgets, it->second.packages);
+
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.packages.size());
+        ui_helpers_set_status(widgets->query.status_label, msg, "gray");
+        package_info_reset_details_view(widgets);
+
+        return;
+      }
+    }
+  }
+
+  // Otherwise perform real background search
+  widgets_spinner_acquire(widgets->query.spinner);
+
+  const std::string key = cache_key_for(term);
+  SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
+  td->term = g_strdup(term.c_str());
+  td->cache_key = g_strdup(key.c_str());
+  td->request_id = widgets->query_state.next_package_list_request_id++;
+  td->generation = BaseManager::instance().current_generation();
+
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  // The shared request helper owns disabling the search controls and flipping
+  // the initiating Search button to Stop.
+  begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::SEARCH);
+  GTask *task = g_task_new(nullptr, c, on_search_task_finished, widgets);
+  g_task_set_task_data(task, td, search_task_data_free);
+  g_task_run_in_thread(task, on_search_task);
+  g_object_unref(task);
+  g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
 // UI callback: List Installed button
 // Starts async listing of all installed packages
 // The same button changes to Stop while the worker task is running.
@@ -605,93 +687,6 @@ package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
   ui_helpers_set_status(widgets->query.status_label, "Ready.", "gray");
   package_info_reset_details_view(widgets);
   ui_helpers_update_action_button_labels(widgets, "");
-}
-
-// -----------------------------------------------------------------------------
-// Add new search term to search history if not already present
-// -----------------------------------------------------------------------------
-static void
-add_to_history(SearchWidgets *widgets, const std::string &term)
-{
-  if (term.empty()) {
-    return;
-  }
-
-  // Prevent duplicates in history
-  for (const auto &s : widgets->query_state.history) {
-    if (s == term) {
-      return;
-    }
-  }
-
-  // Append new term to internal list and UI widget
-  widgets->query_state.history.push_back(term);
-  GtkWidget *row = gtk_label_new(term.c_str());
-  gtk_label_set_xalign(GTK_LABEL(row), 0.0);
-  gtk_list_box_append(widgets->query.history_list, row);
-}
-
-// -----------------------------------------------------------------------------
-// Perform search operation (cached or live)
-// -----------------------------------------------------------------------------
-static void
-perform_search(SearchWidgets *widgets, const std::string &term)
-{
-  if (term.empty()) {
-    return;
-  }
-
-  // Ensure cache key reflects current checkboxes even when triggered from history
-  g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox));
-  g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox));
-
-  gtk_editable_set_text(GTK_EDITABLE(widgets->query.entry), term.c_str());
-  ui_helpers_set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
-  widgets->results.selected_nevra.clear();
-
-  // Check cache first.
-  // Reuse only results produced from the current Base generation so refreshes
-  // and transaction rebuilds cannot surface outdated package metadata.
-  {
-    std::lock_guard<std::mutex> lock(g_cache_mutex);
-    uint64_t generation = BaseManager::instance().current_generation();
-    auto it = g_search_cache.find(cache_key_for(term));
-    if (it != g_search_cache.end()) {
-      if (it->second.generation != generation) {
-        g_search_cache.erase(it);
-      } else {
-        // Use cached results and skip background thread.
-        package_table_fill_package_view(widgets, it->second.packages);
-
-        char msg[256];
-        snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.packages.size());
-        ui_helpers_set_status(widgets->query.status_label, msg, "gray");
-        package_info_reset_details_view(widgets);
-
-        return;
-      }
-    }
-  }
-
-  // Otherwise perform real background search
-  widgets_spinner_acquire(widgets->query.spinner);
-
-  const std::string key = cache_key_for(term);
-  SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
-  td->term = g_strdup(term.c_str());
-  td->cache_key = g_strdup(key.c_str());
-  td->request_id = widgets->query_state.next_package_list_request_id++;
-  td->generation = BaseManager::instance().current_generation();
-
-  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  // The shared request helper owns disabling the search controls and flipping
-  // the initiating Search button to Stop.
-  begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::SEARCH);
-  GTask *task = g_task_new(nullptr, c, on_search_task_finished, widgets);
-  g_task_set_task_data(task, td, search_task_data_free);
-  g_task_run_in_thread(task, on_search_task);
-  g_object_unref(task);
-  g_object_unref(c);
 }
 
 // -----------------------------------------------------------------------------
