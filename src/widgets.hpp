@@ -44,11 +44,11 @@ struct PackageResultsWidgets {
   GtkListBox *listbox = nullptr;
   GtkScrolledWindow *list_scroller = nullptr;
   GtkPaned *inner_paned = nullptr;
-  GtkLabel *details_label = nullptr;
-  // Text buffer owned by the Files tab text view.
+  // Text buffers owned by the details notebook text views.
+  GtkTextBuffer *details_buffer = nullptr;
   GtkTextBuffer *files_buffer = nullptr;
-  GtkLabel *deps_label = nullptr;
-  GtkLabel *changelog_label = nullptr;
+  GtkTextBuffer *deps_buffer = nullptr;
+  GtkTextBuffer *changelog_buffer = nullptr;
   GtkLabel *count_label = nullptr;
   std::vector<PackageRow> current_packages;
   std::string selected_nevra;

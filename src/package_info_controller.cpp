@@ -62,15 +62,15 @@ return_package_info_task_cancelled(GTask *task)
   g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Package info load was cancelled.");
 }
 
-// Replace text in the Files tab buffer owned by the details notebook.
+// Replace text in a details notebook buffer.
 static void
-set_files_text(SearchWidgets *widgets, const char *text)
+set_notebook_text(GtkTextBuffer *buffer, const char *text)
 {
-  if (!widgets || !widgets->results.files_buffer) {
+  if (!buffer) {
     return;
   }
 
-  gtk_text_buffer_set_text(widgets->results.files_buffer, text ? text : "", -1);
+  gtk_text_buffer_set_text(buffer, text ? text : "", -1);
 }
 
 // Reset the details notebook after repopulating the main package view.
@@ -81,10 +81,10 @@ package_info_reset_details_view(SearchWidgets *widgets)
     return;
   }
 
-  gtk_label_set_text(widgets->results.details_label, "Select a package for details.");
-  set_files_text(widgets, "Select an installed package to view its file list.");
-  gtk_label_set_text(widgets->results.deps_label, "Select a package to view dependencies.");
-  gtk_label_set_text(widgets->results.changelog_label, "Select a package to view its changelog.");
+  set_notebook_text(widgets->results.details_buffer, "Select a package for details.");
+  set_notebook_text(widgets->results.files_buffer, "Select an installed package to view its file list.");
+  set_notebook_text(widgets->results.deps_buffer, "Select a package to view dependencies.");
+  set_notebook_text(widgets->results.changelog_buffer, "Select a package to view its changelog.");
 }
 
 // Disable transaction actions when no package row is currently selected.
@@ -224,18 +224,19 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   // Display general package information
-  gtk_label_set_text(widgets->results.details_label, result->info ? result->info : "No details found.");
+  set_notebook_text(widgets->results.details_buffer, result->info ? result->info : "No details found.");
 
   // Display the file list fetched by the background task.
-  set_files_text(widgets, result->files ? result->files : "Select an installed package to view its file list.");
+  set_notebook_text(widgets->results.files_buffer,
+                    result->files ? result->files : "Select an installed package to view its file list.");
 
   // Display dependencies fetched by the background task.
-  gtk_label_set_text(widgets->results.deps_label,
-                     result->deps ? result->deps : "Select a package to view dependencies.");
+  set_notebook_text(widgets->results.deps_buffer,
+                    result->deps ? result->deps : "Select a package to view dependencies.");
 
   // Display changelog fetched by the background task.
-  gtk_label_set_text(widgets->results.changelog_label,
-                     result->changelog ? result->changelog : "Select a package to view its changelog.");
+  set_notebook_text(widgets->results.changelog_buffer,
+                    result->changelog ? result->changelog : "Select a package to view its changelog.");
 
   ui_helpers_set_status(widgets->query.status_label, "Package info loaded.", "green");
   info_task_result_free(result);

@@ -54,10 +54,10 @@ struct AppWidgets {
   GtkWidget *listbox = NULL;
   GtkWidget *notebook = NULL;
 
-  GtkWidget *details_label = NULL;
+  GtkTextBuffer *details_buffer = NULL;
   GtkTextBuffer *files_buffer = NULL;
-  GtkWidget *deps_label = NULL;
-  GtkWidget *changelog_label = NULL;
+  GtkTextBuffer *deps_buffer = NULL;
+  GtkTextBuffer *changelog_buffer = NULL;
   GtkWidget *pending_list = NULL;
 
   GtkWidget *count_label = NULL;
@@ -70,8 +70,7 @@ struct AppWidgets {
 static void activate(GtkApplication *app, gpointer user_data);
 static GtkWidget *create_window(GtkApplication *app);
 static GtkWidget *create_thin_separator(void);
-static GtkWidget *create_scrolled_text_label(const char *text, GtkWidget **out_label);
-static GtkWidget *create_scrolled_file_text_view(const char *text, GtkTextBuffer **out_buffer);
+static GtkWidget *create_scrolled_text_view(const char *text, GtkWrapMode wrap_mode, GtkTextBuffer **out_buffer);
 static void setup_shortcuts(GtkWidget *window, GtkWidget *entry);
 static void build_main_ui(AppWidgets *ui);
 static SearchWidgets *create_search_widgets(const AppWidgets *ui);
@@ -130,39 +129,10 @@ create_thin_separator(void)
 }
 
 // -----------------------------------------------------------------------------
-// Create selectable top-aligned text label inside a scrolled window
+// Create selectable read-only text view inside a scrolled window
 // -----------------------------------------------------------------------------
 static GtkWidget *
-create_scrolled_text_label(const char *text, GtkWidget **out_label)
-{
-  GtkWidget *scrolled = gtk_scrolled_window_new();
-  gtk_widget_set_hexpand(scrolled, TRUE);
-  gtk_widget_set_vexpand(scrolled, TRUE);
-
-  GtkWidget *label = gtk_label_new(text);
-  gtk_label_set_xalign(GTK_LABEL(label), 0.0);
-  gtk_label_set_wrap(GTK_LABEL(label), TRUE);
-  gtk_label_set_selectable(GTK_LABEL(label), TRUE);
-  gtk_widget_set_focusable(label, FALSE);
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), label);
-  gtk_widget_set_valign(label, GTK_ALIGN_START);
-  gtk_widget_set_margin_start(label, 10);
-  gtk_widget_set_margin_end(label, 10);
-  gtk_widget_set_margin_top(label, 10);
-  gtk_widget_set_margin_bottom(label, 10);
-
-  if (out_label) {
-    *out_label = label;
-  }
-
-  return scrolled;
-}
-
-// -----------------------------------------------------------------------------
-// Create selectable file-list text view inside a scrolled window
-// -----------------------------------------------------------------------------
-static GtkWidget *
-create_scrolled_file_text_view(const char *text, GtkTextBuffer **out_buffer)
+create_scrolled_text_view(const char *text, GtkWrapMode wrap_mode, GtkTextBuffer **out_buffer)
 {
   GtkWidget *scrolled = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scrolled, TRUE);
@@ -172,7 +142,8 @@ create_scrolled_file_text_view(const char *text, GtkTextBuffer **out_buffer)
   GtkWidget *view = gtk_text_view_new();
   gtk_text_view_set_editable(GTK_TEXT_VIEW(view), FALSE);
   gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(view), FALSE);
-  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(view), GTK_WRAP_NONE);
+  gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(view), wrap_mode);
+  gtk_widget_set_focusable(view, TRUE);
   gtk_widget_set_margin_start(view, 10);
   gtk_widget_set_margin_end(view, 10);
   gtk_widget_set_margin_top(view, 10);
@@ -402,28 +373,10 @@ build_main_ui(AppWidgets *ui)
   ui->notebook = notebook;
 
   // --- Tab 1: Package Info ---
-  GtkWidget *scrolled_details = gtk_scrolled_window_new();
-  gtk_widget_set_hexpand(scrolled_details, TRUE);
-  gtk_widget_set_vexpand(scrolled_details, TRUE);
-
-  // container to keep label top-aligned
-  GtkWidget *details_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  gtk_widget_set_valign(details_box, GTK_ALIGN_START);
-  gtk_widget_set_margin_start(details_box, 10);
-  gtk_widget_set_margin_end(details_box, 10);
-  gtk_widget_set_margin_top(details_box, 10);
-  gtk_widget_set_margin_bottom(details_box, 10);
-  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_details), details_box);
-
-  GtkWidget *details_label = gtk_label_new("Select a package for details.");
-  gtk_label_set_xalign(GTK_LABEL(details_label), 0.0);
-  gtk_label_set_wrap(GTK_LABEL(details_label), TRUE);
-  gtk_label_set_wrap_mode(GTK_LABEL(details_label), PANGO_WRAP_WORD);
-  gtk_label_set_selectable(GTK_LABEL(details_label), TRUE);
-  // Keep package text copyable without stealing focus when switching tabs.
-  gtk_widget_set_focusable(details_label, FALSE);
-  gtk_box_append(GTK_BOX(details_box), details_label);
-  ui->details_label = details_label;
+  GtkTextBuffer *details_buffer = NULL;
+  GtkWidget *scrolled_details =
+      create_scrolled_text_view("Select a package for details.", GTK_WRAP_WORD, &details_buffer);
+  ui->details_buffer = details_buffer;
 
   GtkWidget *tab_label_info = gtk_label_new("Info");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_details, tab_label_info);
@@ -431,25 +384,26 @@ build_main_ui(AppWidgets *ui)
   // --- Tab 2: File List ---
   GtkTextBuffer *files_buffer = NULL;
   GtkWidget *scrolled_files =
-      create_scrolled_file_text_view("Select an installed package to view its file list.", &files_buffer);
+      create_scrolled_text_view("Select an installed package to view its file list.", GTK_WRAP_NONE, &files_buffer);
   ui->files_buffer = files_buffer;
 
   GtkWidget *tab_label_files = gtk_label_new("Files");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_files, tab_label_files);
 
   // --- Tab 3: Dependencies ---
-  GtkWidget *deps_label = NULL;
-  GtkWidget *scrolled_deps = create_scrolled_text_label("Select a package to view dependencies.", &deps_label);
-  ui->deps_label = deps_label;
+  GtkTextBuffer *deps_buffer = NULL;
+  GtkWidget *scrolled_deps =
+      create_scrolled_text_view("Select a package to view dependencies.", GTK_WRAP_WORD, &deps_buffer);
+  ui->deps_buffer = deps_buffer;
 
   GtkWidget *tab_label_deps = gtk_label_new("Dependencies");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_deps, tab_label_deps);
 
   // --- Tab 4: Changelog ---
-  GtkWidget *changelog_label = NULL;
+  GtkTextBuffer *changelog_buffer = NULL;
   GtkWidget *scrolled_changelog =
-      create_scrolled_text_label("Select a package to view its changelog.", &changelog_label);
-  ui->changelog_label = changelog_label;
+      create_scrolled_text_view("Select a package to view its changelog.", GTK_WRAP_WORD, &changelog_buffer);
+  ui->changelog_buffer = changelog_buffer;
 
   GtkWidget *tab_label_changelog = gtk_label_new("Changelog");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_changelog, tab_label_changelog);
@@ -509,10 +463,10 @@ create_search_widgets(const AppWidgets *ui)
   widgets->results.listbox = GTK_LIST_BOX(ui->listbox);
   widgets->results.list_scroller = GTK_SCROLLED_WINDOW(ui->scrolled_list);
   widgets->results.inner_paned = GTK_PANED(ui->inner_paned);
-  widgets->results.details_label = GTK_LABEL(ui->details_label);
+  widgets->results.details_buffer = ui->details_buffer;
   widgets->results.files_buffer = ui->files_buffer;
-  widgets->results.deps_label = GTK_LABEL(ui->deps_label);
-  widgets->results.changelog_label = GTK_LABEL(ui->changelog_label);
+  widgets->results.deps_buffer = ui->deps_buffer;
+  widgets->results.changelog_buffer = ui->changelog_buffer;
   widgets->results.count_label = GTK_LABEL(ui->count_label);
 
   widgets->transaction.install_button = GTK_BUTTON(ui->install_button);
