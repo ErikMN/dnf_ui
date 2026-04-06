@@ -158,6 +158,17 @@ package_item_from_object(GObject *obj)
   return static_cast<const PackageItem *>(g_object_get_qdata(obj, package_row_quark()));
 }
 
+// Read the mutable package wrapper stored on a GTK list item.
+static PackageItem *
+mutable_package_item_from_object(GObject *obj)
+{
+  if (!obj) {
+    return nullptr;
+  }
+
+  return static_cast<PackageItem *>(g_object_get_qdata(obj, package_row_quark()));
+}
+
 // Map a package wrapper back to the package row used elsewhere in the UI.
 static const PackageRow *
 package_row_from_object(GObject *obj)
@@ -274,6 +285,76 @@ column_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_da
   }
 
   return compare_package_items(*lhs, *rhs, data->kind);
+}
+
+// -----------------------------------------------------------------------------
+// Package status refresh helpers
+// -----------------------------------------------------------------------------
+
+// Apply the current status text and color to one status label.
+static void
+update_status_label(GtkWidget *label, SearchWidgets *widgets, const PackageRow &row)
+{
+  PackageItem item { row, {}, 0 };
+  fill_package_item_status(widgets, item);
+  gtk_label_set_text(GTK_LABEL(label), item.status_text.c_str());
+
+  clear_status_css(label);
+  if (const char *pending_class = pending_css_class(widgets, row.nevra)) {
+    gtk_widget_add_css_class(label, pending_class);
+  } else if (dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED) {
+    gtk_widget_add_css_class(label, "package-status-installed");
+  } else if (dnf_backend_get_package_install_state(row) == PackageInstallState::UPGRADEABLE) {
+    gtk_widget_add_css_class(label, "package-status-upgradeable");
+  } else {
+    gtk_widget_add_css_class(label, "package-status-available");
+  }
+}
+
+// Refresh stored package status values without changing the GTK model.
+static void
+refresh_model_status_values(GtkColumnView *view, SearchWidgets *widgets)
+{
+  GtkSelectionModel *model = gtk_column_view_get_model(view);
+  if (!model || !GTK_IS_SINGLE_SELECTION(model)) {
+    return;
+  }
+
+  GtkSingleSelection *selection = GTK_SINGLE_SELECTION(model);
+  GListModel *items_model = gtk_single_selection_get_model(selection);
+  if (!items_model) {
+    return;
+  }
+
+  guint n_items = g_list_model_get_n_items(items_model);
+  for (guint i = 0; i < n_items; ++i) {
+    GObject *obj = G_OBJECT(g_list_model_get_item(items_model, i));
+    PackageItem *item = mutable_package_item_from_object(obj);
+    if (item) {
+      fill_package_item_status(widgets, *item);
+    }
+    g_object_unref(obj);
+  }
+}
+
+// Refresh the status cells that are currently realized by the virtualized view.
+static void
+refresh_visible_status_labels(GtkWidget *widget, SearchWidgets *widgets)
+{
+  if (!widget) {
+    return;
+  }
+
+  if (GTK_IS_LABEL(widget) && g_object_get_data(G_OBJECT(widget), "package-status-cell")) {
+    PackageRow *row = static_cast<PackageRow *>(g_object_get_data(G_OBJECT(widget), "package-context-row"));
+    if (row) {
+      update_status_label(widget, widgets, *row);
+    }
+  }
+
+  for (GtkWidget *child = gtk_widget_get_first_child(widget); child; child = gtk_widget_get_next_sibling(child)) {
+    refresh_visible_status_labels(child, widgets);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -454,6 +535,8 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
 
         if (kind == PackageColumnKind::STATUS) {
           gtk_widget_add_css_class(label, "package-status");
+          // Mark status cells so local status refreshes can update visible rows.
+          g_object_set_data(G_OBJECT(label), "package-status-cell", GINT_TO_POINTER(1));
         }
         if (kind == PackageColumnKind::VERSION || kind == PackageColumnKind::ARCH || kind == PackageColumnKind::REPO) {
           gtk_widget_add_css_class(label, "package-meta");
@@ -510,22 +593,11 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                            delete static_cast<PackageRow *>(p);
                          });
 
-                     std::string text = column_text(*package_item, kind);
-                     gtk_label_set_text(GTK_LABEL(label), text.c_str());
-
                      if (kind == PackageColumnKind::STATUS) {
-                       clear_status_css(label);
-
-                       const PackageRow &row = package_item->row;
-                       if (const char *pending_class = pending_css_class(widgets, row.nevra)) {
-                         gtk_widget_add_css_class(label, pending_class);
-                       } else if (dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED) {
-                         gtk_widget_add_css_class(label, "package-status-installed");
-                       } else if (dnf_backend_get_package_install_state(row) == PackageInstallState::UPGRADEABLE) {
-                         gtk_widget_add_css_class(label, "package-status-upgradeable");
-                       } else {
-                         gtk_widget_add_css_class(label, "package-status-available");
-                       }
+                       update_status_label(label, widgets, package_item->row);
+                     } else {
+                       std::string text = column_text(*package_item, kind);
+                       gtk_label_set_text(GTK_LABEL(label), text.c_str());
                      }
                    }),
                    nullptr);
@@ -639,6 +711,23 @@ package_table_get_selected_package_row(SearchWidgets *widgets, PackageRow &out_p
 
   g_object_unref(obj);
   return ok;
+}
+
+// Refresh package status text and colors without rebuilding the package table.
+void
+package_table_refresh_statuses(SearchWidgets *widgets)
+{
+  if (!widgets || !widgets->results.list_scroller) {
+    return;
+  }
+
+  GtkWidget *child = gtk_scrolled_window_get_child(widgets->results.list_scroller);
+  if (!child || !GTK_IS_COLUMN_VIEW(child)) {
+    return;
+  }
+
+  refresh_model_status_values(GTK_COLUMN_VIEW(child), widgets);
+  refresh_visible_status_labels(child, widgets);
 }
 
 // -----------------------------------------------------------------------------

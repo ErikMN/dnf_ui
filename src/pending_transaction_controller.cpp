@@ -238,7 +238,7 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
   dnf_backend_refresh_installed_nevras();
 
   if (!widgets->results.current_packages.empty()) {
-    widgets_refresh_current_package_view(widgets);
+    package_table_refresh_statuses(widgets);
   }
 }
 
@@ -368,8 +368,8 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
   }
   ui_helpers_update_action_button_labels(widgets, pkg.nevra);
 
-  // Refresh the package table to apply pending-state badges.
-  widgets_refresh_current_package_view(widgets);
+  // Refresh status badges without rebuilding the package table.
+  package_table_refresh_statuses(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -403,8 +403,8 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
   }
   ui_helpers_update_action_button_labels(widgets, pkg.nevra);
 
-  // Refresh the package table to apply pending-state badges.
-  widgets_refresh_current_package_view(widgets);
+  // Refresh status badges without rebuilding the package table.
+  package_table_refresh_statuses(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -435,7 +435,7 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
   }
   ui_helpers_update_action_button_labels(widgets, pkg.nevra);
 
-  widgets_refresh_current_package_view(widgets);
+  package_table_refresh_statuses(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -455,8 +455,8 @@ pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_d
   widgets->transaction.actions.clear();
   refresh_pending_tab(widgets);
 
-  // Refresh the package table to remove pending-state badges.
-  widgets_refresh_current_package_view(widgets);
+  // Refresh status badges without rebuilding the package table.
+  package_table_refresh_statuses(widgets);
 
   char msg[256];
   snprintf(msg, sizeof(msg), "Cleared %zu pending action%s.", count, count == 1 ? "" : "s");
