@@ -90,9 +90,12 @@ test: dnf_ui_tests
 	@echo "*** Running backend test suite ***"
 	@./dnf_ui_tests
 
+# To test dark or light themes in Docker:
+# make dockerrun THEME=dark
+# make dockerrun THEME=light
 .PHONY: dockerrun
 dockerrun:
-	@./docker/docker_build.sh
+	@THEME="$(THEME)" ./docker/docker_build.sh
 
 .PHONY: dockertest
 dockertest:

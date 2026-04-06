@@ -18,6 +18,27 @@ color_print() {
 
 IMAGE_NAME="dnfui-dev"
 CONTAINER_NAME="dnfui-run"
+THEME_MODE="${THEME:-default}"
+
+# Optional GTK theme override for Docker UI testing:
+THEME_OPTS=()
+case "$THEME_MODE" in
+"" | "default")
+  color_print "$FMT_BLUE" "*** GTK theme: default ***"
+  ;;
+"dark")
+  color_print "$FMT_BLUE" "*** GTK theme: dark ***"
+  THEME_OPTS=(-e GTK_THEME=Adwaita:dark)
+  ;;
+"light")
+  color_print "$FMT_BLUE" "*** GTK theme: light ***"
+  THEME_OPTS=(-e GTK_THEME=Adwaita)
+  ;;
+*)
+  color_print "$FMT_RED" "*** Invalid THEME value: $THEME_MODE. Use dark, light, or default. ***"
+  exit 1
+  ;;
+esac
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,6 +75,7 @@ docker run --rm -it \
   --init \
   -w /workspace \
   "${DISPLAY_OPTS[@]}" \
+  "${THEME_OPTS[@]}" \
   --device /dev/dri \
   -e GSETTINGS_BACKEND=memory \
   -e FINAL \
