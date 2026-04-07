@@ -8,6 +8,7 @@
 #include "widgets.hpp"
 
 #include "base_manager.hpp"
+#include "debug_trace.hpp"
 #include "dnf_backend.hpp"
 #include "package_info_controller.hpp"
 #include "ui_helpers.hpp"
@@ -390,11 +391,18 @@ on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancella
   const SearchTaskData *td = static_cast<const SearchTaskData *>(task_data);
   const char *pattern = td ? td->term : "";
   try {
+    DNF_UI_TRACE(
+        "Search task start request=%llu pattern=%s", td ? static_cast<unsigned long long>(td->request_id) : 0, pattern);
     auto *results =
         new std::vector<PackageRow>(dnf_backend_search_available_package_rows_interruptible(pattern, cancellable));
+    DNF_UI_TRACE("Search task done request=%llu results=%zu",
+                 td ? static_cast<unsigned long long>(td->request_id) : 0,
+                 results->size());
     // Ensure results are freed if never propagated (stale/cancel path).
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
+    DNF_UI_TRACE(
+        "Search task failed request=%llu error=%s", td ? static_cast<unsigned long long>(td->request_id) : 0, e.what());
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
   }
 }

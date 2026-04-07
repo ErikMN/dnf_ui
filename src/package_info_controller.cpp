@@ -7,10 +7,12 @@
 #include "package_info_controller.hpp"
 
 #include "base_manager.hpp"
+#include "debug_trace.hpp"
 #include "ui_helpers.hpp"
 #include "widgets.hpp"
 #include "widgets_internal.hpp"
 
+#include <cstring>
 #include <unistd.h>
 
 // Task data for package-info operation.
@@ -133,9 +135,13 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
 
   InfoTaskData *td = static_cast<InfoTaskData *>(task_data);
   try {
+    DNF_UI_TRACE("Package info task start nevra=%s", td ? td->nevra : "");
     InfoTaskResult *result = static_cast<InfoTaskResult *>(g_malloc0(sizeof *result));
 
     result->info = g_strdup(dnf_backend_get_package_info(td->nevra).c_str());
+    DNF_UI_TRACE("Package info details loaded nevra=%s bytes=%zu",
+                 td ? td->nevra : "",
+                 result->info ? std::strlen(result->info) : 0);
 
     if (cancellable && g_cancellable_is_cancelled(cancellable)) {
       info_task_result_free(result);
@@ -144,9 +150,14 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
     }
 
     try {
+      DNF_UI_TRACE("Package info files load start nevra=%s", td ? td->nevra : "");
       result->files = g_strdup(dnf_backend_get_installed_package_files(td->nevra).c_str());
+      DNF_UI_TRACE("Package info files loaded nevra=%s bytes=%zu",
+                   td ? td->nevra : "",
+                   result->files ? std::strlen(result->files) : 0);
     } catch (const std::exception &e) {
       result->files = g_strdup(e.what());
+      DNF_UI_TRACE("Package info files failed nevra=%s error=%s", td ? td->nevra : "", e.what());
     }
 
     if (cancellable && g_cancellable_is_cancelled(cancellable)) {
@@ -156,9 +167,14 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
     }
 
     try {
+      DNF_UI_TRACE("Package info dependencies load start nevra=%s", td ? td->nevra : "");
       result->deps = g_strdup(dnf_backend_get_package_deps(td->nevra).c_str());
+      DNF_UI_TRACE("Package info dependencies loaded nevra=%s bytes=%zu",
+                   td ? td->nevra : "",
+                   result->deps ? std::strlen(result->deps) : 0);
     } catch (const std::exception &e) {
       result->deps = g_strdup(e.what());
+      DNF_UI_TRACE("Package info dependencies failed nevra=%s error=%s", td ? td->nevra : "", e.what());
     }
 
     if (cancellable && g_cancellable_is_cancelled(cancellable)) {
@@ -168,13 +184,20 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
     }
 
     try {
+      DNF_UI_TRACE("Package info changelog load start nevra=%s", td ? td->nevra : "");
       result->changelog = g_strdup(dnf_backend_get_package_changelog(td->nevra).c_str());
+      DNF_UI_TRACE("Package info changelog loaded nevra=%s bytes=%zu",
+                   td ? td->nevra : "",
+                   result->changelog ? std::strlen(result->changelog) : 0);
     } catch (const std::exception &e) {
       result->changelog = g_strdup(e.what());
+      DNF_UI_TRACE("Package info changelog failed nevra=%s error=%s", td ? td->nevra : "", e.what());
     }
 
+    DNF_UI_TRACE("Package info task done nevra=%s", td ? td->nevra : "");
     g_task_return_pointer(task, result, info_task_result_free);
   } catch (const std::exception &e) {
+    DNF_UI_TRACE("Package info task failed nevra=%s error=%s", td ? td->nevra : "", e.what());
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
   }
 }

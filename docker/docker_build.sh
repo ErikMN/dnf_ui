@@ -80,6 +80,7 @@ docker run --rm -it \
   -e GSETTINGS_BACKEND=memory \
   -e FINAL \
   -e ASAN \
+  -e DEBUG_TRACE \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
   bash -c "make clean && make -j$(nproc) && ./dnf_ui"

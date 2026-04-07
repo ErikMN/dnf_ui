@@ -63,6 +63,11 @@ else
   endif
 endif
 
+# DEBUG_TRACE=y
+ifeq ($(DEBUG_TRACE), y)
+  CXXFLAGS += -DDNF_UI_DEBUG_TRACE
+endif
+
 .PHONY: all
 all: $(PROGS)
 
@@ -95,7 +100,7 @@ test: dnf_ui_tests
 # make dockerrun THEME=light
 .PHONY: dockerrun
 dockerrun:
-	@THEME="$(THEME)" ./docker/docker_build.sh
+	@THEME="$(THEME)" DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_build.sh
 
 .PHONY: dockertest
 dockertest:

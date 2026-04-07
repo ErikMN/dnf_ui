@@ -5,6 +5,7 @@
 // - Supports manual rebuilds when repositories are refreshed
 // -----------------------------------------------------------------------------
 #include "base_manager.hpp"
+#include "debug_trace.hpp"
 
 #include <libdnf5/conf/const.hpp>
 
@@ -106,28 +107,40 @@ BaseManager::rebuild()
 void
 BaseManager::ensure_base_initialized()
 {
+  DNF_UI_TRACE("BaseManager initialize start");
+
   // Create and fully initialize a new libdnf5::Base
   auto base = std::make_shared<libdnf5::Base>();
+  DNF_UI_TRACE("BaseManager load config start");
   base->load_config();
+  DNF_UI_TRACE("BaseManager load config done");
 
   // Changelog lookups for available packages need repo "other" metadata.
   base->get_config().get_optional_metadata_types_option().add_item(libdnf5::Option::Priority::RUNTIME,
                                                                    libdnf5::METADATA_TYPE_OTHER);
+  DNF_UI_TRACE("BaseManager setup start");
   base->setup();
+  DNF_UI_TRACE("BaseManager setup done");
 
   // Load system repositories
   auto repo_sack = base->get_repo_sack();
+  DNF_UI_TRACE("BaseManager create repos start");
   repo_sack->create_repos_from_system_configuration();
+  DNF_UI_TRACE("BaseManager create repos done");
   // Force load all enabled repos; skip disabled safely
   try {
+    DNF_UI_TRACE("BaseManager load repos start");
     repo_sack->load_repos();
+    DNF_UI_TRACE("BaseManager load repos done");
   } catch (const std::exception &e) {
     std::cerr << "Warning: repo load failed: " << e.what() << std::endl;
+    DNF_UI_TRACE("BaseManager load repos failed: %s", e.what());
     throw;
   }
 
   // Make this new Base the shared instance used by the rest of the application
   base_ptr = base;
+  DNF_UI_TRACE("BaseManager initialize done");
 }
 
 // -----------------------------------------------------------------------------
