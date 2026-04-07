@@ -13,6 +13,8 @@
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
 
+#include <unistd.h>
+
 // Task payload for the async apply transaction worker.
 struct ApplyTaskData {
   std::vector<std::string> install;
@@ -39,6 +41,29 @@ pending_jump_button_data_free(gpointer p)
 {
   PendingJumpButtonData *d = static_cast<PendingJumpButtonData *>(p);
   delete d;
+}
+
+// FIXME: Replace with Polkit:
+static bool
+transactions_allowed()
+{
+  return geteuid() == 0;
+}
+
+// Show a consistent status message when transaction actions are attempted
+// without the privileges required to execute them.
+static bool
+require_transaction_privileges(SearchWidgets *widgets, const char *status_message)
+{
+  if (transactions_allowed()) {
+    return true;
+  }
+
+  if (widgets) {
+    ui_helpers_set_status(widgets->query.status_label, status_message, "red");
+  }
+
+  return false;
 }
 
 // Show the selected pending action in the main package list so it can be reviewed or changed.
@@ -88,7 +113,7 @@ update_apply_button(SearchWidgets *widgets)
   }
 
   gtk_button_set_label(widgets->transaction.apply_button, apply_label.c_str());
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), has_pending);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), has_pending && transactions_allowed());
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), has_pending);
 }
 
@@ -352,6 +377,10 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
+  if (!require_transaction_privileges(widgets, "Root privileges are required to mark packages for transaction.")) {
+    return;
+  }
+
   // Determine the selected package from the current package table.
   PackageRow pkg;
   if (!package_table_get_selected_package_row(widgets, pkg)) {
@@ -387,6 +416,10 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
+  if (!require_transaction_privileges(widgets, "Root privileges are required to mark packages for transaction.")) {
+    return;
+  }
+
   // Determine the selected package from the current package table.
   PackageRow pkg;
   if (!package_table_get_selected_package_row(widgets, pkg)) {
@@ -421,6 +454,10 @@ void
 pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  if (!require_transaction_privileges(widgets, "Root privileges are required to mark packages for transaction.")) {
+    return;
+  }
 
   PackageRow pkg;
   if (!package_table_get_selected_package_row(widgets, pkg)) {
@@ -477,6 +514,10 @@ void
 pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  if (!require_transaction_privileges(widgets, "Root privileges are required to apply transactions.")) {
+    return;
+  }
 
   if (widgets->transaction.actions.empty()) {
     ui_helpers_set_status(widgets->query.status_label, "No pending changes.", "gray");
