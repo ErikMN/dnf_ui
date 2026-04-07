@@ -576,8 +576,12 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
 {
   g_signal_connect(ui->clear_cache_button,
                    "clicked",
-                   G_CALLBACK(+[](GtkButton *, gpointer) { package_query_clear_search_cache(); }),
-                   NULL);
+                   G_CALLBACK(+[](GtkButton *, gpointer user_data) {
+                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+                     package_query_clear_search_cache();
+                     ui_helpers_set_status(widgets->query.status_label, "Search cache cleared.", "green");
+                   }),
+                   widgets);
 
   g_signal_connect(ui->list_button, "clicked", G_CALLBACK(package_query_on_list_button_clicked), widgets);
 
