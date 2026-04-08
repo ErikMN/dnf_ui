@@ -1,0 +1,31 @@
+NOTES
+
+--------------------------------------------------------------------------------
+Useful commands:
+--------------------------------------------------------------------------------
+
+sudo dnf install libdnf5-devel libdnf-cli-devel
+sudo dnf install gtk4-devel
+
+sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
+
+--------------------------------------------------------------------------------
+Useful links:
+--------------------------------------------------------------------------------
+
+dnf-5 api:
+https://libdnf.readthedocs.io/en/dnf-5-devel/index.html
+
+Catch2
+https://github.com/catchorg/Catch2
+https://github.com/catchorg/Catch2/blob/devel/docs/tutorial.md
+
+Polkit:
+https://www.freedesktop.org/software/polkit/docs/latest/polkit-intro.html
+https://polkit.pages.freedesktop.org/polkit/polkit.8.html
+https://polkit.pages.freedesktop.org/polkit/pkexec.1.html
+
+Fedora packaging guidelines:
+https://docs.fedoraproject.org/en-US/packaging-guidelines/
+
+--------------------------------------------------------------------------------
