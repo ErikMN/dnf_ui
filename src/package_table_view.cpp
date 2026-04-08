@@ -302,12 +302,15 @@ update_status_label(GtkWidget *label, SearchWidgets *widgets, const PackageRow &
   clear_status_css(label);
   if (const char *pending_class = pending_css_class(widgets, row.nevra)) {
     gtk_widget_add_css_class(label, pending_class);
-  } else if (dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED) {
-    gtk_widget_add_css_class(label, "package-status-installed");
-  } else if (dnf_backend_get_package_install_state(row) == PackageInstallState::UPGRADEABLE) {
-    gtk_widget_add_css_class(label, "package-status-upgradeable");
   } else {
-    gtk_widget_add_css_class(label, "package-status-available");
+    PackageInstallState state = dnf_backend_get_package_install_state(row);
+    if (state == PackageInstallState::INSTALLED) {
+      gtk_widget_add_css_class(label, "package-status-installed");
+    } else if (state == PackageInstallState::UPGRADEABLE) {
+      gtk_widget_add_css_class(label, "package-status-upgradeable");
+    } else {
+      gtk_widget_add_css_class(label, "package-status-available");
+    }
   }
 }
 
