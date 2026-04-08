@@ -865,7 +865,8 @@ dnf_backend_preview_transaction(const std::vector<std::string> &install_nevras,
                                 const std::vector<std::string> &remove_nevras,
                                 const std::vector<std::string> &reinstall_nevras,
                                 TransactionPreview &preview,
-                                std::string &error_out)
+                                std::string &error_out,
+                                const TransactionProgressCallback &progress_cb)
 {
   error_out.clear();
   preview = TransactionPreview();
@@ -878,7 +879,8 @@ dnf_backend_preview_transaction(const std::vector<std::string> &install_nevras,
     auto [base, guard] = BaseManager::instance().acquire_write();
     std::unique_ptr<libdnf5::base::Transaction> transaction;
 
-    if (!resolve_transaction_plan(base, install_nevras, remove_nevras, reinstall_nevras, error_out, {}, transaction)) {
+    if (!resolve_transaction_plan(
+            base, install_nevras, remove_nevras, reinstall_nevras, error_out, progress_cb, transaction)) {
       DNF_UI_TRACE("Transaction preview resolve failed: %s", error_out.c_str());
       return false;
     }

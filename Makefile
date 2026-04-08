@@ -33,6 +33,12 @@ APP_SRCS = $(wildcard src/*.cpp)
 APP_OBJS = $(APP_SRCS:.cpp=.o)
 APP_DEPS = $(APP_SRCS:.cpp=.d)
 
+SERVICE_BACKEND_SRCS = \
+	src/base_manager.cpp \
+	src/dnf_backend.cpp
+SERVICE_BACKEND_OBJS = $(SERVICE_BACKEND_SRCS:.cpp=.o)
+SERVICE_BACKEND_DEPS = $(SERVICE_BACKEND_SRCS:.cpp=.d)
+
 SERVICE_SRCS = $(wildcard src/service/*.cpp)
 SERVICE_OBJS = $(SERVICE_SRCS:.cpp=.o)
 SERVICE_DEPS = $(SERVICE_SRCS:.cpp=.d)
@@ -49,6 +55,7 @@ TEST_DEPS = $(TEST_SRCS:.cpp=.d)
 CPPFLAGS += -Iinclude -Isrc
 
 -include $(APP_DEPS)
+-include $(SERVICE_BACKEND_DEPS)
 -include $(SERVICE_DEPS)
 -include $(TEST_DEPS)
 
@@ -81,6 +88,8 @@ debug:
 	@echo "*** Debug info:"
 	@echo "App source-files:" $(APP_SRCS)
 	@echo "App object-files:" $(APP_OBJS)
+	@echo "Service backend source-files:" $(SERVICE_BACKEND_SRCS)
+	@echo "Service backend object-files:" $(SERVICE_BACKEND_OBJS)
 	@echo "Service source-files:" $(SERVICE_SRCS)
 	@echo "Service object-files:" $(SERVICE_OBJS)
 	@echo "Compiler-flags:" $(CXXFLAGS)
@@ -90,7 +99,7 @@ debug:
 dnf_ui: $(APP_OBJS)
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
-dnf_ui_transaction_service: $(SERVICE_OBJS)
+dnf_ui_transaction_service: $(SERVICE_BACKEND_OBJS) $(SERVICE_OBJS)
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 .PHONY: run
@@ -154,4 +163,4 @@ indent:
 
 .PHONY: clean
 clean:
-	$(RM) $(PROGS) dnf_ui_tests $(APP_OBJS) $(SERVICE_OBJS) $(TEST_OBJS) $(APP_DEPS) $(SERVICE_DEPS) $(TEST_DEPS)
+	$(RM) $(PROGS) dnf_ui_tests $(APP_OBJS) $(SERVICE_BACKEND_OBJS) $(SERVICE_OBJS) $(TEST_OBJS) $(APP_DEPS) $(SERVICE_BACKEND_DEPS) $(SERVICE_DEPS) $(TEST_DEPS)

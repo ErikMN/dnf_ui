@@ -1,15 +1,20 @@
 #include "transaction_service.hpp"
 
 #include "debug_trace.hpp"
+#include "dnf_backend.hpp"
 #include "transaction_request.hpp"
 
 #include <gio/gio.h>
 #include <glib-unix.h>
 
+#include <atomic>
 #include <cstdio>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -38,6 +43,11 @@ constexpr const char *kTransactionIntrospectionXml = R"XML(
 <node>
   <interface name="com.fedora.Dnfui.TransactionRequest1">
     <method name="Cancel"/>
+    <method name="GetResult">
+      <arg name="finished" type="b" direction="out"/>
+      <arg name="success" type="b" direction="out"/>
+      <arg name="details" type="s" direction="out"/>
+    </method>
     <signal name="Progress">
       <arg name="line" type="s"/>
     </signal>
@@ -59,7 +69,10 @@ struct TransactionSession {
   guint registration_id = 0;
   std::string object_path;
   TransactionRequest request;
-  bool finished = false;
+  std::atomic<bool> finished { false };
+  std::atomic<bool> cancelled { false };
+  bool success = false;
+  std::string details;
 };
 
 struct TransactionService {
@@ -78,6 +91,11 @@ struct TransactionService {
 // -----------------------------------------------------------------------------
 static void emit_transaction_progress(TransactionSession *session, const std::string &line);
 static void emit_transaction_finished(TransactionSession *session, bool success, const std::string &details);
+
+// -----------------------------------------------------------------------------
+// Transaction preview formatting
+// -----------------------------------------------------------------------------
+static std::string format_transaction_preview_details(const TransactionPreview &preview);
 
 // -----------------------------------------------------------------------------
 // Transaction request conversion
@@ -113,27 +131,47 @@ request_from_variant(GVariant *parameters)
 }
 
 // -----------------------------------------------------------------------------
-// Proof of concept transaction completion
+// Main loop dispatch helpers
 // -----------------------------------------------------------------------------
+struct QueuedProgressMessage {
+  TransactionSession *session = nullptr;
+  std::string line;
+};
+
+struct QueuedFinishedResult {
+  TransactionSession *session = nullptr;
+  bool success = false;
+  std::string details;
+};
+
 static gboolean
-finish_transaction_poc(gpointer user_data)
+dispatch_transaction_progress(gpointer user_data)
 {
-  TransactionSession *session = static_cast<TransactionSession *>(user_data);
-  if (!session || session->finished) {
+  std::unique_ptr<QueuedProgressMessage> message(static_cast<QueuedProgressMessage *>(user_data));
+  if (!message || !message->session) {
     return G_SOURCE_REMOVE;
   }
 
-  DNF_UI_TRACE(
-      "Transaction service PoC finish path=%s items=%zu", session->object_path.c_str(), session->request.item_count());
-  emit_transaction_progress(session, "Transaction service proof of concept accepted the request.");
-  emit_transaction_finished(session, false, "Transaction service proof of concept only. No transaction was applied.");
+  emit_transaction_progress(message->session, message->line);
+  return G_SOURCE_REMOVE;
+}
+
+static gboolean
+dispatch_transaction_finished(gpointer user_data)
+{
+  std::unique_ptr<QueuedFinishedResult> result(static_cast<QueuedFinishedResult *>(user_data));
+  if (!result || !result->session) {
+    return G_SOURCE_REMOVE;
+  }
+
+  emit_transaction_finished(result->session, result->success, result->details);
   return G_SOURCE_REMOVE;
 }
 
 static void
 emit_transaction_progress(TransactionSession *session, const std::string &line)
 {
-  if (!session || !session->service || !session->service->connection) {
+  if (!session || !session->service || !session->service->connection || session->finished.load()) {
     return;
   }
 
@@ -149,11 +187,17 @@ emit_transaction_progress(TransactionSession *session, const std::string &line)
 static void
 emit_transaction_finished(TransactionSession *session, bool success, const std::string &details)
 {
-  if (!session || !session->service || !session->service->connection || session->finished) {
+  if (!session || !session->service || !session->service->connection) {
     return;
   }
 
-  session->finished = true;
+  bool expected = false;
+  if (!session->finished.compare_exchange_strong(expected, true)) {
+    return;
+  }
+
+  session->success = success;
+  session->details = details;
   g_dbus_connection_emit_signal(session->service->connection,
                                 nullptr,
                                 session->object_path.c_str(),
@@ -161,6 +205,155 @@ emit_transaction_finished(TransactionSession *session, bool success, const std::
                                 "Finished",
                                 g_variant_new("(bs)", success, details.c_str()),
                                 nullptr);
+}
+
+static void
+queue_transaction_progress(TransactionSession *session, const std::string &line)
+{
+  if (!session || line.empty() || session->finished.load()) {
+    return;
+  }
+
+  auto *message = new QueuedProgressMessage();
+  message->session = session;
+  message->line = line;
+  g_main_context_invoke(nullptr, dispatch_transaction_progress, message);
+}
+
+static void
+queue_transaction_finished(TransactionSession *session, bool success, const std::string &details)
+{
+  if (!session || session->finished.load()) {
+    return;
+  }
+
+  auto *result = new QueuedFinishedResult();
+  result->session = session;
+  result->success = success;
+  result->details = details;
+  g_main_context_invoke(nullptr, dispatch_transaction_finished, result);
+}
+
+static std::string
+format_transaction_preview_space_change(long long delta_bytes)
+{
+  if (delta_bytes == 0) {
+    return "Disk space usage will be unchanged.";
+  }
+
+  unsigned long long abs_bytes =
+      delta_bytes > 0 ? static_cast<unsigned long long>(delta_bytes) : static_cast<unsigned long long>(-delta_bytes);
+  char *formatted = g_format_size(abs_bytes);
+  std::string line;
+
+  if (delta_bytes > 0) {
+    line = std::string(formatted) + " extra disk space will be used.";
+  } else {
+    line = std::string(formatted) + " of disk space will be freed.";
+  }
+
+  g_free(formatted);
+  return line;
+}
+
+static void
+append_transaction_preview_section(std::ostringstream &summary,
+                                   const char *title,
+                                   const std::vector<std::string> &items)
+{
+  if (!title || items.empty()) {
+    return;
+  }
+
+  summary << title << ":\n";
+  for (const auto &item : items) {
+    summary << "  " << item << "\n";
+  }
+  summary << "\n";
+}
+
+static std::string
+format_transaction_preview_details(const TransactionPreview &preview)
+{
+  std::ostringstream summary;
+
+  auto append_count_line = [&](size_t count, const char *verb) {
+    if (count == 0) {
+      return;
+    }
+    summary << count << " package" << (count == 1 ? "" : "s") << " will be " << verb << ".\n";
+  };
+
+  append_count_line(preview.install.size(), "installed");
+  append_count_line(preview.upgrade.size(), "upgraded");
+  append_count_line(preview.downgrade.size(), "downgraded");
+  append_count_line(preview.reinstall.size(), "reinstalled");
+  append_count_line(preview.remove.size(), "removed");
+  summary << format_transaction_preview_space_change(preview.disk_space_delta) << "\n\n";
+
+  append_transaction_preview_section(summary, "To be installed", preview.install);
+  append_transaction_preview_section(summary, "To be upgraded", preview.upgrade);
+  append_transaction_preview_section(summary, "To be downgraded", preview.downgrade);
+  append_transaction_preview_section(summary, "To be reinstalled", preview.reinstall);
+  append_transaction_preview_section(summary, "To be removed", preview.remove);
+
+  return summary.str();
+}
+
+// -----------------------------------------------------------------------------
+// Transaction preview execution
+// -----------------------------------------------------------------------------
+static void
+run_transaction_preview(TransactionSession *session)
+{
+  if (!session) {
+    return;
+  }
+
+  TransactionPreview preview;
+  std::string error_out;
+  auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
+
+  DNF_UI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
+  bool ok = dnf_backend_preview_transaction(
+      session->request.install, session->request.remove, session->request.reinstall, preview, error_out, progress_cb);
+
+  if (session->cancelled.load()) {
+    DNF_UI_TRACE("Transaction service preview cancelled path=%s", session->object_path.c_str());
+    queue_transaction_finished(session, false, "Transaction preview was cancelled.");
+    return;
+  }
+
+  if (!ok) {
+    DNF_UI_TRACE("Transaction service preview failed path=%s", session->object_path.c_str());
+    queue_transaction_finished(session, false, error_out);
+    return;
+  }
+
+  DNF_UI_TRACE("Transaction service preview done path=%s items=%zu",
+               session->object_path.c_str(),
+               preview.install.size() + preview.upgrade.size() + preview.downgrade.size() + preview.reinstall.size() +
+                   preview.remove.size());
+  queue_transaction_finished(session, true, format_transaction_preview_details(preview));
+}
+
+static gboolean
+start_transaction_preview(gpointer user_data)
+{
+  TransactionSession *session = static_cast<TransactionSession *>(user_data);
+  if (!session || session->finished.load()) {
+    return G_SOURCE_REMOVE;
+  }
+
+  GThread *thread = g_thread_new(
+      "dnf-ui-preview",
+      +[](gpointer data) -> gpointer {
+        run_transaction_preview(static_cast<TransactionSession *>(data));
+        return nullptr;
+      },
+      session);
+  g_thread_unref(thread);
+  return G_SOURCE_REMOVE;
 }
 
 // -----------------------------------------------------------------------------
@@ -183,18 +376,30 @@ on_transaction_method_call(GDBusConnection *,
     return;
   }
 
-  if (g_strcmp0(interface_name, kTransactionInterface) != 0 || g_strcmp0(method_name, "Cancel") != 0) {
+  if (g_strcmp0(interface_name, kTransactionInterface) != 0) {
     g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "Unknown method.");
     return;
   }
 
-  DNF_UI_TRACE("Transaction service cancel path=%s", object_path);
-  if (!session->finished) {
-    emit_transaction_progress(session, "Transaction was cancelled before apply.");
-    emit_transaction_finished(session, false, "Transaction was cancelled before apply.");
+  if (g_strcmp0(method_name, "Cancel") == 0) {
+    DNF_UI_TRACE("Transaction service cancel path=%s", object_path);
+    session->cancelled = true;
+    if (!session->finished.load()) {
+      emit_transaction_progress(session, "Transaction preview was cancelled.");
+      emit_transaction_finished(session, false, "Transaction preview was cancelled.");
+    }
+
+    g_dbus_method_invocation_return_value(invocation, nullptr);
+    return;
   }
 
-  g_dbus_method_invocation_return_value(invocation, nullptr);
+  if (g_strcmp0(method_name, "GetResult") == 0) {
+    g_dbus_method_invocation_return_value(
+        invocation, g_variant_new("(bbs)", session->finished.load(), session->success, session->details.c_str()));
+    return;
+  }
+
+  g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "Unknown method.");
 }
 
 static const GDBusInterfaceVTable kTransactionVTable = {
@@ -280,8 +485,8 @@ on_manager_method_call(GDBusConnection *,
   }
 
   g_dbus_method_invocation_return_value(invocation, g_variant_new("(o)", session->object_path.c_str()));
-  // Queue the proof of concept completion after the request object is returned to the caller.
-  g_idle_add_full(G_PRIORITY_DEFAULT, finish_transaction_poc, session, nullptr);
+  // Queue the preview start after the request object is returned to the caller.
+  g_idle_add_full(G_PRIORITY_DEFAULT, start_transaction_preview, session, nullptr);
 }
 
 static const GDBusInterfaceVTable kManagerVTable = {

@@ -102,7 +102,8 @@ bool dnf_backend_preview_transaction(const std::vector<std::string> &install_nev
                                      const std::vector<std::string> &remove_nevras,
                                      const std::vector<std::string> &reinstall_nevras,
                                      TransactionPreview &preview,
-                                     std::string &error_out);
+                                     std::string &error_out,
+                                     const TransactionProgressCallback &progress_cb = {});
 bool dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
                                    const std::vector<std::string> &remove_nevras,
                                    const std::vector<std::string> &reinstall_nevras,
