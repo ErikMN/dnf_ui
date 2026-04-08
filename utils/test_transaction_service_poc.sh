@@ -82,7 +82,7 @@ dbus-run-session -- bash <<'EOF'
       --object-path "$transaction_path" \
       --method "$RESULT_METHOD")"
 
-    if printf "%s\n" "$result" | grep -Fq "(false,"; then
+    if printf "%s\n" "$result" | grep -Fq "'preview-running'"; then
       if [ "$SECONDS" -ge "$deadline" ]; then
         echo "*** Timed out waiting for transaction preview result ***" >&2
         exit 1
@@ -91,7 +91,7 @@ dbus-run-session -- bash <<'EOF'
       continue
     fi
 
-    if printf "%s\n" "$result" | grep -Fq "(true, true,"; then
+    if printf "%s\n" "$result" | grep -Fq "'preview-ready', true, true,"; then
       echo "$result"
       break
     fi

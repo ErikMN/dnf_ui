@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -e
+
+SERVICE_NAME="com.fedora.Dnfui.Transaction1"
+MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
+MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"
+RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
+APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
+REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
+
+# Make this script work from any directory:
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SERVICE_BIN="$PROJECT_ROOT/dnf_ui_transaction_service"
+
+if [ ! -x "$SERVICE_BIN" ]; then
+  echo "*** Missing service binary: $SERVICE_BIN ***" >&2
+  echo "*** Build it first with: make dnf_ui_transaction_service ***" >&2
+  exit 1
+fi
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "*** serviceapplytest must run as root until Polkit is added ***" >&2
+  exit 1
+fi
+
+if [ -z "$REINSTALL_SPEC" ]; then
+  echo "*** Set SERVICE_TEST_REINSTALL_NEVRA to an installed package before running serviceapplytest ***" >&2
+  exit 1
+fi
+
+LOG_FILE="$(mktemp)"
+cleanup_log() {
+  rm -f "$LOG_FILE"
+}
+trap cleanup_log EXIT
+
+echo "*** Running transaction service apply test ***"
+
+SERVICE_BIN="$SERVICE_BIN" \
+SERVICE_NAME="$SERVICE_NAME" \
+MANAGER_PATH="$MANAGER_PATH" \
+MANAGER_METHOD="$MANAGER_METHOD" \
+RESULT_METHOD="$RESULT_METHOD" \
+APPLY_METHOD="$APPLY_METHOD" \
+REINSTALL_SPEC="$REINSTALL_SPEC" \
+LOG_FILE="$LOG_FILE" \
+dbus-run-session -- bash <<'EOF'
+  set -e
+
+  wait_for_result() {
+    local transaction_path="$1"
+    local expected_stage="$2"
+    local expected_success="$3"
+    local deadline="$((SECONDS + 60))"
+    local result=""
+
+    while :; do
+      result="$(gdbus call \
+        --session \
+        --dest "$SERVICE_NAME" \
+        --object-path "$transaction_path" \
+        --method "$RESULT_METHOD")"
+
+      if printf "%s\n" "$result" | grep -Fq "'$expected_stage', true, $expected_success,"; then
+        printf "%s\n" "$result"
+        return 0
+      fi
+
+      if printf "%s\n" "$result" | grep -Fq "'preview-running'"; then
+        :
+      elif printf "%s\n" "$result" | grep -Fq "'apply-running'"; then
+        :
+      else
+        printf "%s\n" "$result"
+        echo "*** Transaction did not reach the expected result state ***" >&2
+        return 1
+      fi
+
+      if [ "$SECONDS" -ge "$deadline" ]; then
+        echo "*** Timed out waiting for transaction service result ***" >&2
+        return 1
+      fi
+
+      sleep 1
+    done
+  }
+
+  cleanup() {
+    if [ -n "${service_pid:-}" ]; then
+      kill "$service_pid" >/dev/null 2>&1 || true
+      wait "$service_pid" >/dev/null 2>&1 || true
+    fi
+  }
+  trap cleanup EXIT
+
+  "$SERVICE_BIN" --session >"$LOG_FILE" 2>&1 &
+  service_pid=$!
+
+  gdbus wait --session "$SERVICE_NAME" >/dev/null
+
+  reply="$(gdbus call \
+    --session \
+    --dest "$SERVICE_NAME" \
+    --object-path "$MANAGER_PATH" \
+    --method "$MANAGER_METHOD" \
+    "[]" \
+    "[]" \
+    "[\"$REINSTALL_SPEC\"]")"
+
+  echo "$reply"
+
+  case "$reply" in
+    *"/com/fedora/Dnfui/Transaction1/requests/"* )
+      ;;
+    * )
+      echo "*** Service did not return a transaction object path ***" >&2
+      exit 1
+      ;;
+  esac
+
+  transaction_path="${reply#*objectpath \'}"
+  transaction_path="${transaction_path%%\'*}"
+  if [ -z "$transaction_path" ]; then
+    echo "*** Failed to parse transaction object path ***" >&2
+    exit 1
+  fi
+
+  preview_result="$(wait_for_result "$transaction_path" "preview-ready" "true")"
+  echo "$preview_result"
+
+  gdbus call \
+    --session \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$APPLY_METHOD" >/dev/null
+
+  apply_result="$(wait_for_result "$transaction_path" "apply-succeeded" "true")"
+  echo "$apply_result"
+
+  case "$apply_result" in
+    *"Transaction applied successfully."* )
+      ;;
+    * )
+      echo "*** Transaction apply result did not contain the expected success text ***" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "*** Service log ***"
+  cat "$LOG_FILE"
+EOF

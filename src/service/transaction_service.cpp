@@ -1,5 +1,6 @@
 #include "transaction_service.hpp"
 
+#include "base_manager.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend.hpp"
 #include "transaction_request.hpp"
@@ -43,7 +44,9 @@ constexpr const char *kTransactionIntrospectionXml = R"XML(
 <node>
   <interface name="com.fedora.Dnfui.TransactionRequest1">
     <method name="Cancel"/>
+    <method name="Apply"/>
     <method name="GetResult">
+      <arg name="stage" type="s" direction="out"/>
       <arg name="finished" type="b" direction="out"/>
       <arg name="success" type="b" direction="out"/>
       <arg name="details" type="s" direction="out"/>
@@ -52,6 +55,7 @@ constexpr const char *kTransactionIntrospectionXml = R"XML(
       <arg name="line" type="s"/>
     </signal>
     <signal name="Finished">
+      <arg name="stage" type="s"/>
       <arg name="success" type="b"/>
       <arg name="details" type="s"/>
     </signal>
@@ -64,6 +68,16 @@ constexpr const char *kTransactionIntrospectionXml = R"XML(
 // -----------------------------------------------------------------------------
 struct TransactionService;
 
+enum class TransactionStage {
+  PREVIEW_RUNNING,
+  PREVIEW_READY,
+  PREVIEW_FAILED,
+  APPLY_RUNNING,
+  APPLY_SUCCEEDED,
+  APPLY_FAILED,
+  CANCELLED,
+};
+
 struct TransactionSession {
   TransactionService *service = nullptr;
   guint registration_id = 0;
@@ -71,6 +85,7 @@ struct TransactionSession {
   TransactionRequest request;
   std::atomic<bool> finished { false };
   std::atomic<bool> cancelled { false };
+  TransactionStage stage = TransactionStage::PREVIEW_RUNNING;
   bool success = false;
   std::string details;
 };
@@ -83,6 +98,7 @@ struct TransactionService {
   guint owner_id = 0;
   guint manager_registration_id = 0;
   guint next_transaction_id = 1;
+  std::atomic<bool> apply_running { false };
   std::map<std::string, std::unique_ptr<TransactionSession>> transactions;
 };
 
@@ -90,12 +106,16 @@ struct TransactionService {
 // Transaction session signal helpers
 // -----------------------------------------------------------------------------
 static void emit_transaction_progress(TransactionSession *session, const std::string &line);
-static void emit_transaction_finished(TransactionSession *session, bool success, const std::string &details);
+static void emit_transaction_finished(TransactionSession *session,
+                                      TransactionStage stage,
+                                      bool success,
+                                      const std::string &details);
 
 // -----------------------------------------------------------------------------
 // Transaction preview formatting
 // -----------------------------------------------------------------------------
 static std::string format_transaction_preview_details(const TransactionPreview &preview);
+static const char *transaction_stage_name(TransactionStage stage);
 
 // -----------------------------------------------------------------------------
 // Transaction request conversion
@@ -140,6 +160,7 @@ struct QueuedProgressMessage {
 
 struct QueuedFinishedResult {
   TransactionSession *session = nullptr;
+  TransactionStage stage = TransactionStage::PREVIEW_FAILED;
   bool success = false;
   std::string details;
 };
@@ -164,7 +185,7 @@ dispatch_transaction_finished(gpointer user_data)
     return G_SOURCE_REMOVE;
   }
 
-  emit_transaction_finished(result->session, result->success, result->details);
+  emit_transaction_finished(result->session, result->stage, result->success, result->details);
   return G_SOURCE_REMOVE;
 }
 
@@ -185,7 +206,7 @@ emit_transaction_progress(TransactionSession *session, const std::string &line)
 }
 
 static void
-emit_transaction_finished(TransactionSession *session, bool success, const std::string &details)
+emit_transaction_finished(TransactionSession *session, TransactionStage stage, bool success, const std::string &details)
 {
   if (!session || !session->service || !session->service->connection) {
     return;
@@ -196,6 +217,7 @@ emit_transaction_finished(TransactionSession *session, bool success, const std::
     return;
   }
 
+  session->stage = stage;
   session->success = success;
   session->details = details;
   g_dbus_connection_emit_signal(session->service->connection,
@@ -203,7 +225,7 @@ emit_transaction_finished(TransactionSession *session, bool success, const std::
                                 session->object_path.c_str(),
                                 kTransactionInterface,
                                 "Finished",
-                                g_variant_new("(bs)", success, details.c_str()),
+                                g_variant_new("(sbs)", transaction_stage_name(stage), success, details.c_str()),
                                 nullptr);
 }
 
@@ -221,14 +243,18 @@ queue_transaction_progress(TransactionSession *session, const std::string &line)
 }
 
 static void
-queue_transaction_finished(TransactionSession *session, bool success, const std::string &details)
+queue_transaction_finished(TransactionSession *session,
+                           TransactionStage stage,
+                           bool success,
+                           const std::string &details)
 {
-  if (!session || session->finished.load()) {
+  if (!session) {
     return;
   }
 
   auto *result = new QueuedFinishedResult();
   result->session = session;
+  result->stage = stage;
   result->success = success;
   result->details = details;
   g_main_context_invoke(nullptr, dispatch_transaction_finished, result);
@@ -300,8 +326,44 @@ format_transaction_preview_details(const TransactionPreview &preview)
   return summary.str();
 }
 
+static const char *
+transaction_stage_name(TransactionStage stage)
+{
+  switch (stage) {
+  case TransactionStage::PREVIEW_RUNNING:
+    return "preview-running";
+  case TransactionStage::PREVIEW_READY:
+    return "preview-ready";
+  case TransactionStage::PREVIEW_FAILED:
+    return "preview-failed";
+  case TransactionStage::APPLY_RUNNING:
+    return "apply-running";
+  case TransactionStage::APPLY_SUCCEEDED:
+    return "apply-succeeded";
+  case TransactionStage::APPLY_FAILED:
+    return "apply-failed";
+  case TransactionStage::CANCELLED:
+    return "cancelled";
+  }
+
+  return "unknown";
+}
+
+static void
+set_transaction_running(TransactionSession *session, TransactionStage stage)
+{
+  if (!session) {
+    return;
+  }
+
+  session->stage = stage;
+  session->finished = false;
+  session->success = false;
+  session->details.clear();
+}
+
 // -----------------------------------------------------------------------------
-// Transaction preview execution
+// Transaction execution
 // -----------------------------------------------------------------------------
 static void
 run_transaction_preview(TransactionSession *session)
@@ -320,13 +382,13 @@ run_transaction_preview(TransactionSession *session)
 
   if (session->cancelled.load()) {
     DNF_UI_TRACE("Transaction service preview cancelled path=%s", session->object_path.c_str());
-    queue_transaction_finished(session, false, "Transaction preview was cancelled.");
+    queue_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
     return;
   }
 
   if (!ok) {
     DNF_UI_TRACE("Transaction service preview failed path=%s", session->object_path.c_str());
-    queue_transaction_finished(session, false, error_out);
+    queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, error_out);
     return;
   }
 
@@ -334,7 +396,8 @@ run_transaction_preview(TransactionSession *session)
                session->object_path.c_str(),
                preview.install.size() + preview.upgrade.size() + preview.downgrade.size() + preview.reinstall.size() +
                    preview.remove.size());
-  queue_transaction_finished(session, true, format_transaction_preview_details(preview));
+  queue_transaction_finished(
+      session, TransactionStage::PREVIEW_READY, true, format_transaction_preview_details(preview));
 }
 
 static gboolean
@@ -349,6 +412,64 @@ start_transaction_preview(gpointer user_data)
       "dnf-ui-preview",
       +[](gpointer data) -> gpointer {
         run_transaction_preview(static_cast<TransactionSession *>(data));
+        return nullptr;
+      },
+      session);
+  g_thread_unref(thread);
+  return G_SOURCE_REMOVE;
+}
+
+static void
+run_transaction_apply(TransactionSession *session)
+{
+  if (!session || !session->service) {
+    return;
+  }
+
+  std::string error_out;
+  auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
+
+  DNF_UI_TRACE("Transaction service apply start path=%s", session->object_path.c_str());
+  bool ok = dnf_backend_apply_transaction(
+      session->request.install, session->request.remove, session->request.reinstall, error_out, progress_cb);
+
+  std::string details;
+  TransactionStage stage = TransactionStage::APPLY_FAILED;
+  bool success = false;
+
+  if (ok) {
+    details = "Transaction applied successfully.";
+    stage = TransactionStage::APPLY_SUCCEEDED;
+    success = true;
+
+    try {
+      queue_transaction_progress(session, "Refreshing backend state...");
+      BaseManager::instance().rebuild();
+    } catch (const std::exception &e) {
+      details += "\nBackend refresh failed: " + std::string(e.what());
+    }
+  } else {
+    details = error_out;
+  }
+
+  session->service->apply_running = false;
+
+  DNF_UI_TRACE("Transaction service apply done path=%s success=%d", session->object_path.c_str(), success ? 1 : 0);
+  queue_transaction_finished(session, stage, success, details);
+}
+
+static gboolean
+start_transaction_apply(gpointer user_data)
+{
+  TransactionSession *session = static_cast<TransactionSession *>(user_data);
+  if (!session) {
+    return G_SOURCE_REMOVE;
+  }
+
+  GThread *thread = g_thread_new(
+      "dnf-ui-apply",
+      +[](gpointer data) -> gpointer {
+        run_transaction_apply(static_cast<TransactionSession *>(data));
         return nullptr;
       },
       session);
@@ -383,19 +504,69 @@ on_transaction_method_call(GDBusConnection *,
 
   if (g_strcmp0(method_name, "Cancel") == 0) {
     DNF_UI_TRACE("Transaction service cancel path=%s", object_path);
+    if (session->stage == TransactionStage::APPLY_RUNNING) {
+      g_dbus_method_invocation_return_error(invocation,
+                                            G_DBUS_ERROR,
+                                            G_DBUS_ERROR_NOT_SUPPORTED,
+                                            "Cancellation is not supported while apply is running.");
+      return;
+    }
+
     session->cancelled = true;
+    if (session->stage == TransactionStage::PREVIEW_READY && session->finished.load()) {
+      session->stage = TransactionStage::CANCELLED;
+      session->success = false;
+      session->details = "Transaction preview was cancelled.";
+      emit_transaction_progress(session, "Transaction preview was cancelled.");
+      g_dbus_connection_emit_signal(
+          session->service->connection,
+          nullptr,
+          session->object_path.c_str(),
+          kTransactionInterface,
+          "Finished",
+          g_variant_new("(sbs)", transaction_stage_name(TransactionStage::CANCELLED), FALSE, session->details.c_str()),
+          nullptr);
+      g_dbus_method_invocation_return_value(invocation, nullptr);
+      return;
+    }
+
     if (!session->finished.load()) {
       emit_transaction_progress(session, "Transaction preview was cancelled.");
-      emit_transaction_finished(session, false, "Transaction preview was cancelled.");
+      emit_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
     }
 
     g_dbus_method_invocation_return_value(invocation, nullptr);
     return;
   }
 
+  if (g_strcmp0(method_name, "Apply") == 0) {
+    if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
+      g_dbus_method_invocation_return_error(
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview must succeed before apply can start.");
+      return;
+    }
+
+    bool expected = false;
+    if (!session->service->apply_running.compare_exchange_strong(expected, true)) {
+      g_dbus_method_invocation_return_error(
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Another transaction apply is already running.");
+      return;
+    }
+
+    session->cancelled = false;
+    set_transaction_running(session, TransactionStage::APPLY_RUNNING);
+    g_dbus_method_invocation_return_value(invocation, nullptr);
+    g_idle_add_full(G_PRIORITY_DEFAULT, start_transaction_apply, session, nullptr);
+    return;
+  }
+
   if (g_strcmp0(method_name, "GetResult") == 0) {
-    g_dbus_method_invocation_return_value(
-        invocation, g_variant_new("(bbs)", session->finished.load(), session->success, session->details.c_str()));
+    g_dbus_method_invocation_return_value(invocation,
+                                          g_variant_new("(sbbs)",
+                                                        transaction_stage_name(session->stage),
+                                                        session->finished.load(),
+                                                        session->success,
+                                                        session->details.c_str()));
     return;
   }
 
