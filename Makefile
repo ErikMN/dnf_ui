@@ -1,6 +1,6 @@
 CXX = g++
 CXXFLAGS += -std=c++20 -Werror -MMD -MP -pipe -fdiagnostics-color=always
-PROGS = dnf_ui
+PROGS = dnf_ui dnf_ui_transaction_service
 LDLIBS = -lm
 
 PKGS = libdnf5 gtk4
@@ -15,7 +15,7 @@ ifneq ($(filter test,$(MAKECMDGOALS)),)
     $(error "Missing test dependencies: please install development packages for $(TEST_PKGS)")
   endif
 else
-  ifeq ($(filter dockerrun dockertest dockersetup cppcheck indent clean,$(MAKECMDGOALS)),)
+  ifeq ($(filter dockerrun dockertest dockerservicetest dockersetup cppcheck indent clean,$(MAKECMDGOALS)),)
     PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
     ifeq ($(PKG_OK),yes)
       PKG_LIBS := $(shell pkg-config --libs $(PKGS))
@@ -29,9 +29,13 @@ endif
 LDLIBS += $(PKG_LIBS)
 CPPFLAGS += $(PKG_CFLAGS)
 
-SRCS = $(wildcard src/*.cpp)
-OBJS = $(SRCS:.cpp=.o)
-DEPS = $(SRCS:.cpp=.d)
+APP_SRCS = $(wildcard src/*.cpp)
+APP_OBJS = $(APP_SRCS:.cpp=.o)
+APP_DEPS = $(APP_SRCS:.cpp=.d)
+
+SERVICE_SRCS = $(wildcard src/service/*.cpp)
+SERVICE_OBJS = $(SERVICE_SRCS:.cpp=.o)
+SERVICE_DEPS = $(SERVICE_SRCS:.cpp=.d)
 
 TEST_SRCS = \
     test/test_backend.cpp \
@@ -44,7 +48,8 @@ TEST_DEPS = $(TEST_SRCS:.cpp=.d)
 
 CPPFLAGS += -Iinclude -Isrc
 
--include $(DEPS)
+-include $(APP_DEPS)
+-include $(SERVICE_DEPS)
 -include $(TEST_DEPS)
 
 # FINAL=y
@@ -74,13 +79,18 @@ all: $(PROGS)
 .PHONY: debug
 debug:
 	@echo "*** Debug info:"
-	@echo "Source-files:" $(SRCS)
-	@echo "Object-files:" $(OBJS)
+	@echo "App source-files:" $(APP_SRCS)
+	@echo "App object-files:" $(APP_OBJS)
+	@echo "Service source-files:" $(SERVICE_SRCS)
+	@echo "Service object-files:" $(SERVICE_OBJS)
 	@echo "Compiler-flags:" $(CXXFLAGS)
 	@echo "Linker-flags:" $(LDFLAGS)
 	@echo "Linker-libs:" $(LDLIBS)
 
-$(PROGS): $(OBJS)
+dnf_ui: $(APP_OBJS)
+	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
+dnf_ui_transaction_service: $(SERVICE_OBJS)
 	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
 .PHONY: run
@@ -95,6 +105,10 @@ test: dnf_ui_tests
 	@echo "*** Running backend test suite ***"
 	@./dnf_ui_tests
 
+.PHONY: servicetest
+servicetest: dnf_ui_transaction_service
+	@./utils/test_transaction_service_poc.sh
+
 # To test dark or light themes in Docker:
 # make dockerrun THEME=dark
 # make dockerrun THEME=light
@@ -105,6 +119,10 @@ dockerrun:
 .PHONY: dockertest
 dockertest:
 	@./docker/docker_test.sh
+
+.PHONY: dockerservicetest
+dockerservicetest:
+	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_test.sh
 
 .PHONY: dockersetup
 dockersetup:
@@ -136,4 +154,4 @@ indent:
 
 .PHONY: clean
 clean:
-	$(RM) $(PROGS) dnf_ui_tests $(OBJS) $(TEST_OBJS) $(DEPS) $(TEST_DEPS)
+	$(RM) $(PROGS) dnf_ui_tests $(APP_OBJS) $(SERVICE_OBJS) $(TEST_OBJS) $(APP_DEPS) $(SERVICE_DEPS) $(TEST_DEPS)
