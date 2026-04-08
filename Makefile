@@ -3,7 +3,7 @@ CXXFLAGS += -std=c++20 -Werror -MMD -MP -pipe -fdiagnostics-color=always
 PROGS = dnf_ui dnf_ui_transaction_service
 LDLIBS = -lm
 
-PKGS = libdnf5 gtk4
+PKGS = libdnf5 gtk4 polkit-gobject-1
 TEST_PKGS = libdnf5 gio-2.0 catch2-with-main
 
 ifneq ($(filter test,$(MAKECMDGOALS)),)

@@ -7,6 +7,7 @@
 
 #include <gio/gio.h>
 #include <glib-unix.h>
+#include <polkit/polkit.h>
 
 #include <atomic>
 #include <cstdio>
@@ -26,6 +27,7 @@ constexpr const char *kServiceName = "com.fedora.Dnfui.Transaction1";
 constexpr const char *kManagerObjectPath = "/com/fedora/Dnfui/Transaction1";
 constexpr const char *kManagerInterface = "com.fedora.Dnfui.Transaction1";
 constexpr const char *kTransactionInterface = "com.fedora.Dnfui.TransactionRequest1";
+constexpr const char *kApplyActionId = "com.fedora.dnfui.apply-transactions";
 
 constexpr const char *kManagerIntrospectionXml = R"XML(
 <node>
@@ -95,6 +97,7 @@ struct TransactionService {
   GDBusConnection *connection = nullptr;
   GDBusNodeInfo *manager_node_info = nullptr;
   GDBusNodeInfo *transaction_node_info = nullptr;
+  GBusType bus_type = G_BUS_TYPE_SESSION;
   guint owner_id = 0;
   guint manager_registration_id = 0;
   guint next_transaction_id = 1;
@@ -116,6 +119,8 @@ static void emit_transaction_finished(TransactionSession *session,
 // -----------------------------------------------------------------------------
 static std::string format_transaction_preview_details(const TransactionPreview &preview);
 static const char *transaction_stage_name(TransactionStage stage);
+static bool
+authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation, std::string &error_out);
 
 // -----------------------------------------------------------------------------
 // Transaction request conversion
@@ -362,6 +367,65 @@ set_transaction_running(TransactionSession *session, TransactionStage stage)
   session->details.clear();
 }
 
+static bool
+authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation, std::string &error_out)
+{
+  error_out.clear();
+
+  if (!session || !session->service || !invocation) {
+    error_out = "Transaction service authorization state is not available.";
+    return false;
+  }
+
+  // Session bus mode remains available for local development and Docker tests.
+  if (session->service->bus_type != G_BUS_TYPE_SYSTEM) {
+    return true;
+  }
+
+  const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
+  if (!sender || !*sender) {
+    error_out = "Could not determine the caller identity.";
+    return false;
+  }
+
+  GError *error = nullptr;
+  PolkitAuthority *authority = polkit_authority_get_sync(nullptr, &error);
+  if (!authority) {
+    error_out = error ? error->message : "Failed to contact the authorization service.";
+    g_clear_error(&error);
+    return false;
+  }
+
+  PolkitSubject *subject = polkit_system_bus_name_new(sender);
+  PolkitAuthorizationResult *result =
+      polkit_authority_check_authorization_sync(authority,
+                                                subject,
+                                                kApplyActionId,
+                                                nullptr,
+                                                POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
+                                                nullptr,
+                                                &error);
+
+  g_object_unref(subject);
+  g_object_unref(authority);
+
+  if (!result) {
+    error_out = error ? error->message : "Authorization check failed.";
+    g_clear_error(&error);
+    return false;
+  }
+
+  bool authorized = polkit_authorization_result_get_is_authorized(result);
+  g_object_unref(result);
+
+  if (!authorized) {
+    error_out = "Not authorized to apply package transactions.";
+    return false;
+  }
+
+  return true;
+}
+
 // -----------------------------------------------------------------------------
 // Transaction execution
 // -----------------------------------------------------------------------------
@@ -543,6 +607,14 @@ on_transaction_method_call(GDBusConnection *,
     if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
       g_dbus_method_invocation_return_error(
           invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview must succeed before apply can start.");
+      return;
+    }
+
+    std::string error_out;
+    if (!authorize_apply_request(session, invocation, error_out)) {
+      DNF_UI_TRACE("Transaction service apply authorization failed path=%s", object_path);
+      g_dbus_method_invocation_return_error(
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "%s", error_out.c_str());
       return;
     }
 
@@ -770,6 +842,7 @@ int
 transaction_service_run(const TransactionServiceOptions &options)
 {
   TransactionService service;
+  service.bus_type = options.bus_type;
   service.loop = g_main_loop_new(nullptr, FALSE);
 
   GError *error = nullptr;

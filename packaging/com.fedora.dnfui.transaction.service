@@ -1,0 +1,8 @@
+[Unit]
+Description=DNF UI transaction service
+
+[Service]
+Type=dbus
+BusName=com.fedora.Dnfui.Transaction1
+ExecStart=/usr/libexec/dnf_ui_transaction_service --system
+User=root

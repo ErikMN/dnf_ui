@@ -4,6 +4,8 @@ FROM fedora:latest
 RUN dnf install -y \
     gtk4-devel \
     libdnf5-devel \
+    polkit-devel \
+    polkit \
     gcc-c++ \
     make \
     pkgconf \
