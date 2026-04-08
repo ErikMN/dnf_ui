@@ -15,7 +15,7 @@ ifneq ($(filter test,$(MAKECMDGOALS)),)
     $(error "Missing test dependencies: please install development packages for $(TEST_PKGS)")
   endif
 else
-  ifeq ($(filter dockerrun dockertest dockerservicetest dockerserviceapplytest dockerservicesystemtest dockerservicesystemapplytest dockersetup cppcheck indent clean,$(MAKECMDGOALS)),)
+  ifeq ($(filter dockerrun dockertest dockerservicetest dockerserviceapplytest dockerservicesystemtest dockerservicesystemapplytest dockersetup cppcheck indent clean serviceuninstall servicesystemtest servicesystemapplytest,$(MAKECMDGOALS)),)
     PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
     ifeq ($(PKG_OK),yes)
       PKG_LIBS := $(shell pkg-config --libs $(PKGS))
@@ -121,6 +121,22 @@ servicetest: dnf_ui_transaction_service
 .PHONY: serviceapplytest
 serviceapplytest: dnf_ui_transaction_service
 	@./utils/test_transaction_service_apply.sh
+
+.PHONY: serviceinstall
+serviceinstall: dnf_ui_transaction_service
+	@./utils/install_transaction_service.sh
+
+.PHONY: serviceuninstall
+serviceuninstall:
+	@./utils/uninstall_transaction_service.sh
+
+.PHONY: servicesystemtest
+servicesystemtest:
+	@./utils/test_transaction_service_system_bus.sh
+
+.PHONY: servicesystemapplytest
+servicesystemapplytest:
+	@SERVICE_SYSTEM_APPLY=yes ./utils/test_transaction_service_system_bus.sh
 
 # To test dark or light themes in Docker:
 # make dockerrun THEME=dark
