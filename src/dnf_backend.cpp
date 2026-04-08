@@ -183,8 +183,7 @@ dnf_backend_search_available_package_rows_interruptible(const std::string &patte
 //   calling into BaseManager, which would produce a deadlock.
 //   Rows are collected into local sets while the Base lock is held, then the
 //   Base lock is released before g_installed_mutex is acquired to publish the
-//   new snapshot. This matches the pattern used by
-//   dnf_backend_get_installed_package_rows_interruptible.
+//   new snapshot.
 // -----------------------------------------------------------------------------
 void
 dnf_backend_refresh_installed_nevras()
@@ -416,11 +415,15 @@ dnf_backend_get_package_info(const std::string &pkg_nevra)
 // -----------------------------------------------------------------------------
 // Helper: Retrieve file list for an installed package (by NEVRA)
 // Returns newline-separated file list or a friendly message if none.
+//
+// max_files_for_display: if > 0, limits visible output and appends a truncation
+// notice. Used by the UI to avoid clipboard socket overflow when copying large
+// file lists. Pass 0 for the full list.
 // -----------------------------------------------------------------------------
 std::string
-dnf_backend_get_installed_package_files(const std::string &pkg_nevra)
+dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max_files_for_display)
 {
-  DNF_UI_TRACE("Backend file list start nevra=%s", pkg_nevra.c_str());
+  DNF_UI_TRACE("Backend file list start nevra=%s max_display=%zu", pkg_nevra.c_str(), max_files_for_display);
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
 
@@ -437,17 +440,34 @@ dnf_backend_get_installed_package_files(const std::string &pkg_nevra)
 
   std::ostringstream files;
   size_t file_count = 0;
+  size_t displayed_count = 0;
+  const bool should_truncate = max_files_for_display > 0;
+
   for (const auto &f : pkg.get_files()) {
-    files << f << "\n";
     ++file_count;
+    if (!should_truncate || displayed_count < max_files_for_display) {
+      files << f << "\n";
+      ++displayed_count;
+    }
   }
 
   std::string result = files.str();
   if (result.empty()) {
     result = "No files recorded for this installed package.";
+  } else if (should_truncate && file_count > max_files_for_display) {
+    // Append file list truncation notice:
+    const size_t hidden_count = file_count - displayed_count;
+    files << "\n--- " << hidden_count << " more file" << (hidden_count == 1 ? "" : "s") << " not shown ---\n"
+          << "--- Use the package manager CLI for complete list ---\n";
+    result = files.str();
   }
 
-  DNF_UI_TRACE("Backend file list done nevra=%s files=%zu bytes=%zu", pkg_nevra.c_str(), file_count, result.size());
+  DNF_UI_TRACE("Backend file list done nevra=%s total=%zu displayed=%zu bytes=%zu",
+               pkg_nevra.c_str(),
+               file_count,
+               displayed_count,
+               result.size());
+
   return result;
 }
 

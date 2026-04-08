@@ -94,7 +94,7 @@ std::vector<PackageRow> dnf_backend_search_available_package_rows_interruptible(
 std::vector<PackageRow> dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra);
 std::vector<PackageRow> dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra);
 std::string dnf_backend_get_package_info(const std::string &pkg_nevra);
-std::string dnf_backend_get_installed_package_files(const std::string &pkg_nevra);
+std::string dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max_files_for_display = 1500);
 std::string dnf_backend_get_package_deps(const std::string &pkg_nevra);
 std::string dnf_backend_get_package_changelog(const std::string &pkg_nevra);
 // Resolve the pending transaction and summarize the final package changes for UI review.

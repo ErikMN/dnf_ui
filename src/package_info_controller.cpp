@@ -151,7 +151,8 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
 
     try {
       DNF_UI_TRACE("Package info files load start nevra=%s", td ? td->nevra : "");
-      result->files = g_strdup(dnf_backend_get_installed_package_files(td->nevra).c_str());
+      // NOTE: Limit displayed files to prevent X11 clipboard socket overflow on copy:
+      result->files = g_strdup(dnf_backend_get_installed_package_files(td->nevra, 1500).c_str());
       DNF_UI_TRACE("Package info files loaded nevra=%s bytes=%zu",
                    td ? td->nevra : "",
                    result->files ? std::strlen(result->files) : 0);
