@@ -161,22 +161,6 @@ create_scrolled_text_view(const char *text, GtkWrapMode wrap_mode, GtkTextBuffer
   return scrolled;
 }
 
-// TODO: REMOVE:
-static void
-trace_files_tab_copy_clipboard(GtkTextView *view, const char *phase)
-{
-  GtkTextBuffer *buffer = gtk_text_view_get_buffer(view);
-  GtkTextIter start;
-  GtkTextIter end;
-  int selected_chars = 0;
-
-  if (gtk_text_buffer_get_selection_bounds(buffer, &start, &end)) {
-    selected_chars = gtk_text_iter_get_offset(&end) - gtk_text_iter_get_offset(&start);
-  }
-
-  DNF_UI_TRACE("Files tab copy %s selected_chars=%d", phase, selected_chars);
-}
-
 // -----------------------------------------------------------------------------
 // Setup window keyboard shortcuts
 // -----------------------------------------------------------------------------
@@ -403,20 +387,6 @@ build_main_ui(AppWidgets *ui)
   GtkWidget *scrolled_files =
       create_scrolled_text_view("Select an installed package to view its file list.", GTK_WRAP_NONE, &files_buffer);
   ui->files_buffer = files_buffer;
-
-  // TODO: REMOVE:
-  GtkWidget *files_view = gtk_scrolled_window_get_child(GTK_SCROLLED_WINDOW(scrolled_files));
-  if (files_view) {
-    g_signal_connect(files_view,
-                     "copy-clipboard",
-                     G_CALLBACK(+[](GtkTextView *view, gpointer) { trace_files_tab_copy_clipboard(view, "start"); }),
-                     NULL);
-    g_signal_connect_after(
-        files_view,
-        "copy-clipboard",
-        G_CALLBACK(+[](GtkTextView *view, gpointer) { trace_files_tab_copy_clipboard(view, "done"); }),
-        NULL);
-  }
 
   GtkWidget *tab_label_files = gtk_label_new("Files");
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_files, tab_label_files);
