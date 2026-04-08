@@ -9,8 +9,6 @@
 #include "package_info_controller.hpp"
 #include "widgets.hpp"
 
-#include <unistd.h>
-
 #include <string>
 
 // -----------------------------------------------------------------------------
@@ -456,7 +454,6 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
   gtk_popover_set_child(GTK_POPOVER(popover), box);
 
   PackageInstallState install_state = dnf_backend_get_package_install_state(row);
-  bool is_root = (geteuid() == 0);
 
   PendingAction::Type pending_type;
   bool has_pending = get_context_menu_pending_action(widgets, row.nevra, pending_type);
@@ -471,7 +468,7 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
 
   append_context_menu_action(GTK_BOX(box),
                              install_label,
-                             is_root && install_state != PackageInstallState::INSTALLED,
+                             install_state != PackageInstallState::INSTALLED,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
@@ -482,7 +479,7 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
 
   append_context_menu_action(GTK_BOX(box),
                              remove_label,
-                             is_root && install_state == PackageInstallState::INSTALLED,
+                             install_state == PackageInstallState::INSTALLED,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
@@ -493,7 +490,7 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
 
   append_context_menu_action(GTK_BOX(box),
                              reinstall_label,
-                             is_root && install_state == PackageInstallState::INSTALLED,
+                             install_state == PackageInstallState::INSTALLED,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));

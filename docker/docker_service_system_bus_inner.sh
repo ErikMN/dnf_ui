@@ -49,6 +49,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+print_logs() {
+  echo "*** Service log ***"
+  cat "$SERVICE_LOG" || true
+
+  echo "*** Polkit log ***"
+  cat "$POLKIT_LOG" || true
+}
+
 wait_for_result() {
   local transaction_path="$1"
   local expected_stage="$2"
@@ -77,11 +85,13 @@ wait_for_result() {
     else
       printf "%s\n" "$result"
       echo "*** Transaction did not reach the expected result state ***" >&2
+      print_logs >&2
       return 1
     fi
 
     if [ "$SECONDS" -ge "$deadline" ]; then
       echo "*** Timed out waiting for transaction service result ***" >&2
+      print_logs >&2
       return 1
     fi
 
@@ -182,6 +192,7 @@ if [ -n "$ALLOW_APPLY" ]; then
       ;;
     * )
       echo "*** Transaction apply result did not contain the expected success text ***" >&2
+      print_logs >&2
       exit 1
       ;;
   esac
@@ -211,13 +222,10 @@ else
       ;;
     * )
       echo "*** Apply did not fail with the expected authorization error ***" >&2
+      print_logs >&2
       exit 1
       ;;
   esac
 fi
 
-echo "*** Service log ***"
-cat "$SERVICE_LOG"
-
-echo "*** Polkit log ***"
-cat "$POLKIT_LOG"
+print_logs

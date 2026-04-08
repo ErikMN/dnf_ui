@@ -13,7 +13,6 @@
 #include "widgets_internal.hpp"
 
 #include <cstring>
-#include <unistd.h>
 
 // Task data for package-info operation.
 // Snapshot generation at dispatch time so we can drop stale results after Base rebuild.
@@ -112,15 +111,12 @@ update_selected_package_actions(SearchWidgets *widgets, const PackageRow &select
   // remove and reinstall stay reserved for the exact installed row.
   PackageInstallState install_state = dnf_backend_get_package_install_state(selected);
 
-  // FIXME: Replace with Polkit:
-  bool is_root = (geteuid() == 0);
-
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button),
-                           is_root && install_state != PackageInstallState::INSTALLED);
+                           install_state != PackageInstallState::INSTALLED);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button),
-                           is_root && install_state == PackageInstallState::INSTALLED);
+                           install_state == PackageInstallState::INSTALLED);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
-                           is_root && install_state == PackageInstallState::INSTALLED);
+                           install_state == PackageInstallState::INSTALLED);
   ui_helpers_update_action_button_labels(widgets, selected.nevra);
 }
 

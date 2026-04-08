@@ -3,6 +3,7 @@
 #include "base_manager.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend.hpp"
+#include "service/transaction_service_dbus.hpp"
 #include "transaction_request.hpp"
 
 #include <gio/gio.h>
@@ -23,10 +24,10 @@ namespace {
 // -----------------------------------------------------------------------------
 // Transaction service D-Bus names and introspection data
 // -----------------------------------------------------------------------------
-constexpr const char *kServiceName = "com.fedora.Dnfui.Transaction1";
-constexpr const char *kManagerObjectPath = "/com/fedora/Dnfui/Transaction1";
-constexpr const char *kManagerInterface = "com.fedora.Dnfui.Transaction1";
-constexpr const char *kTransactionInterface = "com.fedora.Dnfui.TransactionRequest1";
+constexpr const char *kServiceName = kTransactionServiceName;
+constexpr const char *kManagerObjectPath = kTransactionServiceManagerPath;
+constexpr const char *kManagerInterface = kTransactionServiceManagerInterface;
+constexpr const char *kTransactionInterface = kTransactionServiceRequestInterface;
 constexpr const char *kApplyActionId = "com.fedora.dnfui.apply-transactions";
 
 constexpr const char *kManagerIntrospectionXml = R"XML(

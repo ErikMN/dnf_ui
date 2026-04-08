@@ -10,7 +10,6 @@
 #include "ui_helpers.hpp"
 #include "base_manager.hpp"
 
-#include <unistd.h>
 #include <cstdio>
 
 #include <gtk/gtk.h>
@@ -80,7 +79,6 @@ static void initialize_ui_state(SearchWidgets *widgets);
 static void connect_signals(const AppWidgets *ui, SearchWidgets *widgets);
 static void connect_cleanup(GtkWidget *window, SearchWidgets *widgets);
 static void setup_periodic_tasks(void);
-static void apply_root_state(const AppWidgets *ui, SearchWidgets *widgets);
 static void show_pending_quit_dialog(SearchWidgets *widgets);
 static gboolean on_main_window_close_request(GtkWindow *window, gpointer user_data);
 static gboolean start_backend_warmup_idle(gpointer user_data);
@@ -900,22 +898,6 @@ on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gp
 }
 
 // -----------------------------------------------------------------------------
-// Disable transaction buttons when not running as root
-// FIXME: Replace with Polkit:
-// -----------------------------------------------------------------------------
-static void
-apply_root_state(const AppWidgets *ui, SearchWidgets *widgets)
-{
-  if (geteuid() != 0) {
-    std::printf("*** Not running as root ***\n");
-    gtk_widget_set_sensitive(ui->install_button, FALSE);
-    gtk_widget_set_sensitive(ui->reinstall_button, FALSE);
-    gtk_widget_set_sensitive(ui->remove_button, FALSE);
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), FALSE);
-  }
-}
-
-// -----------------------------------------------------------------------------
 // GTK app setup (start here)
 // -----------------------------------------------------------------------------
 static void
@@ -938,7 +920,6 @@ activate(GtkApplication *app, gpointer)
   connect_signals(&ui, widgets);
   connect_cleanup(ui.window, widgets);
   setup_periodic_tasks();
-  apply_root_state(&ui, widgets);
 
   // Show the fully initialized window
   gtk_window_present(GTK_WINDOW(ui.window));
