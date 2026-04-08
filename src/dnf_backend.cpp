@@ -178,28 +178,36 @@ dnf_backend_search_available_package_rows_interruptible(const std::string &patte
 // the system package set.
 //
 // Thread-safety:
-//   This function takes g_installed_mutex for the entire duration of clearing
-//   and repopulating g_installed_nevras to prevent
-//   concurrent reads or writes from GTK worker threads or periodic refresh
-//   timers.
+//   The Base read lock (base_mutex) and g_installed_mutex must never be held
+//   simultaneously, as any future caller may acquire g_installed_mutex before
+//   calling into BaseManager, which would produce a deadlock.
+//   Rows are collected into local sets while the Base lock is held, then the
+//   Base lock is released before g_installed_mutex is acquired to publish the
+//   new snapshot. This matches the pattern used by
+//   dnf_backend_get_installed_package_rows_interruptible.
 // -----------------------------------------------------------------------------
 void
 dnf_backend_refresh_installed_nevras()
 {
-  auto [base, guard, generation] = BaseManager::instance().acquire_read();
-  libdnf5::rpm::PackageQuery query(base);
-  query.filter_installed();
+  std::set<std::string> installed_nevras;
+  std::map<std::string, PackageRow> installed_rows_by_name_arch;
 
-  // Acquire exclusive lock before modifying the installed-package cache.
+  {
+    auto [base, guard, generation] = BaseManager::instance().acquire_read();
+    libdnf5::rpm::PackageQuery query(base);
+    query.filter_installed();
+
+    for (auto pkg : query) {
+      PackageRow row = make_package_row(pkg);
+      installed_nevras.insert(row.nevra);
+      remember_installed_row(installed_rows_by_name_arch, row);
+    }
+  } // Base read lock released before acquiring g_installed_mutex
+
+  // Publish the refreshed installed-package cache now that the Base lock is free.
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  g_installed_nevras.clear();
-  g_installed_rows_by_name_arch.clear();
-
-  for (auto pkg : query) {
-    PackageRow row = make_package_row(pkg);
-    g_installed_nevras.insert(row.nevra);
-    remember_installed_row(g_installed_rows_by_name_arch, row);
-  }
+  g_installed_nevras.swap(installed_nevras);
+  g_installed_rows_by_name_arch.swap(installed_rows_by_name_arch);
 }
 
 // Return whether one package row is available, upgradeable, or installed exactly.
