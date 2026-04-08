@@ -15,7 +15,7 @@ ifneq ($(filter test,$(MAKECMDGOALS)),)
     $(error "Missing test dependencies: please install development packages for $(TEST_PKGS)")
   endif
 else
-  ifeq ($(filter dockerrun dockertest dockerservicetest dockerserviceapplytest dockerservicesystemtest dockersetup cppcheck indent clean,$(MAKECMDGOALS)),)
+  ifeq ($(filter dockerrun dockertest dockerservicetest dockerserviceapplytest dockerservicesystemtest dockerservicesystemapplytest dockersetup cppcheck indent clean,$(MAKECMDGOALS)),)
     PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
     ifeq ($(PKG_OK),yes)
       PKG_LIBS := $(shell pkg-config --libs $(PKGS))
@@ -144,6 +144,10 @@ dockerserviceapplytest:
 .PHONY: dockerservicesystemtest
 dockerservicesystemtest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_test.sh
+
+.PHONY: dockerservicesystemapplytest
+dockerservicesystemapplytest:
+	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_apply_test.sh
 
 .PHONY: dockersetup
 dockersetup:

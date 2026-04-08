@@ -8,9 +8,11 @@ RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
 APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
 TEST_USER="dnfuitest"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-bash}"
+ALLOW_APPLY="${SERVICE_SYSTEM_BUS_ALLOW_APPLY:-}"
 SERVICE_BIN="/workspace/dnf_ui_transaction_service"
 POLICY_FILE="/workspace/packaging/com.fedora.dnfui.policy"
 BUS_POLICY_FILE="/workspace/packaging/com.fedora.Dnfui.Transaction1.conf"
+RULES_FILE="/etc/polkit-1/rules.d/49-com.fedora.dnfui-test.rules"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "*** docker_service_system_bus_inner.sh must run as root ***" >&2
@@ -70,6 +72,8 @@ wait_for_result() {
 
     if printf "%s\n" "$result" | grep -Fq "'preview-running'"; then
       :
+    elif printf "%s\n" "$result" | grep -Fq "'apply-running'"; then
+      :
     else
       printf "%s\n" "$result"
       echo "*** Transaction did not reach the expected result state ***" >&2
@@ -93,6 +97,20 @@ install -D -m 0755 "$SERVICE_BIN" /usr/libexec/dnf_ui_transaction_service
 install -D -m 0644 "$POLICY_FILE" /usr/share/polkit-1/actions/com.fedora.dnfui.policy
 install -D -m 0644 "$BUS_POLICY_FILE" /usr/share/dbus-1/system.d/com.fedora.Dnfui.Transaction1.conf
 
+if [ -n "$ALLOW_APPLY" ]; then
+  install -d /etc/polkit-1/rules.d
+  cat >"$RULES_FILE" <<'EOF'
+polkit.addRule(function(action, subject) {
+  if (action.id == "com.fedora.dnfui.apply-transactions" &&
+      subject.user == "dnfuitest") {
+    return polkit.Result.YES;
+  }
+
+  return polkit.Result.NOT_HANDLED;
+});
+EOF
+fi
+
 mkdir -p /run/dbus
 dbus-uuidgen --ensure=/etc/machine-id
 
@@ -107,7 +125,11 @@ polkit_pid=$!
 "$SERVICE_BIN" --system >"$SERVICE_LOG" 2>&1 &
 service_pid=$!
 
-echo "*** Running transaction service system bus test ***"
+if [ -n "$ALLOW_APPLY" ]; then
+  echo "*** Running transaction service system bus apply test ***"
+else
+  echo "*** Running transaction service system bus test ***"
+fi
 
 gdbus wait --system "$SERVICE_NAME" >/dev/null
 
@@ -143,34 +165,56 @@ fi
 preview_result="$(wait_for_result "$transaction_path" "preview-ready" "true")"
 echo "$preview_result"
 
-set +e
-apply_output="$(runuser -u "$TEST_USER" -- \
-  env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
-  gdbus call \
-  --system \
-  --dest "$SERVICE_NAME" \
-  --object-path "$transaction_path" \
-  --method "$APPLY_METHOD" 2>&1)"
-apply_status=$?
-set -e
+if [ -n "$ALLOW_APPLY" ]; then
+  runuser -u "$TEST_USER" -- \
+    env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
+    gdbus call \
+    --system \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$APPLY_METHOD" >/dev/null
 
-echo "$apply_output"
+  apply_result="$(wait_for_result "$transaction_path" "apply-succeeded" "true")"
+  echo "$apply_result"
 
-if [ "$apply_status" -eq 0 ]; then
-  echo "*** Unprivileged apply unexpectedly succeeded on the system bus ***" >&2
-  exit 1
-fi
+  case "$apply_result" in
+    *"Transaction applied successfully."* )
+      ;;
+    * )
+      echo "*** Transaction apply result did not contain the expected success text ***" >&2
+      exit 1
+      ;;
+  esac
+else
+  set +e
+  apply_output="$(runuser -u "$TEST_USER" -- \
+    env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
+    gdbus call \
+    --system \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$APPLY_METHOD" 2>&1)"
+  apply_status=$?
+  set -e
 
-case "$apply_output" in
-  *"AccessDenied"* )
-    ;;
-  *"Not authorized to apply package transactions."* )
-    ;;
-  * )
-    echo "*** Apply did not fail with the expected authorization error ***" >&2
+  echo "$apply_output"
+
+  if [ "$apply_status" -eq 0 ]; then
+    echo "*** Unprivileged apply unexpectedly succeeded on the system bus ***" >&2
     exit 1
-    ;;
-esac
+  fi
+
+  case "$apply_output" in
+    *"AccessDenied"* )
+      ;;
+    *"Not authorized to apply package transactions."* )
+      ;;
+    * )
+      echo "*** Apply did not fail with the expected authorization error ***" >&2
+      exit 1
+      ;;
+  esac
+fi
 
 echo "*** Service log ***"
 cat "$SERVICE_LOG"
