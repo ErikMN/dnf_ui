@@ -20,6 +20,17 @@ struct TransactionServiceResult {
   std::string details;
 };
 
+static GBusType
+get_transaction_service_bus_type()
+{
+  const char *bus_mode = g_getenv("DNF_UI_TRANSACTION_BUS");
+  if (bus_mode && g_strcmp0(bus_mode, "session") == 0) {
+    return G_BUS_TYPE_SESSION;
+  }
+
+  return G_BUS_TYPE_SYSTEM;
+}
+
 static GVariant *
 build_start_transaction_parameters(const TransactionRequest &request)
 {
@@ -133,7 +144,8 @@ transaction_service_client_apply_request(const TransactionRequest &request,
   append_progress("Connecting to transaction service...");
 
   GError *error = nullptr;
-  GDBusConnection *connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, nullptr, &error);
+  GBusType bus_type = get_transaction_service_bus_type();
+  GDBusConnection *connection = g_bus_get_sync(bus_type, nullptr, &error);
   if (!connection) {
     error_out = error ? error->message : "Could not connect to the transaction service bus.";
     g_clear_error(&error);

@@ -83,4 +83,4 @@ docker run --rm -it \
   -e DEBUG_TRACE \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
-  bash -c "make clean && make -j$(nproc) && ./dnf_ui"
+  bash /workspace/docker/docker_gui_service_run_inner.sh

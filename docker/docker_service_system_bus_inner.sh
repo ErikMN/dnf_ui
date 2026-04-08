@@ -8,6 +8,7 @@ RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
 APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
 TEST_USER="dnfuitest"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-bash}"
+INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
 ALLOW_APPLY="${SERVICE_SYSTEM_BUS_ALLOW_APPLY:-}"
 SERVICE_BIN="/workspace/dnf_ui_transaction_service"
 POLICY_FILE="/workspace/packaging/com.fedora.dnfui.policy"
@@ -137,8 +138,18 @@ service_pid=$!
 
 if [ -n "$ALLOW_APPLY" ]; then
   echo "*** Running transaction service system bus apply test ***"
+elif [ -n "$INSTALL_SPEC" ]; then
+  echo "*** Running transaction service system bus install preview test ***"
 else
   echo "*** Running transaction service system bus test ***"
+fi
+
+start_install="[]"
+start_remove="[]"
+start_reinstall="[\"$REINSTALL_SPEC\"]"
+if [ -n "$INSTALL_SPEC" ]; then
+  start_install="[\"$INSTALL_SPEC\"]"
+  start_reinstall="[]"
 fi
 
 gdbus wait --system "$SERVICE_NAME" >/dev/null
@@ -150,9 +161,9 @@ reply="$(runuser -u "$TEST_USER" -- \
   --dest "$SERVICE_NAME" \
   --object-path "$MANAGER_PATH" \
   --method "$MANAGER_METHOD" \
-  "[]" \
-  "[]" \
-  "[\"$REINSTALL_SPEC\"]")"
+  "$start_install" \
+  "$start_remove" \
+  "$start_reinstall")"
 
 echo "$reply"
 
