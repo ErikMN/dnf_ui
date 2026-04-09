@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
+# Inner system bus smoke test used by the Docker service wrappers. It stages the
+# policy files, starts a private bus and polkitd, then exercises preview and
+# apply through the installed service contract.
+
 SERVICE_NAME="com.fedora.Dnfui.Transaction1"
 MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
 MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Docker GUI run helper that starts the app and transaction service on a shared
+# session bus for manual transaction testing inside the container.
+
 SERVICE_NAME="com.fedora.Dnfui.Transaction1"
 SERVICE_BIN="/workspace/dnf_ui_transaction_service"
 APP_BIN="/workspace/dnf_ui"

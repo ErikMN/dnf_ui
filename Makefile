@@ -114,6 +114,7 @@ test: dnf_ui_tests
 	@echo "*** Running backend test suite ***"
 	@./dnf_ui_tests
 
+# Native transaction service development helpers:
 .PHONY: servicetest
 servicetest: dnf_ui_transaction_service
 	@./utils/test_transaction_service_poc.sh
@@ -138,6 +139,7 @@ servicesystemtest:
 servicesystemapplytest:
 	@SERVICE_SYSTEM_APPLY=yes ./utils/test_transaction_service_system_bus.sh
 
+# Docker app and transaction service helpers:
 # To test dark or light themes in Docker:
 # make dockerrun THEME=dark
 # make dockerrun THEME=light

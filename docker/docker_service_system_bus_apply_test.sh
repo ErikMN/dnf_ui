@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Docker wrapper for the system bus transaction service allow and apply smoke
+# test.
+
 # Print colors:
 FMT_RED=$(printf '\033[31m')
 FMT_GREEN=$(printf '\033[32m')

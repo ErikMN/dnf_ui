@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Native system bus smoke test for the installed transaction service. The apply
+# mode is meant to be run as a regular desktop user so Polkit can prompt.
+
 SERVICE_NAME="com.fedora.Dnfui.Transaction1"
 MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
 MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"

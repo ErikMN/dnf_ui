@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Session bus smoke test for the standalone transaction service binary. This is
+# the smallest native check for the D-Bus manager and preview flow.
+
 SERVICE_NAME="com.fedora.Dnfui.Transaction1"
 MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
 MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"

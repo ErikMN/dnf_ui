@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Native development helper that installs the transaction service files into
+# system locations for local Fedora testing.
+
 SERVICE_NAME="com.fedora.Dnfui.Transaction1"
 SERVICE_BIN_DEST="/usr/libexec/dnf_ui_transaction_service"
 POLICY_DEST="/usr/share/polkit-1/actions/com.fedora.dnfui.policy"

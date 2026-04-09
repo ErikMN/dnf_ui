@@ -30,6 +30,16 @@ serviceinstall is a native development helper, not the final packaging flow.
 sudo make serviceuninstall
 
 --------------------------------------------------------------------------------
+Transaction service overview:
+--------------------------------------------------------------------------------
+
+The GUI runs as the regular user.
+Preview and apply both go through the transaction service.
+Native Fedora uses the system bus path and Polkit for apply authorization.
+Docker GUI testing uses the session bus path for convenience.
+The dockerservicesystem targets exercise the real system bus authorization flow.
+
+--------------------------------------------------------------------------------
 Docker service test:
 --------------------------------------------------------------------------------
 

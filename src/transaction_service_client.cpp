@@ -1,3 +1,10 @@
+// -----------------------------------------------------------------------------
+// src/transaction_service_client.cpp
+// GUI-side D-Bus client for the transaction service
+// Starts transaction requests, waits for preview and apply state changes, reads
+// structured preview data, forwards service progress lines, and releases
+// finished requests when the GUI no longer needs them.
+// -----------------------------------------------------------------------------
 #include "transaction_service_client.hpp"
 
 #include "debug_trace.hpp"
@@ -32,6 +39,7 @@ struct TransactionServiceProgressForwarder {
 static GBusType
 get_transaction_service_bus_type()
 {
+  // Docker GUI testing uses the session bus path while native Polkit uses the system bus.
   const char *bus_mode = g_getenv("DNF_UI_TRANSACTION_BUS");
   if (bus_mode && g_strcmp0(bus_mode, "session") == 0) {
     return G_BUS_TYPE_SESSION;
@@ -65,6 +73,7 @@ build_start_transaction_parameters(const TransactionRequest &request)
     g_variant_builder_add(&reinstall_builder, "s", spec.c_str());
   }
 
+  // Pack the request arrays in install, remove, and reinstall order.
   return g_variant_new("(asasas)", &install_builder, &remove_builder, &reinstall_builder);
 }
 
@@ -169,6 +178,7 @@ get_transaction_result(GDBusConnection *connection,
     return false;
   }
 
+  // Read stage, finished, success, and details from the GetResult reply.
   const gchar *stage = nullptr;
   gboolean finished = FALSE;
   gboolean success = FALSE;

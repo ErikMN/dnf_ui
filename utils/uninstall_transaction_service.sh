@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Native development helper that removes the locally installed transaction
+# service files after Fedora testing.
+
 SERVICE_BIN_DEST="/usr/libexec/dnf_ui_transaction_service"
 POLICY_DEST="/usr/share/polkit-1/actions/com.fedora.dnfui.policy"
 DBUS_SERVICE_DEST="/usr/share/dbus-1/system-services/com.fedora.Dnfui.Transaction1.service"
