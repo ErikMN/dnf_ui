@@ -950,7 +950,8 @@ dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
     DNF_UI_TRACE("Transaction run done result=%d", static_cast<int>(run_result));
     if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
       std::ostringstream oss;
-      oss << "Transaction failed (code " << static_cast<int>(run_result) << ").\n";
+      oss << "Transaction failed: " << libdnf5::base::Transaction::transaction_result_to_string(run_result) << " (code "
+          << static_cast<int>(run_result) << ").\n";
 
       for (const auto &msg : transaction->get_transaction_problems()) {
         oss << "  " << msg << "\n";
