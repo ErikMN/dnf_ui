@@ -6,8 +6,42 @@ Useful commands:
 
 sudo dnf install libdnf5-devel libdnf-cli-devel
 sudo dnf install gtk4-devel
+sudo dnf install polkit-devel polkit
 
 sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
+
+--------------------------------------------------------------------------------
+Native Polkit test:
+--------------------------------------------------------------------------------
+
+make clean && make -j1
+sudo make serviceinstall
+
+make servicesystemtest
+SERVICE_TEST_REINSTALL_NEVRA=bash make servicesystemapplytest
+
+./dnf_ui
+
+Run dnf_ui as a regular desktop user and apply a transaction to test the
+desktop Polkit prompt.
+
+serviceinstall is a native development helper, not the final packaging flow.
+
+sudo make serviceuninstall
+
+--------------------------------------------------------------------------------
+Docker service test:
+--------------------------------------------------------------------------------
+
+make dockerservicesystemtest DEBUG_TRACE=y
+make dockerservicesystemapplytest DEBUG_TRACE=y
+make dockerrun DEBUG_TRACE=y
+
+Use native Fedora to test the real desktop Polkit prompt.
+Use Docker to test the service boundary and package transactions.
+
+make dockerrun uses the session bus service path for container testing.
+Use the dockerservicesystem targets to test the real system bus Polkit flow.
 
 --------------------------------------------------------------------------------
 Useful links:
