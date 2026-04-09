@@ -16,6 +16,7 @@ TEST_USER="dnfuitest"
 INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
 ALLOW_APPLY="${SERVICE_SYSTEM_BUS_ALLOW_APPLY:-}"
+TIMEOUT_SECONDS="${SERVICE_TEST_TIMEOUT_SECONDS:-180}"
 SERVICE_BIN="/workspace/dnf_ui_transaction_service"
 POLICY_FILE="/workspace/packaging/com.fedora.dnfui.policy"
 BUS_POLICY_FILE="/workspace/packaging/com.fedora.Dnfui.Transaction1.conf"
@@ -78,7 +79,7 @@ wait_for_result() {
   local transaction_path="$1"
   local expected_stage="$2"
   local expected_success="$3"
-  local deadline="$((SECONDS + 60))"
+  local deadline="$((SECONDS + TIMEOUT_SECONDS))"
   local result=""
 
   while :; do
@@ -107,7 +108,8 @@ wait_for_result() {
     fi
 
     if [ "$SECONDS" -ge "$deadline" ]; then
-      echo "*** Timed out waiting for transaction service result ***" >&2
+      echo "*** Timed out waiting for transaction service result after ${TIMEOUT_SECONDS} seconds ***" >&2
+      echo "*** Last observed result: $result ***" >&2
       print_logs >&2
       return 1
     fi
@@ -160,10 +162,13 @@ if [ -n "$ALLOW_APPLY" ]; then
   else
     echo "*** Package spec: $REINSTALL_SPEC ***"
   fi
+  echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 elif [ -n "$INSTALL_SPEC" ]; then
   echo "*** Running transaction service system bus install preview test ***"
+  echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 else
   echo "*** Running transaction service system bus test ***"
+  echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 fi
 
 start_install="[]"

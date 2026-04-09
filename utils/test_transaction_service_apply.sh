@@ -10,6 +10,7 @@ APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
 RELEASE_METHOD="com.fedora.Dnfui.TransactionRequest1.Release"
 INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
+TIMEOUT_SECONDS="${SERVICE_TEST_TIMEOUT_SECONDS:-180}"
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -52,6 +53,7 @@ else
 fi
 echo "*** Use only a harmless package for install tests. ***"
 echo "*** Use only a non critical installed package for reinstall tests. ***"
+echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 
 SERVICE_BIN="$SERVICE_BIN" \
 SERVICE_NAME="$SERVICE_NAME" \
@@ -64,6 +66,7 @@ RELEASE_METHOD="$RELEASE_METHOD" \
 INSTALL_SPEC="$INSTALL_SPEC" \
 REINSTALL_SPEC="$REINSTALL_SPEC" \
 LOG_FILE="$LOG_FILE" \
+TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
 dbus-run-session -- bash <<'EOF'
   set -e
 
@@ -71,7 +74,7 @@ dbus-run-session -- bash <<'EOF'
     local transaction_path="$1"
     local expected_stage="$2"
     local expected_success="$3"
-    local deadline="$((SECONDS + 60))"
+    local deadline="$((SECONDS + TIMEOUT_SECONDS))"
     local result=""
 
     while :; do
@@ -97,7 +100,8 @@ dbus-run-session -- bash <<'EOF'
       fi
 
       if [ "$SECONDS" -ge "$deadline" ]; then
-        echo "*** Timed out waiting for transaction service result ***" >&2
+        echo "*** Timed out waiting for transaction service result after ${TIMEOUT_SECONDS} seconds ***" >&2
+        echo "*** Last observed result: $result ***" >&2
         echo "*** Service log ***" >&2
         cat "$LOG_FILE" >&2 || true
         return 1

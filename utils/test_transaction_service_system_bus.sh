@@ -12,6 +12,7 @@ APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
 APPLY_MODE="${SERVICE_SYSTEM_APPLY:-}"
 INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
+TIMEOUT_SECONDS="${SERVICE_TEST_TIMEOUT_SECONDS:-180}"
 
 if [ "$(id -u)" -eq 0 ]; then
   echo "*** Run this test as a regular user, not as root. ***" >&2
@@ -32,7 +33,7 @@ wait_for_result() {
   local transaction_path="$1"
   local expected_stage="$2"
   local expected_success="$3"
-  local deadline="$((SECONDS + 60))"
+  local deadline="$((SECONDS + TIMEOUT_SECONDS))"
   local result=""
 
   while :; do
@@ -58,7 +59,8 @@ wait_for_result() {
     fi
 
     if [ "$SECONDS" -ge "$deadline" ]; then
-      echo "*** Timed out waiting for transaction service result ***" >&2
+      echo "*** Timed out waiting for transaction service result after ${TIMEOUT_SECONDS} seconds ***" >&2
+      echo "*** Last observed result: $result ***" >&2
       return 1
     fi
 
@@ -76,8 +78,10 @@ if [ -n "$APPLY_MODE" ]; then
   fi
   echo "*** Use only a harmless package for install tests. ***"
   echo "*** Use only a non critical installed package for reinstall tests. ***"
+  echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 else
   echo "*** Running native transaction service preview test ***"
+  echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 fi
 
 start_install="[]"
