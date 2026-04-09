@@ -1,5 +1,6 @@
 #include "transaction_service_client.hpp"
 
+#include "debug_trace.hpp"
 #include "service/transaction_service_dbus.hpp"
 #include "transaction_request.hpp"
 
@@ -18,6 +19,10 @@ struct TransactionServiceResult {
   bool finished = false;
   bool success = false;
   std::string details;
+};
+
+struct TransactionServiceProgressForwarder {
+  const std::function<void(const std::string &)> *progress_callback = nullptr;
 };
 
 static GBusType
@@ -88,12 +93,11 @@ get_transaction_result(GDBusConnection *connection,
   gboolean success = FALSE;
   const gchar *details = nullptr;
   g_variant_get(reply, "(&sbbs)", &stage, &finished, &success, &details);
-  g_variant_unref(reply);
-
   result_out.stage = stage ? stage : "";
   result_out.finished = finished;
   result_out.success = success;
   result_out.details = details ? details : "";
+  g_variant_unref(reply);
   return true;
 }
 
@@ -101,14 +105,31 @@ static bool
 wait_for_transaction_stage(GDBusConnection *connection,
                            const std::string &transaction_path,
                            const char *running_stage,
+                           GMainContext *signal_context,
                            TransactionServiceResult &result_out,
                            std::string &error_out)
 {
   error_out.clear();
+  std::string last_stage;
 
   while (true) {
+    if (signal_context) {
+      while (g_main_context_pending(signal_context)) {
+        g_main_context_iteration(signal_context, FALSE);
+      }
+    }
+
     if (!get_transaction_result(connection, transaction_path, result_out, error_out)) {
       return false;
+    }
+
+    if (result_out.stage != last_stage) {
+      DNF_UI_TRACE("Transaction service client stage path=%s stage=%s finished=%d success=%d",
+                   transaction_path.c_str(),
+                   result_out.stage.c_str(),
+                   result_out.finished ? 1 : 0,
+                   result_out.success ? 1 : 0);
+      last_stage = result_out.stage;
     }
 
     if (result_out.stage != running_stage) {
@@ -117,6 +138,30 @@ wait_for_transaction_stage(GDBusConnection *connection,
 
     g_usleep(200 * 1000);
   }
+}
+
+static void
+on_transaction_progress_signal(GDBusConnection *,
+                               const gchar *,
+                               const gchar *,
+                               const gchar *,
+                               const gchar *,
+                               GVariant *parameters,
+                               gpointer user_data)
+{
+  auto *forwarder = static_cast<TransactionServiceProgressForwarder *>(user_data);
+  if (!forwarder || !forwarder->progress_callback || !*forwarder->progress_callback) {
+    return;
+  }
+
+  const gchar *line = nullptr;
+  g_variant_get(parameters, "(&s)", &line);
+  if (!line || !*line) {
+    return;
+  }
+
+  DNF_UI_TRACE("Transaction service client progress line=%s", line);
+  (*forwarder->progress_callback)(line);
 }
 
 } // namespace
@@ -145,6 +190,7 @@ transaction_service_client_apply_request(const TransactionRequest &request,
 
   GError *error = nullptr;
   GBusType bus_type = get_transaction_service_bus_type();
+  DNF_UI_TRACE("Transaction service client connect bus=%s", bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
   GDBusConnection *connection = g_bus_get_sync(bus_type, nullptr, &error);
   if (!connection) {
     error_out = error ? error->message : "Could not connect to the transaction service bus.";
@@ -155,6 +201,10 @@ transaction_service_client_apply_request(const TransactionRequest &request,
   bool ok = false;
   TransactionServiceResult result;
   std::string transaction_path;
+  GMainContext *signal_context = g_main_context_new();
+  g_main_context_push_thread_default(signal_context);
+  TransactionServiceProgressForwarder progress_forwarder { &progress_callback };
+  guint progress_subscription_id = 0;
 
   do {
     GVariant *start_reply = g_dbus_connection_call_sync(connection,
@@ -184,8 +234,21 @@ transaction_service_client_apply_request(const TransactionRequest &request,
       break;
     }
 
+    DNF_UI_TRACE("Transaction service client start path=%s", transaction_path.c_str());
+    progress_subscription_id = g_dbus_connection_signal_subscribe(connection,
+                                                                  kTransactionServiceName,
+                                                                  kTransactionServiceRequestInterface,
+                                                                  "Progress",
+                                                                  transaction_path.c_str(),
+                                                                  nullptr,
+                                                                  G_DBUS_SIGNAL_FLAGS_NONE,
+                                                                  on_transaction_progress_signal,
+                                                                  &progress_forwarder,
+                                                                  nullptr);
+
     append_progress("Waiting for privileged transaction preview...");
-    if (!wait_for_transaction_stage(connection, transaction_path, "preview-running", result, error_out)) {
+    if (!wait_for_transaction_stage(
+            connection, transaction_path, "preview-running", signal_context, result, error_out)) {
       break;
     }
 
@@ -216,7 +279,7 @@ transaction_service_client_apply_request(const TransactionRequest &request,
     g_variant_unref(apply_reply);
 
     append_progress("Waiting for privileged apply to finish...");
-    if (!wait_for_transaction_stage(connection, transaction_path, "apply-running", result, error_out)) {
+    if (!wait_for_transaction_stage(connection, transaction_path, "apply-running", signal_context, result, error_out)) {
       break;
     }
 
@@ -226,9 +289,20 @@ transaction_service_client_apply_request(const TransactionRequest &request,
     }
 
     append_progress(result.details.empty() ? "Transaction applied successfully." : result.details);
+    DNF_UI_TRACE("Transaction service client apply done path=%s", transaction_path.c_str());
     ok = true;
   } while (false);
 
+  if (!ok) {
+    DNF_UI_TRACE(
+        "Transaction service client apply failed path=%s error=%s", transaction_path.c_str(), error_out.c_str());
+  }
+
+  if (progress_subscription_id != 0) {
+    g_dbus_connection_signal_unsubscribe(connection, progress_subscription_id);
+  }
+  g_main_context_pop_thread_default(signal_context);
+  g_main_context_unref(signal_context);
   g_object_unref(connection);
   return ok;
 }

@@ -79,6 +79,8 @@ dbus-run-session -- bash <<'EOF'
 
       if [ "$SECONDS" -ge "$deadline" ]; then
         echo "*** Timed out waiting for transaction service result ***" >&2
+        echo "*** Service log ***" >&2
+        cat "$LOG_FILE" >&2 || true
         return 1
       fi
 

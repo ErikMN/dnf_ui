@@ -439,6 +439,7 @@ run_transaction_preview(TransactionSession *session)
 
   TransactionPreview preview;
   std::string error_out;
+  queue_transaction_progress(session, "Loading package base...");
   auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
   DNF_UI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
@@ -492,6 +493,7 @@ run_transaction_apply(TransactionSession *session)
   }
 
   std::string error_out;
+  queue_transaction_progress(session, "Loading package base...");
   auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
   DNF_UI_TRACE("Transaction service apply start path=%s", session->object_path.c_str());
