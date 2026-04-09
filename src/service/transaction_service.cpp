@@ -48,6 +48,15 @@ constexpr const char *kTransactionIntrospectionXml = R"XML(
   <interface name="com.fedora.Dnfui.TransactionRequest1">
     <method name="Cancel"/>
     <method name="Apply"/>
+    <method name="Release"/>
+    <method name="GetPreview">
+      <arg name="install" type="as" direction="out"/>
+      <arg name="upgrade" type="as" direction="out"/>
+      <arg name="downgrade" type="as" direction="out"/>
+      <arg name="reinstall" type="as" direction="out"/>
+      <arg name="remove" type="as" direction="out"/>
+      <arg name="disk_space_delta" type="x" direction="out"/>
+    </method>
     <method name="GetResult">
       <arg name="stage" type="s" direction="out"/>
       <arg name="finished" type="b" direction="out"/>
@@ -86,6 +95,7 @@ struct TransactionSession {
   guint registration_id = 0;
   std::string object_path;
   TransactionRequest request;
+  TransactionPreview preview;
   std::atomic<bool> finished { false };
   std::atomic<bool> cancelled { false };
   TransactionStage stage = TransactionStage::PREVIEW_RUNNING;
@@ -171,6 +181,11 @@ struct QueuedFinishedResult {
   std::string details;
 };
 
+struct QueuedSessionRelease {
+  TransactionService *service = nullptr;
+  std::string object_path;
+};
+
 static gboolean
 dispatch_transaction_progress(gpointer user_data)
 {
@@ -192,6 +207,27 @@ dispatch_transaction_finished(gpointer user_data)
   }
 
   emit_transaction_finished(result->session, result->stage, result->success, result->details);
+  return G_SOURCE_REMOVE;
+}
+
+static gboolean
+dispatch_transaction_release(gpointer user_data)
+{
+  std::unique_ptr<QueuedSessionRelease> release(static_cast<QueuedSessionRelease *>(user_data));
+  if (!release || !release->service) {
+    return G_SOURCE_REMOVE;
+  }
+
+  auto it = release->service->transactions.find(release->object_path);
+  if (it == release->service->transactions.end()) {
+    return G_SOURCE_REMOVE;
+  }
+
+  if (release->service->connection && it->second->registration_id != 0) {
+    g_dbus_connection_unregister_object(release->service->connection, it->second->registration_id);
+  }
+
+  release->service->transactions.erase(it);
   return G_SOURCE_REMOVE;
 }
 
@@ -266,6 +302,19 @@ queue_transaction_finished(TransactionSession *session,
   g_main_context_invoke(nullptr, dispatch_transaction_finished, result);
 }
 
+static void
+queue_transaction_release(TransactionSession *session)
+{
+  if (!session || !session->service) {
+    return;
+  }
+
+  auto *release = new QueuedSessionRelease();
+  release->service = session->service;
+  release->object_path = session->object_path;
+  g_main_context_invoke(nullptr, dispatch_transaction_release, release);
+}
+
 static std::string
 format_transaction_preview_space_change(long long delta_bytes)
 {
@@ -302,6 +351,14 @@ append_transaction_preview_section(std::ostringstream &summary,
     summary << "  " << item << "\n";
   }
   summary << "\n";
+}
+
+static void
+append_transaction_preview_array(GVariantBuilder &builder, const std::vector<std::string> &items)
+{
+  for (const auto &item : items) {
+    g_variant_builder_add(&builder, "s", item.c_str());
+  }
 }
 
 static std::string
@@ -458,6 +515,7 @@ run_transaction_preview(TransactionSession *session)
     return;
   }
 
+  session->preview = preview;
   DNF_UI_TRACE("Transaction service preview done path=%s items=%zu",
                session->object_path.c_str(),
                preview.install.size() + preview.upgrade.size() + preview.downgrade.size() + preview.reinstall.size() +
@@ -632,6 +690,57 @@ on_transaction_method_call(GDBusConnection *,
     set_transaction_running(session, TransactionStage::APPLY_RUNNING);
     g_dbus_method_invocation_return_value(invocation, nullptr);
     g_idle_add_full(G_PRIORITY_DEFAULT, start_transaction_apply, session, nullptr);
+    return;
+  }
+
+  if (g_strcmp0(method_name, "Release") == 0) {
+    if (!session->finished.load()) {
+      g_dbus_method_invocation_return_error(invocation,
+                                            G_DBUS_ERROR,
+                                            G_DBUS_ERROR_FAILED,
+                                            "Transaction request cannot be released while work is still running.");
+      return;
+    }
+
+    g_dbus_method_invocation_return_value(invocation, nullptr);
+    queue_transaction_release(session);
+    return;
+  }
+
+  if (g_strcmp0(method_name, "GetPreview") == 0) {
+    if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
+      g_dbus_method_invocation_return_error(
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview is not available.");
+      return;
+    }
+
+    GVariantBuilder install_builder;
+    GVariantBuilder upgrade_builder;
+    GVariantBuilder downgrade_builder;
+    GVariantBuilder reinstall_builder;
+    GVariantBuilder remove_builder;
+
+    g_variant_builder_init(&install_builder, G_VARIANT_TYPE("as"));
+    g_variant_builder_init(&upgrade_builder, G_VARIANT_TYPE("as"));
+    g_variant_builder_init(&downgrade_builder, G_VARIANT_TYPE("as"));
+    g_variant_builder_init(&reinstall_builder, G_VARIANT_TYPE("as"));
+    g_variant_builder_init(&remove_builder, G_VARIANT_TYPE("as"));
+
+    append_transaction_preview_array(install_builder, session->preview.install);
+    append_transaction_preview_array(upgrade_builder, session->preview.upgrade);
+    append_transaction_preview_array(downgrade_builder, session->preview.downgrade);
+    append_transaction_preview_array(reinstall_builder, session->preview.reinstall);
+    append_transaction_preview_array(remove_builder, session->preview.remove);
+
+    // Return the preview arrays in the same order as the GetPreview D-Bus signature.
+    g_dbus_method_invocation_return_value(invocation,
+                                          g_variant_new("(asasasasasx)",
+                                                        &install_builder,
+                                                        &upgrade_builder,
+                                                        &downgrade_builder,
+                                                        &reinstall_builder,
+                                                        &remove_builder,
+                                                        static_cast<gint64>(session->preview.disk_space_delta)));
     return;
   }
 

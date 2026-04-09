@@ -227,6 +227,8 @@ transaction_progress_finish(TransactionProgressWindow *progress, bool success, c
 struct SummaryDialogApplyData {
   SearchWidgets *widgets;
   TransactionApplyCallback on_apply;
+  TransactionApplyCallback on_cancel;
+  bool apply_requested;
 };
 
 static void
@@ -291,7 +293,8 @@ append_transaction_summary_section(GtkBox *parent, const char *title, const std:
 void
 transaction_progress_show_summary_dialog(SearchWidgets *widgets,
                                          const TransactionPreview &preview,
-                                         TransactionApplyCallback on_apply)
+                                         TransactionApplyCallback on_apply,
+                                         TransactionApplyCallback on_cancel)
 {
   GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
   gtk_window_set_title(dialog, "Summary");
@@ -391,7 +394,7 @@ transaction_progress_show_summary_dialog(SearchWidgets *widgets,
   gtk_widget_add_css_class(apply_button, "suggested-action");
   gtk_box_append(GTK_BOX(button_box), apply_button);
 
-  auto *apply_data = new SummaryDialogApplyData { widgets, on_apply };
+  auto *apply_data = new SummaryDialogApplyData { widgets, on_apply, on_cancel, false };
 
   g_object_set_data_full(G_OBJECT(dialog), "summary-dialog-apply-data", apply_data, summary_dialog_apply_data_free);
 
@@ -405,6 +408,19 @@ transaction_progress_show_summary_dialog(SearchWidgets *widgets,
                    }),
                    nullptr);
 
+  g_signal_connect(dialog,
+                   "destroy",
+                   G_CALLBACK(+[](GtkWidget *widget, gpointer) {
+                     SummaryDialogApplyData *data = static_cast<SummaryDialogApplyData *>(
+                         g_object_get_data(G_OBJECT(widget), "summary-dialog-apply-data"));
+                     if (!data || data->apply_requested || !data->widgets || !data->on_cancel) {
+                       return;
+                     }
+
+                     data->on_cancel(data->widgets);
+                   }),
+                   nullptr);
+
   g_signal_connect(apply_button,
                    "clicked",
                    G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
@@ -412,6 +428,9 @@ transaction_progress_show_summary_dialog(SearchWidgets *widgets,
                      SearchWidgets *widgets = data ? data->widgets : nullptr;
                      TransactionApplyCallback on_apply = data ? data->on_apply : nullptr;
                      GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(button));
+                     if (data) {
+                       data->apply_requested = true;
+                     }
                      if (root && GTK_IS_WINDOW(root)) {
                        gtk_window_destroy(GTK_WINDOW(root));
                      }

@@ -1,6 +1,7 @@
 #include "transaction_service_client.hpp"
 
 #include "debug_trace.hpp"
+#include "dnf_backend.hpp"
 #include "service/transaction_service_dbus.hpp"
 #include "transaction_request.hpp"
 
@@ -25,6 +26,9 @@ struct TransactionServiceProgressForwarder {
   const std::function<void(const std::string &)> *progress_callback = nullptr;
 };
 
+// -----------------------------------------------------------------------------
+// Select the D-Bus bus used by the transaction service client
+// -----------------------------------------------------------------------------
 static GBusType
 get_transaction_service_bus_type()
 {
@@ -36,6 +40,9 @@ get_transaction_service_bus_type()
   return G_BUS_TYPE_SYSTEM;
 }
 
+// -----------------------------------------------------------------------------
+// Build the StartTransaction argument tuple for the D-Bus service call
+// -----------------------------------------------------------------------------
 static GVariant *
 build_start_transaction_parameters(const TransactionRequest &request)
 {
@@ -61,6 +68,80 @@ build_start_transaction_parameters(const TransactionRequest &request)
   return g_variant_new("(asasas)", &install_builder, &remove_builder, &reinstall_builder);
 }
 
+// -----------------------------------------------------------------------------
+// Connect to the D-Bus transaction service used by the GUI client
+// -----------------------------------------------------------------------------
+static GDBusConnection *
+connect_transaction_service(std::string &error_out)
+{
+  error_out.clear();
+
+  GError *error = nullptr;
+  GBusType bus_type = get_transaction_service_bus_type();
+  DNF_UI_TRACE("Transaction service client connect bus=%s", bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
+  GDBusConnection *connection = g_bus_get_sync(bus_type, nullptr, &error);
+  if (!connection) {
+    error_out = error ? error->message : "Could not connect to the transaction service bus.";
+    g_clear_error(&error);
+    return nullptr;
+  }
+
+  return connection;
+}
+
+// -----------------------------------------------------------------------------
+// Start a new transaction request and return its service object path
+// -----------------------------------------------------------------------------
+static bool
+start_transaction_request(GDBusConnection *connection,
+                          const TransactionRequest &request,
+                          std::string &transaction_path_out,
+                          std::string &error_out)
+{
+  transaction_path_out.clear();
+  error_out.clear();
+
+  if (!connection) {
+    error_out = "Transaction service connection is not available.";
+    return false;
+  }
+
+  GError *error = nullptr;
+  GVariant *start_reply = g_dbus_connection_call_sync(connection,
+                                                      kTransactionServiceName,
+                                                      kTransactionServiceManagerPath,
+                                                      kTransactionServiceManagerInterface,
+                                                      "StartTransaction",
+                                                      build_start_transaction_parameters(request),
+                                                      G_VARIANT_TYPE("(o)"),
+                                                      G_DBUS_CALL_FLAGS_NONE,
+                                                      -1,
+                                                      nullptr,
+                                                      &error);
+  if (!start_reply) {
+    error_out = error ? error->message : "Could not start the transaction service request.";
+    g_clear_error(&error);
+    return false;
+  }
+
+  const gchar *path = nullptr;
+  g_variant_get(start_reply, "(&o)", &path);
+  transaction_path_out = path ? path : "";
+  g_variant_unref(start_reply);
+
+  if (transaction_path_out.empty()) {
+    error_out = "Transaction service returned an empty request path.";
+    return false;
+  }
+
+  DNF_UI_TRACE("Transaction service client start path=%s", transaction_path_out.c_str());
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Read the current state of a service transaction request
+// -----------------------------------------------------------------------------
 static bool
 get_transaction_result(GDBusConnection *connection,
                        const std::string &transaction_path,
@@ -98,9 +179,113 @@ get_transaction_result(GDBusConnection *connection,
   result_out.success = success;
   result_out.details = details ? details : "";
   g_variant_unref(reply);
+
   return true;
 }
 
+// -----------------------------------------------------------------------------
+// Read the structured preview data from a prepared service request
+// -----------------------------------------------------------------------------
+static bool
+get_transaction_preview(GDBusConnection *connection,
+                        const std::string &transaction_path,
+                        TransactionPreview &preview_out,
+                        std::string &error_out)
+{
+  preview_out = {};
+  error_out.clear();
+
+  GError *error = nullptr;
+  GVariant *reply = g_dbus_connection_call_sync(connection,
+                                                kTransactionServiceName,
+                                                transaction_path.c_str(),
+                                                kTransactionServiceRequestInterface,
+                                                "GetPreview",
+                                                nullptr,
+                                                G_VARIANT_TYPE("(asasasasasx)"),
+                                                G_DBUS_CALL_FLAGS_NONE,
+                                                -1,
+                                                nullptr,
+                                                &error);
+  if (!reply) {
+    error_out = error ? error->message : "Failed to read transaction service preview.";
+    g_clear_error(&error);
+    return false;
+  }
+
+  // Unpack the preview reply into owned string arrays and the disk space delta.
+  gchar **install = nullptr;
+  gchar **upgrade = nullptr;
+  gchar **downgrade = nullptr;
+  gchar **reinstall = nullptr;
+  gchar **remove = nullptr;
+  gint64 disk_space_delta = 0;
+  g_variant_get(reply, "(^as^as^as^as^asx)", &install, &upgrade, &downgrade, &reinstall, &remove, &disk_space_delta);
+
+  auto append_specs = [](std::vector<std::string> &target, gchar **specs) {
+    if (!specs) {
+      return;
+    }
+
+    for (gchar **it = specs; *it; ++it) {
+      target.emplace_back(*it);
+    }
+  };
+
+  append_specs(preview_out.install, install);
+  append_specs(preview_out.upgrade, upgrade);
+  append_specs(preview_out.downgrade, downgrade);
+  append_specs(preview_out.reinstall, reinstall);
+  append_specs(preview_out.remove, remove);
+  preview_out.disk_space_delta = static_cast<long long>(disk_space_delta);
+
+  g_strfreev(install);
+  g_strfreev(upgrade);
+  g_strfreev(downgrade);
+  g_strfreev(reinstall);
+  g_strfreev(remove);
+  g_variant_unref(reply);
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Release a finished service request that is no longer needed by the GUI
+// -----------------------------------------------------------------------------
+static bool
+release_transaction_request(GDBusConnection *connection, const std::string &transaction_path, std::string &error_out)
+{
+  error_out.clear();
+
+  if (!connection || transaction_path.empty()) {
+    return true;
+  }
+
+  GError *error = nullptr;
+  GVariant *reply = g_dbus_connection_call_sync(connection,
+                                                kTransactionServiceName,
+                                                transaction_path.c_str(),
+                                                kTransactionServiceRequestInterface,
+                                                "Release",
+                                                nullptr,
+                                                nullptr,
+                                                G_DBUS_CALL_FLAGS_NONE,
+                                                -1,
+                                                nullptr,
+                                                &error);
+  if (!reply) {
+    error_out = error ? error->message : "Failed to release transaction service request.";
+    g_clear_error(&error);
+    return false;
+  }
+
+  g_variant_unref(reply);
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Wait until the service request leaves the current running stage
+// -----------------------------------------------------------------------------
 static bool
 wait_for_transaction_stage(GDBusConnection *connection,
                            const std::string &transaction_path,
@@ -140,6 +325,9 @@ wait_for_transaction_stage(GDBusConnection *connection,
   }
 }
 
+// -----------------------------------------------------------------------------
+// Forward transaction progress signals from the service to the GUI callback
+// -----------------------------------------------------------------------------
 static void
 on_transaction_progress_signal(GDBusConnection *,
                                const gchar *,
@@ -167,16 +355,79 @@ on_transaction_progress_signal(GDBusConnection *,
 } // namespace
 
 // -----------------------------------------------------------------------------
-// Run a complete privileged apply request through the system bus service
+// Resolve a service-backed transaction preview and return its request path
 // -----------------------------------------------------------------------------
 bool
-transaction_service_client_apply_request(const TransactionRequest &request,
-                                         const std::function<void(const std::string &)> &progress_callback,
-                                         std::string &error_out)
+transaction_service_client_preview_request(const TransactionRequest &request,
+                                           TransactionPreview &preview_out,
+                                           std::string &transaction_path_out,
+                                           std::string &error_out)
 {
+  preview_out = {};
+  transaction_path_out.clear();
   error_out.clear();
 
   if (!request.validate(error_out)) {
+    return false;
+  }
+
+  std::string connect_error;
+  GDBusConnection *connection = connect_transaction_service(connect_error);
+  if (!connection) {
+    error_out = connect_error;
+    return false;
+  }
+
+  TransactionServiceResult result;
+  if (!start_transaction_request(connection, request, transaction_path_out, error_out)) {
+    g_object_unref(connection);
+    return false;
+  }
+
+  if (!wait_for_transaction_stage(connection, transaction_path_out, "preview-running", nullptr, result, error_out)) {
+    std::string release_error;
+    release_transaction_request(connection, transaction_path_out, release_error);
+    g_object_unref(connection);
+    return false;
+  }
+
+  if (result.stage != "preview-ready" || !result.finished || !result.success) {
+    error_out = result.details.empty() ? "Privileged transaction preview failed." : result.details;
+    DNF_UI_TRACE(
+        "Transaction service client preview failed path=%s error=%s", transaction_path_out.c_str(), error_out.c_str());
+    std::string release_error;
+    release_transaction_request(connection, transaction_path_out, release_error);
+    g_object_unref(connection);
+    return false;
+  }
+
+  if (!get_transaction_preview(connection, transaction_path_out, preview_out, error_out)) {
+    DNF_UI_TRACE("Transaction service client get preview failed path=%s error=%s",
+                 transaction_path_out.c_str(),
+                 error_out.c_str());
+    std::string release_error;
+    release_transaction_request(connection, transaction_path_out, release_error);
+    g_object_unref(connection);
+    return false;
+  }
+
+  g_object_unref(connection);
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Apply a previously previewed transaction request through the service
+// -----------------------------------------------------------------------------
+bool
+transaction_service_client_apply_started_request(const std::string &transaction_path,
+                                                 const std::function<void(const std::string &)> &progress_callback,
+                                                 std::string &error_out)
+{
+  error_out.clear();
+
+  if (transaction_path.empty()) {
+    error_out = "Transaction service request path is empty.";
     return false;
   }
 
@@ -188,52 +439,21 @@ transaction_service_client_apply_request(const TransactionRequest &request,
 
   append_progress("Connecting to transaction service...");
 
-  GError *error = nullptr;
-  GBusType bus_type = get_transaction_service_bus_type();
-  DNF_UI_TRACE("Transaction service client connect bus=%s", bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
-  GDBusConnection *connection = g_bus_get_sync(bus_type, nullptr, &error);
+  std::string connect_error;
+  GDBusConnection *connection = connect_transaction_service(connect_error);
   if (!connection) {
-    error_out = error ? error->message : "Could not connect to the transaction service bus.";
-    g_clear_error(&error);
+    error_out = connect_error;
     return false;
   }
 
   bool ok = false;
   TransactionServiceResult result;
-  std::string transaction_path;
   GMainContext *signal_context = g_main_context_new();
   g_main_context_push_thread_default(signal_context);
   TransactionServiceProgressForwarder progress_forwarder { &progress_callback };
   guint progress_subscription_id = 0;
 
   do {
-    GVariant *start_reply = g_dbus_connection_call_sync(connection,
-                                                        kTransactionServiceName,
-                                                        kTransactionServiceManagerPath,
-                                                        kTransactionServiceManagerInterface,
-                                                        "StartTransaction",
-                                                        build_start_transaction_parameters(request),
-                                                        G_VARIANT_TYPE("(o)"),
-                                                        G_DBUS_CALL_FLAGS_NONE,
-                                                        -1,
-                                                        nullptr,
-                                                        &error);
-    if (!start_reply) {
-      error_out = error ? error->message : "Could not start the transaction service request.";
-      g_clear_error(&error);
-      break;
-    }
-
-    const gchar *path = nullptr;
-    g_variant_get(start_reply, "(&o)", &path);
-    transaction_path = path ? path : "";
-    g_variant_unref(start_reply);
-
-    if (transaction_path.empty()) {
-      error_out = "Transaction service returned an empty request path.";
-      break;
-    }
-
     DNF_UI_TRACE("Transaction service client start path=%s", transaction_path.c_str());
     progress_subscription_id = g_dbus_connection_signal_subscribe(connection,
                                                                   kTransactionServiceName,
@@ -246,20 +466,10 @@ transaction_service_client_apply_request(const TransactionRequest &request,
                                                                   &progress_forwarder,
                                                                   nullptr);
 
-    append_progress("Waiting for privileged transaction preview...");
-    if (!wait_for_transaction_stage(
-            connection, transaction_path, "preview-running", signal_context, result, error_out)) {
-      break;
-    }
-
-    if (result.stage != "preview-ready" || !result.finished || !result.success) {
-      error_out = result.details.empty() ? "Privileged transaction preview failed." : result.details;
-      break;
-    }
-
     append_progress("Privileged transaction preview ready.");
     append_progress("Requesting authorization and starting apply...");
 
+    GError *error = nullptr;
     GVariant *apply_reply = g_dbus_connection_call_sync(connection,
                                                         kTransactionServiceName,
                                                         transaction_path.c_str(),
@@ -304,5 +514,40 @@ transaction_service_client_apply_request(const TransactionRequest &request,
   g_main_context_pop_thread_default(signal_context);
   g_main_context_unref(signal_context);
   g_object_unref(connection);
+
   return ok;
 }
+
+// -----------------------------------------------------------------------------
+// Release a finished service request after it has been applied or discarded
+// -----------------------------------------------------------------------------
+void
+transaction_service_client_release_request(const std::string &transaction_path)
+{
+  if (transaction_path.empty()) {
+    return;
+  }
+
+  std::string connect_error;
+  GDBusConnection *connection = connect_transaction_service(connect_error);
+  if (!connection) {
+    DNF_UI_TRACE("Transaction service client release connect failed path=%s error=%s",
+                 transaction_path.c_str(),
+                 connect_error.c_str());
+    return;
+  }
+
+  std::string error_out;
+  if (!release_transaction_request(connection, transaction_path, error_out)) {
+    DNF_UI_TRACE(
+        "Transaction service client release failed path=%s error=%s", transaction_path.c_str(), error_out.c_str());
+  } else {
+    DNF_UI_TRACE("Transaction service client release done path=%s", transaction_path.c_str());
+  }
+
+  g_object_unref(connection);
+}
+
+// -----------------------------------------------------------------------------
+// EOF
+// -----------------------------------------------------------------------------

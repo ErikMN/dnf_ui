@@ -19,7 +19,8 @@ void transaction_progress_show_error_dialog(SearchWidgets *widgets,
                                             const std::string &details);
 void transaction_progress_show_summary_dialog(SearchWidgets *widgets,
                                               const TransactionPreview &preview,
-                                              TransactionApplyCallback on_apply);
+                                              TransactionApplyCallback on_apply,
+                                              TransactionApplyCallback on_cancel);
 
 // -----------------------------------------------------------------------------
 // EOF

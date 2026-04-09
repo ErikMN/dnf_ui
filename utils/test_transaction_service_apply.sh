@@ -5,7 +5,9 @@ SERVICE_NAME="com.fedora.Dnfui.Transaction1"
 MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
 MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"
 RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
+PREVIEW_METHOD="com.fedora.Dnfui.TransactionRequest1.GetPreview"
 APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
+RELEASE_METHOD="com.fedora.Dnfui.TransactionRequest1.Release"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
 
 # Make this script work from any directory:
@@ -42,7 +44,9 @@ SERVICE_NAME="$SERVICE_NAME" \
 MANAGER_PATH="$MANAGER_PATH" \
 MANAGER_METHOD="$MANAGER_METHOD" \
 RESULT_METHOD="$RESULT_METHOD" \
+PREVIEW_METHOD="$PREVIEW_METHOD" \
 APPLY_METHOD="$APPLY_METHOD" \
+RELEASE_METHOD="$RELEASE_METHOD" \
 REINSTALL_SPEC="$REINSTALL_SPEC" \
 LOG_FILE="$LOG_FILE" \
 dbus-run-session -- bash <<'EOF'
@@ -131,6 +135,22 @@ dbus-run-session -- bash <<'EOF'
   preview_result="$(wait_for_result "$transaction_path" "preview-ready" "true")"
   echo "$preview_result"
 
+  preview_data="$(gdbus call \
+    --session \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$PREVIEW_METHOD")"
+  echo "$preview_data"
+
+  case "$preview_data" in
+    *"$REINSTALL_SPEC"* )
+      ;;
+    * )
+      echo "*** Structured preview did not contain the expected package spec ***" >&2
+      exit 1
+      ;;
+  esac
+
   gdbus call \
     --session \
     --dest "$SERVICE_NAME" \
@@ -148,6 +168,26 @@ dbus-run-session -- bash <<'EOF'
       exit 1
       ;;
   esac
+
+  gdbus call \
+    --session \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$RELEASE_METHOD" >/dev/null
+
+  set +e
+  released_result="$(gdbus call \
+    --session \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$RESULT_METHOD" 2>&1)"
+  released_status=$?
+  set -e
+
+  if [ "$released_status" -eq 0 ]; then
+    echo "*** Released transaction request is still reachable ***" >&2
+    exit 1
+  fi
 
   echo "*** Service log ***"
   cat "$LOG_FILE"

@@ -5,7 +5,9 @@ SERVICE_NAME="com.fedora.Dnfui.Transaction1"
 MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
 MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"
 RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
+PREVIEW_METHOD="com.fedora.Dnfui.TransactionRequest1.GetPreview"
 APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
+RELEASE_METHOD="com.fedora.Dnfui.TransactionRequest1.Release"
 TEST_USER="dnfuitest"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-bash}"
 INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
@@ -186,6 +188,30 @@ fi
 preview_result="$(wait_for_result "$transaction_path" "preview-ready" "true")"
 echo "$preview_result"
 
+preview_data="$(runuser -u "$TEST_USER" -- \
+  env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
+  gdbus call \
+  --system \
+  --dest "$SERVICE_NAME" \
+  --object-path "$transaction_path" \
+  --method "$PREVIEW_METHOD")"
+echo "$preview_data"
+
+expected_preview_spec="$REINSTALL_SPEC"
+if [ -n "$INSTALL_SPEC" ]; then
+  expected_preview_spec="$INSTALL_SPEC"
+fi
+
+case "$preview_data" in
+  *"$expected_preview_spec"* )
+    ;;
+  * )
+    echo "*** Structured preview did not contain the expected package spec ***" >&2
+    print_logs >&2
+    exit 1
+    ;;
+esac
+
 if [ -n "$ALLOW_APPLY" ]; then
   runuser -u "$TEST_USER" -- \
     env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
@@ -207,6 +233,31 @@ if [ -n "$ALLOW_APPLY" ]; then
       exit 1
       ;;
   esac
+
+  runuser -u "$TEST_USER" -- \
+    env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
+    gdbus call \
+    --system \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$RELEASE_METHOD" >/dev/null
+
+  set +e
+  released_result="$(runuser -u "$TEST_USER" -- \
+    env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
+    gdbus call \
+    --system \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$RESULT_METHOD" 2>&1)"
+  released_status=$?
+  set -e
+
+  if [ "$released_status" -eq 0 ]; then
+    echo "*** Released transaction request is still reachable ***" >&2
+    print_logs >&2
+    exit 1
+  fi
 else
   set +e
   apply_output="$(runuser -u "$TEST_USER" -- \

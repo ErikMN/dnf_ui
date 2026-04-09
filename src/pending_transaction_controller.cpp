@@ -17,7 +17,7 @@
 
 // Task payload for the async apply transaction worker.
 struct ApplyTaskData {
-  TransactionRequest request;
+  std::string transaction_path;
   TransactionProgressWindow *progress_window;
 };
 
@@ -39,6 +39,21 @@ pending_jump_button_data_free(gpointer p)
 {
   PendingJumpButtonData *d = static_cast<PendingJumpButtonData *>(p);
   delete d;
+}
+
+static void
+invalidate_service_preview(SearchWidgets *widgets)
+{
+  if (!widgets) {
+    return;
+  }
+
+  if (!widgets->transaction.preview_transaction_path.empty()) {
+    // Drop the prepared service request when the pending transaction changes or is dismissed.
+    transaction_service_client_release_request(widgets->transaction.preview_transaction_path);
+  }
+
+  widgets->transaction.preview_transaction_path.clear();
 }
 
 // Show the selected pending action in the main package list so it can be reviewed or changed.
@@ -275,8 +290,17 @@ rebuild_after_tx_async(SearchWidgets *widgets)
 static void
 start_apply_transaction(SearchWidgets *widgets)
 {
+  if (!widgets) {
+    return;
+  }
+
+  if (widgets->transaction.preview_transaction_path.empty()) {
+    ui_helpers_set_status(widgets->query.status_label, "No prepared transaction request is available.", "red");
+    return;
+  }
+
   ApplyTaskData *td = new ApplyTaskData;
-  build_pending_transaction_request(widgets, td->request);
+  td->transaction_path = widgets->transaction.preview_transaction_path;
   td->progress_window = transaction_progress_create_window(widgets, widgets->transaction.actions.size());
 
   transaction_progress_append(td->progress_window, "Queued transaction request.");
@@ -306,6 +330,7 @@ start_apply_transaction(SearchWidgets *widgets)
         transaction_progress_finish(td ? td->progress_window : nullptr, success, "");
 
         if (success) {
+          invalidate_service_preview(widgets);
           // Clear pending queue and refresh tab
           widgets->transaction.actions.clear();
           refresh_pending_tab(widgets);
@@ -315,6 +340,7 @@ start_apply_transaction(SearchWidgets *widgets)
           // Rebuild base and refresh installed highlighting asynchronously
           rebuild_after_tx_async(widgets);
         } else {
+          invalidate_service_preview(widgets);
           std::string details = error ? error->message : "Transaction failed.";
           ui_helpers_set_status(widgets->query.status_label, details.c_str(), "red");
           // Show the full backend error in a copyable dialog instead of only in the status bar.
@@ -335,8 +361,8 @@ start_apply_transaction(SearchWidgets *widgets)
       task, +[](GTask *t, gpointer, gpointer task_data, GCancellable *) {
         ApplyTaskData *td = static_cast<ApplyTaskData *>(task_data);
         std::string err;
-        bool ok = transaction_service_client_apply_request(
-            td->request,
+        bool ok = transaction_service_client_apply_started_request(
+            td->transaction_path,
             [td](const std::string &message) { transaction_progress_append(td->progress_window, message); },
             err);
         if (ok) {
@@ -380,6 +406,7 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
     ui_helpers_set_status(widgets->query.status_label, ("Marked for install: " + pkg.name).c_str(), "blue");
   }
   ui_helpers_update_action_button_labels(widgets, pkg.nevra);
+  invalidate_service_preview(widgets);
 
   // Refresh status badges without rebuilding the package table.
   package_table_refresh_statuses(widgets);
@@ -415,6 +442,7 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
     ui_helpers_set_status(widgets->query.status_label, ("Marked for removal: " + pkg.name).c_str(), "blue");
   }
   ui_helpers_update_action_button_labels(widgets, pkg.nevra);
+  invalidate_service_preview(widgets);
 
   // Refresh status badges without rebuilding the package table.
   package_table_refresh_statuses(widgets);
@@ -447,6 +475,7 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
     ui_helpers_set_status(widgets->query.status_label, ("Marked for reinstall: " + pkg.name).c_str(), "blue");
   }
   ui_helpers_update_action_button_labels(widgets, pkg.nevra);
+  invalidate_service_preview(widgets);
 
   package_table_refresh_statuses(widgets);
 }
@@ -466,6 +495,7 @@ pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_d
 
   size_t count = widgets->transaction.actions.size();
   widgets->transaction.actions.clear();
+  invalidate_service_preview(widgets);
   refresh_pending_tab(widgets);
 
   // Refresh status badges without rebuilding the package table.
@@ -477,7 +507,7 @@ pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_d
 }
 
 // -----------------------------------------------------------------------------
-// Apply pending actions in a single libdnf5 transaction (async via backend)
+// Resolve pending actions through the transaction service and confirm them
 // -----------------------------------------------------------------------------
 void
 pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
@@ -489,18 +519,16 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  std::vector<std::string> install;
-  std::vector<std::string> remove;
-  std::vector<std::string> reinstall;
-  build_pending_transaction_specs(widgets, install, remove, reinstall);
-
-  // Resolve the full transaction first so the summary includes dependency-driven changes too.
+  TransactionRequest request;
   TransactionPreview preview;
+  std::string transaction_path;
   std::string error;
-  if (!dnf_backend_preview_transaction(install, remove, reinstall, preview, error)) {
+  build_pending_transaction_request(widgets, request);
+  invalidate_service_preview(widgets);
+
+  if (!transaction_service_client_preview_request(request, preview, transaction_path, error)) {
     const char *status_message = error.empty() ? "Unable to prepare transaction preview." : error.c_str();
     ui_helpers_set_status(widgets->query.status_label, status_message, "red");
-    // Show the solver error in a copyable dialog before the transaction starts.
     transaction_progress_show_error_dialog(widgets,
                                            "Transaction Preview Failed",
                                            "The transaction could not be prepared. Review the details below.",
@@ -508,7 +536,8 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  transaction_progress_show_summary_dialog(widgets, preview, start_apply_transaction);
+  widgets->transaction.preview_transaction_path = transaction_path;
+  transaction_progress_show_summary_dialog(widgets, preview, start_apply_transaction, invalidate_service_preview);
 }
 
 // -----------------------------------------------------------------------------
