@@ -37,6 +37,7 @@ docker run --rm -it \
   -e FINAL \
   -e ASAN \
   -e DEBUG_TRACE \
+  -e SERVICE_TEST_INSTALL_SPEC=cowsay \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
   bash -c "make clean && make -j$(nproc) servicetest"

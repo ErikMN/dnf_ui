@@ -7,8 +7,37 @@ Useful commands:
 sudo dnf install libdnf5-devel libdnf-cli-devel
 sudo dnf install gtk4-devel
 sudo dnf install polkit-devel polkit
+sudo dnf install catch2-devel
 
 sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
+
+--------------------------------------------------------------------------------
+Run all tests:
+--------------------------------------------------------------------------------
+
+Native C++ tests:
+make test
+
+Native transaction service tests:
+SERVICE_TEST_INSTALL_SPEC=cowsay make servicetest
+sudo SERVICE_TEST_REINSTALL_NEVRA=<installed-non-critical-package> make serviceapplytest
+
+Native system bus transaction service tests:
+sudo make serviceinstall
+SERVICE_TEST_INSTALL_SPEC=cowsay make servicesystemtest
+SERVICE_TEST_REINSTALL_NEVRA=<installed-non-critical-package> make servicesystemapplytest
+sudo make serviceuninstall
+
+Docker C++ tests:
+make dockertest
+
+Docker transaction service tests:
+make dockerservicetest
+make dockerserviceapplytest
+
+Docker system bus transaction service tests:
+make dockerservicesystemtest
+make dockerservicesystemapplytest
 
 --------------------------------------------------------------------------------
 Native Polkit test:
@@ -17,8 +46,8 @@ Native Polkit test:
 make clean && make -j1
 sudo make serviceinstall
 
-make servicesystemtest
-SERVICE_TEST_REINSTALL_NEVRA=bash make servicesystemapplytest
+SERVICE_TEST_INSTALL_SPEC=cowsay make servicesystemtest
+SERVICE_TEST_REINSTALL_NEVRA=<installed-non-critical-package> make servicesystemapplytest
 
 ./dnf_ui
 
@@ -26,6 +55,7 @@ Run dnf_ui as a regular desktop user and apply a transaction to test the
 desktop Polkit prompt.
 
 serviceinstall is a native development helper, not the final packaging flow.
+Choose a non critical installed package for native apply tests.
 
 sudo make serviceuninstall
 

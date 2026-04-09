@@ -8,6 +8,8 @@ SERVICE_NAME="com.fedora.Dnfui.Transaction1"
 MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
 MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"
 RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
+INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
+REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,6 +19,16 @@ SERVICE_BIN="$PROJECT_ROOT/dnf_ui_transaction_service"
 if [ ! -x "$SERVICE_BIN" ]; then
   echo "*** Missing service binary: $SERVICE_BIN ***" >&2
   echo "*** Build it first with: make dnf_ui_transaction_service ***" >&2
+  exit 1
+fi
+
+if [ -z "$INSTALL_SPEC" ] && [ -z "$REINSTALL_SPEC" ]; then
+  echo "*** Set SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA before running servicetest ***" >&2
+  exit 1
+fi
+
+if [ -n "$INSTALL_SPEC" ] && [ -n "$REINSTALL_SPEC" ]; then
+  echo "*** Set only one of SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA ***" >&2
   exit 1
 fi
 
@@ -33,6 +45,8 @@ SERVICE_NAME="$SERVICE_NAME" \
 MANAGER_PATH="$MANAGER_PATH" \
 MANAGER_METHOD="$MANAGER_METHOD" \
 RESULT_METHOD="$RESULT_METHOD" \
+INSTALL_SPEC="$INSTALL_SPEC" \
+REINSTALL_SPEC="$REINSTALL_SPEC" \
 LOG_FILE="$LOG_FILE" \
 dbus-run-session -- bash <<'EOF'
   set -e
@@ -50,14 +64,24 @@ dbus-run-session -- bash <<'EOF'
 
   gdbus wait --session "$SERVICE_NAME" >/dev/null
 
+  start_install="[]"
+  start_reinstall="[]"
+  expected_summary_text="reinstalled"
+  if [ -n "$INSTALL_SPEC" ]; then
+    start_install="[\"$INSTALL_SPEC\"]"
+    expected_summary_text="installed"
+  else
+    start_reinstall="[\"$REINSTALL_SPEC\"]"
+  fi
+
   reply="$(gdbus call \
     --session \
     --dest "$SERVICE_NAME" \
     --object-path "$MANAGER_PATH" \
     --method "$MANAGER_METHOD" \
+    "$start_install" \
     "[]" \
-    "[]" \
-    "[\"bash\"]")"
+    "$start_reinstall")"
 
   echo "$reply"
 
@@ -105,7 +129,7 @@ dbus-run-session -- bash <<'EOF'
   done
 
   case "$result" in
-    *"reinstalled"* )
+    *"$expected_summary_text"* )
       ;;
     * )
       echo "*** Transaction preview result did not contain the expected summary text ***" >&2

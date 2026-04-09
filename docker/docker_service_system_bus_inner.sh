@@ -13,8 +13,8 @@ PREVIEW_METHOD="com.fedora.Dnfui.TransactionRequest1.GetPreview"
 APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
 RELEASE_METHOD="com.fedora.Dnfui.TransactionRequest1.Release"
 TEST_USER="dnfuitest"
-REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-bash}"
 INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
+REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
 ALLOW_APPLY="${SERVICE_SYSTEM_BUS_ALLOW_APPLY:-}"
 SERVICE_BIN="/workspace/dnf_ui_transaction_service"
 POLICY_FILE="/workspace/packaging/com.fedora.dnfui.policy"
@@ -33,6 +33,16 @@ fi
 
 if [ ! -f "$POLICY_FILE" ] || [ ! -f "$BUS_POLICY_FILE" ]; then
   echo "*** Missing service packaging files in /workspace/packaging ***" >&2
+  exit 1
+fi
+
+if [ -z "$INSTALL_SPEC" ] && [ -z "$REINSTALL_SPEC" ]; then
+  echo "*** Set SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA before running this test ***" >&2
+  exit 1
+fi
+
+if [ -n "$INSTALL_SPEC" ] && [ -n "$REINSTALL_SPEC" ]; then
+  echo "*** Set only one of SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA ***" >&2
   exit 1
 fi
 
@@ -144,6 +154,12 @@ service_pid=$!
 
 if [ -n "$ALLOW_APPLY" ]; then
   echo "*** Running transaction service system bus apply test ***"
+  echo "*** NOTE: This test applies a real package transaction inside the disposable Docker container. ***"
+  if [ -n "$INSTALL_SPEC" ]; then
+    echo "*** Package spec: $INSTALL_SPEC ***"
+  else
+    echo "*** Package spec: $REINSTALL_SPEC ***"
+  fi
 elif [ -n "$INSTALL_SPEC" ]; then
   echo "*** Running transaction service system bus install preview test ***"
 else

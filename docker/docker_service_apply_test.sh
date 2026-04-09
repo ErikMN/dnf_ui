@@ -27,6 +27,9 @@ if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
 fi
 
 color_print "$FMT_GREEN" "*** Running transaction service apply test inside container... ***"
+color_print "$FMT_GREEN" "*** NOTE: This test applies a real package transaction inside the disposable Docker container. ***"
+color_print "$FMT_GREEN" "*** NOTE: It does not change packages on the native host. ***"
+color_print "$FMT_GREEN" "*** Package spec: cowsay ***"
 
 docker run --rm -it \
   --name "$CONTAINER_NAME" \
@@ -35,7 +38,7 @@ docker run --rm -it \
   -e FINAL \
   -e ASAN \
   -e DEBUG_TRACE \
-  -e SERVICE_TEST_REINSTALL_NEVRA=bash \
+  -e SERVICE_TEST_INSTALL_SPEC=cowsay \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
   bash -c "make clean && make -j$(nproc) serviceapplytest"

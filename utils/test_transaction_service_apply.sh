@@ -8,6 +8,7 @@ RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
 PREVIEW_METHOD="com.fedora.Dnfui.TransactionRequest1.GetPreview"
 APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
 RELEASE_METHOD="com.fedora.Dnfui.TransactionRequest1.Release"
+INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
 
 # Make this script work from any directory:
@@ -26,8 +27,13 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-if [ -z "$REINSTALL_SPEC" ]; then
-  echo "*** Set SERVICE_TEST_REINSTALL_NEVRA to an installed package before running serviceapplytest ***" >&2
+if [ -z "$INSTALL_SPEC" ] && [ -z "$REINSTALL_SPEC" ]; then
+  echo "*** Set SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA before running serviceapplytest ***" >&2
+  exit 1
+fi
+
+if [ -n "$INSTALL_SPEC" ] && [ -n "$REINSTALL_SPEC" ]; then
+  echo "*** Set only one of SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA ***" >&2
   exit 1
 fi
 
@@ -38,6 +44,14 @@ cleanup_log() {
 trap cleanup_log EXIT
 
 echo "*** Running transaction service apply test ***"
+echo "*** WARNING: This test applies a real package transaction on the current system. ***"
+if [ -n "$INSTALL_SPEC" ]; then
+  echo "*** Package spec: $INSTALL_SPEC ***"
+else
+  echo "*** Package spec: $REINSTALL_SPEC ***"
+fi
+echo "*** Use only a harmless package for install tests. ***"
+echo "*** Use only a non critical installed package for reinstall tests. ***"
 
 SERVICE_BIN="$SERVICE_BIN" \
 SERVICE_NAME="$SERVICE_NAME" \
@@ -47,6 +61,7 @@ RESULT_METHOD="$RESULT_METHOD" \
 PREVIEW_METHOD="$PREVIEW_METHOD" \
 APPLY_METHOD="$APPLY_METHOD" \
 RELEASE_METHOD="$RELEASE_METHOD" \
+INSTALL_SPEC="$INSTALL_SPEC" \
 REINSTALL_SPEC="$REINSTALL_SPEC" \
 LOG_FILE="$LOG_FILE" \
 dbus-run-session -- bash <<'EOF'
@@ -105,14 +120,24 @@ dbus-run-session -- bash <<'EOF'
 
   gdbus wait --session "$SERVICE_NAME" >/dev/null
 
+  start_install="[]"
+  start_reinstall="[]"
+  expected_preview_spec="$REINSTALL_SPEC"
+  if [ -n "$INSTALL_SPEC" ]; then
+    start_install="[\"$INSTALL_SPEC\"]"
+    expected_preview_spec="$INSTALL_SPEC"
+  else
+    start_reinstall="[\"$REINSTALL_SPEC\"]"
+  fi
+
   reply="$(gdbus call \
     --session \
     --dest "$SERVICE_NAME" \
     --object-path "$MANAGER_PATH" \
     --method "$MANAGER_METHOD" \
+    "$start_install" \
     "[]" \
-    "[]" \
-    "[\"$REINSTALL_SPEC\"]")"
+    "$start_reinstall")"
 
   echo "$reply"
 
@@ -143,13 +168,15 @@ dbus-run-session -- bash <<'EOF'
   echo "$preview_data"
 
   case "$preview_data" in
-    *"$REINSTALL_SPEC"* )
+    *"$expected_preview_spec"* )
       ;;
     * )
       echo "*** Structured preview did not contain the expected package spec ***" >&2
       exit 1
       ;;
   esac
+
+  echo "*** WARNING: Applying a real package transaction now. ***"
 
   gdbus call \
     --session \

@@ -46,6 +46,8 @@ SERVICE_DEPS = $(SERVICE_SRCS:.cpp=.d)
 TEST_SRCS = \
     test/test_backend.cpp \
     test/test_search.cpp \
+    test/test_transaction_preview.cpp \
+    test/test_transaction_request.cpp \
     src/base_manager.cpp \
     src/dnf_backend.cpp
 
