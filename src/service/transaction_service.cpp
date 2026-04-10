@@ -844,6 +844,12 @@ on_transaction_method_call(GDBusConnection *,
       return;
     }
 
+    if (session->pending_apply_invocation) {
+      g_dbus_method_invocation_return_error(
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Apply authorization is already in progress.");
+      return;
+    }
+
     std::string error_out;
     if (!start_authorize_apply_request(session, invocation, error_out)) {
       DNF_UI_TRACE(
