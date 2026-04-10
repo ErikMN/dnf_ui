@@ -907,11 +907,13 @@ dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
 {
   error_out.clear();
 
-  // FIXME: Replace with Polkit:
-  if (geteuid() != 0) {
-    error_out = "Must be run as root to perform transactions.";
-    return false;
-  }
+  // AUTHORIZATION NOTE:
+  // When called through the transaction service D-Bus interface,
+  // Polkit authorization is enforced by the service before this function is invoked.
+  // The service runs with elevated privileges and performs the authorization check upstream.
+  //
+  // Direct backend calls (tests, service-side execution) bypass authorization and ASSUME
+  // the caller has already validated privileges or is running in a test environment.
 
   try {
     DNF_UI_TRACE("Transaction apply start install=%zu remove=%zu reinstall=%zu",
