@@ -125,6 +125,7 @@ struct TransactionService {
   guint next_transaction_id = 1;
   std::atomic<bool> apply_running { false };
   std::atomic<bool> shutting_down { false };
+  bool keep_alive_until_exit = false;
   std::map<std::string, std::unique_ptr<TransactionSession>> transactions;
 };
 
@@ -1175,10 +1176,12 @@ cleanup_service(TransactionService &service)
 {
   // Signal that shutdown is in progress to prevent async callbacks from accessing freed memory.
   service.shutting_down = true;
+  bool keep_alive_until_exit = false;
 
   // Reply to any pending authorization requests with an error before destroying sessions.
   for (auto &[path, session] : service.transactions) {
     if (session->pending_apply_invocation) {
+      keep_alive_until_exit = true;
       DNF_UI_TRACE("Transaction service cancelling pending authorization during shutdown path=%s", path.c_str());
       g_dbus_method_invocation_return_error(session->pending_apply_invocation,
                                             G_DBUS_ERROR,
@@ -1187,14 +1190,30 @@ cleanup_service(TransactionService &service)
       g_object_unref(session->pending_apply_invocation);
       session->pending_apply_invocation = nullptr;
     }
+
+    if (!session->finished.load()) {
+      keep_alive_until_exit = true;
+    }
   }
 
   for (auto &[path, session] : service.transactions) {
+    if (session->owner_watch_id != 0) {
+      g_bus_unwatch_name(session->owner_watch_id);
+      session->owner_watch_id = 0;
+    }
+
     if (service.connection && session->registration_id != 0) {
       g_dbus_connection_unregister_object(service.connection, session->registration_id);
     }
   }
-  service.transactions.clear();
+
+  // Detached worker threads and async authorization callbacks still use raw service or session pointers.
+  // During shutdown, keep that state allocated until process exit instead of freeing it during teardown.
+  if (keep_alive_until_exit) {
+    service.keep_alive_until_exit = true;
+  } else {
+    service.transactions.clear();
+  }
 
   if (service.connection && service.manager_registration_id != 0) {
     g_dbus_connection_unregister_object(service.connection, service.manager_registration_id);
@@ -1234,43 +1253,46 @@ cleanup_service(TransactionService &service)
 int
 transaction_service_run(const TransactionServiceOptions &options)
 {
-  TransactionService service;
-  service.bus_type = options.bus_type;
-  service.loop = g_main_loop_new(nullptr, FALSE);
+  auto service = std::make_unique<TransactionService>();
+  service->bus_type = options.bus_type;
+  service->loop = g_main_loop_new(nullptr, FALSE);
 
   GError *error = nullptr;
-  service.manager_node_info = g_dbus_node_info_new_for_xml(kManagerIntrospectionXml, &error);
-  if (!service.manager_node_info) {
+  service->manager_node_info = g_dbus_node_info_new_for_xml(kManagerIntrospectionXml, &error);
+  if (!service->manager_node_info) {
     std::fprintf(stderr, "Failed to parse manager introspection XML: %s\n", error ? error->message : "unknown");
     g_clear_error(&error);
-    cleanup_service(service);
+    cleanup_service(*service);
     return 1;
   }
 
-  service.transaction_node_info = g_dbus_node_info_new_for_xml(kTransactionIntrospectionXml, &error);
-  if (!service.transaction_node_info) {
+  service->transaction_node_info = g_dbus_node_info_new_for_xml(kTransactionIntrospectionXml, &error);
+  if (!service->transaction_node_info) {
     std::fprintf(stderr, "Failed to parse transaction introspection XML: %s\n", error ? error->message : "unknown");
     g_clear_error(&error);
-    cleanup_service(service);
+    cleanup_service(*service);
     return 1;
   }
 
-  service.owner_id = g_bus_own_name(options.bus_type,
-                                    kServiceName,
-                                    G_BUS_NAME_OWNER_FLAGS_NONE,
-                                    on_bus_acquired,
-                                    nullptr,
-                                    on_name_lost,
-                                    &service,
-                                    nullptr);
+  service->owner_id = g_bus_own_name(options.bus_type,
+                                     kServiceName,
+                                     G_BUS_NAME_OWNER_FLAGS_NONE,
+                                     on_bus_acquired,
+                                     nullptr,
+                                     on_name_lost,
+                                     service.get(),
+                                     nullptr);
 
-  g_unix_signal_add(SIGINT, on_quit_signal, service.loop);
-  g_unix_signal_add(SIGTERM, on_quit_signal, service.loop);
+  g_unix_signal_add(SIGINT, on_quit_signal, service->loop);
+  g_unix_signal_add(SIGTERM, on_quit_signal, service->loop);
 
   DNF_UI_TRACE("Transaction service run loop start");
-  g_main_loop_run(service.loop);
+  g_main_loop_run(service->loop);
   DNF_UI_TRACE("Transaction service run loop stop");
 
-  cleanup_service(service);
+  cleanup_service(*service);
+  if (service->keep_alive_until_exit) {
+    (void)service.release();
+  }
   return 0;
 }
