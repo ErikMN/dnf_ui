@@ -109,6 +109,8 @@ struct TransactionSession {
   bool success = false;
   std::string details;
   GDBusMethodInvocation *pending_apply_invocation = nullptr;
+  std::string owner_name;
+  guint owner_watch_id = 0;
 };
 
 struct TransactionService {
@@ -247,8 +249,16 @@ dispatch_transaction_release(gpointer user_data)
     return G_SOURCE_REMOVE;
   }
 
-  if (release->service->connection && it->second->registration_id != 0) {
-    g_dbus_connection_unregister_object(release->service->connection, it->second->registration_id);
+  TransactionSession *session = it->second.get();
+
+  // Stop watching the client's bus name since the session is being released.
+  if (session->owner_watch_id != 0) {
+    g_bus_unwatch_name(session->owner_watch_id);
+    session->owner_watch_id = 0;
+  }
+
+  if (release->service->connection && session->registration_id != 0) {
+    g_dbus_connection_unregister_object(release->service->connection, session->registration_id);
   }
 
   release->service->transactions.erase(it);
@@ -893,9 +903,44 @@ static const GDBusInterfaceVTable kTransactionVTable = {
   nullptr,
 };
 
+// -----------------------------------------------------------------------------
+// Client disconnect handling
+// -----------------------------------------------------------------------------
+// Callback invoked when a client that owns transaction sessions disconnects
+// from the bus. Automatically releases all sessions owned by that client to
+// prevent orphaned sessions from accumulating when clients crash or are killed.
+static void
+on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer user_data)
+{
+  TransactionService *service = static_cast<TransactionService *>(user_data);
+  if (!service || !name) {
+    return;
+  }
+
+  DNF_UI_TRACE("Transaction service client disconnected name=%s", name);
+
+  // Find and release all sessions owned by this client.
+  std::vector<std::string> orphaned_paths;
+  for (const auto &[path, session] : service->transactions) {
+    if (session->owner_name == name) {
+      orphaned_paths.push_back(path);
+    }
+  }
+
+  for (const auto &path : orphaned_paths) {
+    DNF_UI_TRACE("Transaction service auto-releasing orphaned session path=%s owner=%s", path.c_str(), name);
+    queue_transaction_release(service->transactions[path].get());
+  }
+}
+
 // Create and register one new transaction request object on the bus.
+// Watches the client's unique bus name to auto-release the session if the
+// client disconnects without calling Release.
 static TransactionSession *
-create_transaction_session(TransactionService *service, const TransactionRequest &request, std::string &error_out)
+create_transaction_session(TransactionService *service,
+                           const TransactionRequest &request,
+                           GDBusMethodInvocation *invocation,
+                           std::string &error_out)
 {
   error_out.clear();
   if (!service || !service->connection || !service->transaction_node_info) {
@@ -908,6 +953,14 @@ create_transaction_session(TransactionService *service, const TransactionRequest
   session->request = request;
   session->object_path =
       std::string(kManagerObjectPath) + "/requests/" + std::to_string(service->next_transaction_id++);
+
+  // Get the client's unique bus name and watch it for disconnect:
+  const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
+  if (!sender || !*sender) {
+    error_out = "Could not determine the client bus name.";
+    return nullptr;
+  }
+  session->owner_name = sender;
 
   GError *error = nullptr;
   session->registration_id = g_dbus_connection_register_object(service->connection,
@@ -922,6 +975,10 @@ create_transaction_session(TransactionService *service, const TransactionRequest
     g_clear_error(&error);
     return nullptr;
   }
+
+  // Watch for client disconnect to auto-release orphaned sessions.
+  session->owner_watch_id = g_bus_watch_name_on_connection(
+      service->connection, sender, G_BUS_NAME_WATCHER_FLAGS_NONE, nullptr, on_client_name_vanished, service, nullptr);
 
   TransactionSession *raw = session.get();
   service->transactions.emplace(session->object_path, std::move(session));
@@ -965,7 +1022,7 @@ on_manager_method_call(GDBusConnection *,
                request.remove.size(),
                request.reinstall.size());
 
-  TransactionSession *session = create_transaction_session(service, request, error_out);
+  TransactionSession *session = create_transaction_session(service, request, invocation, error_out);
   if (!session) {
     g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", error_out.c_str());
     return;
