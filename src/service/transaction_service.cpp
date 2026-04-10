@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -101,6 +102,7 @@ struct TransactionSession {
   TransactionService *service = nullptr;
   guint registration_id = 0;
   std::string object_path;
+  std::mutex state_mutex;
   TransactionRequest request;
   TransactionPreview preview;
   std::atomic<bool> finished { false };
@@ -313,9 +315,12 @@ emit_transaction_finished(TransactionSession *session, TransactionStage stage, b
     return;
   }
 
-  session->stage = stage;
-  session->success = success;
-  session->details = details;
+  {
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+    session->stage = stage;
+    session->success = success;
+    session->details = details;
+  }
   g_dbus_connection_emit_signal(session->service->connection,
                                 nullptr,
                                 session->object_path.c_str(),
@@ -488,6 +493,7 @@ set_transaction_running(TransactionSession *session, TransactionStage stage)
     return;
   }
 
+  std::lock_guard<std::mutex> lock(session->state_mutex);
   session->stage = stage;
   session->finished = false;
   session->success = false;
@@ -558,19 +564,25 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
   }
 
   TransactionSession *session = it->second.get();
-  if (!session || !session->pending_apply_invocation) {
-    return;
+  GDBusMethodInvocation *invocation = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+    if (!session || !session->pending_apply_invocation) {
+      return;
+    }
+    invocation = session->pending_apply_invocation;
+    session->pending_apply_invocation = nullptr;
   }
 
-  GDBusMethodInvocation *invocation = session->pending_apply_invocation;
-  session->pending_apply_invocation = nullptr;
-
   // Verify the session is still in a valid state for apply (user may have cancelled)
-  if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
-    g_dbus_method_invocation_return_error(
-        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction state changed during authorization.");
-    g_object_unref(invocation);
-    return;
+  {
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+    if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
+      g_dbus_method_invocation_return_error(
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction state changed during authorization.");
+      g_object_unref(invocation);
+      return;
+    }
   }
 
   GError *error = nullptr;
@@ -644,7 +656,10 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
   PolkitSubject *subject = polkit_system_bus_name_new(sender);
 
   // Take ownership of the invocation, the async callback will reply to it.
-  session->pending_apply_invocation = G_DBUS_METHOD_INVOCATION(g_object_ref(invocation));
+  {
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+    session->pending_apply_invocation = G_DBUS_METHOD_INVOCATION(g_object_ref(invocation));
+  }
 
   // Create callback context with service pointer and object path for safe lookup.
   auto *callback_context = new AuthorizationCallbackContext();
@@ -700,7 +715,10 @@ run_transaction_preview(TransactionSession *session)
     return;
   }
 
-  session->preview = preview;
+  {
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+    session->preview = preview;
+  }
   DNF_UI_TRACE("Transaction service preview done path=%s items=%zu",
                session->object_path.c_str(),
                preview.install.size() + preview.upgrade.size() + preview.downgrade.size() + preview.reinstall.size() +
@@ -858,10 +876,13 @@ on_transaction_method_call(GDBusConnection *,
   }
 
   if (g_strcmp0(method_name, "Apply") == 0) {
-    if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
-      g_dbus_method_invocation_return_error(
-          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview must succeed before apply can start.");
-      return;
+    {
+      std::lock_guard<std::mutex> lock(session->state_mutex);
+      if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
+        g_dbus_method_invocation_return_error(
+            invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview must succeed before apply can start.");
+        return;
+      }
     }
 
     if (session->pending_apply_invocation) {
@@ -917,6 +938,8 @@ on_transaction_method_call(GDBusConnection *,
       return;
     }
 
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+
     GVariantBuilder install_builder;
     GVariantBuilder upgrade_builder;
     GVariantBuilder downgrade_builder;
@@ -948,6 +971,8 @@ on_transaction_method_call(GDBusConnection *,
   }
 
   if (g_strcmp0(method_name, "GetResult") == 0) {
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+
     // Return stage, finished, success, and details in the GetResult reply order.
     g_dbus_method_invocation_return_value(invocation,
                                           g_variant_new("(sbbs)",
