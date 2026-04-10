@@ -123,6 +123,7 @@ struct TransactionService {
   guint manager_registration_id = 0;
   guint next_transaction_id = 1;
   std::atomic<bool> apply_running { false };
+  std::atomic<bool> shutting_down { false };
   std::map<std::string, std::unique_ptr<TransactionSession>> transactions;
 };
 
@@ -495,13 +496,45 @@ complete_apply_request(TransactionSession *session, GDBusMethodInvocation *invoc
 }
 
 // -----------------------------------------------------------------------------
+// Context passed to async polkit authorization callback.
+// Stores object path and service pointer to safely locate the session after
+// the async operation completes, handling the case where the service or session
+// may have been destroyed during shutdown.
+// -----------------------------------------------------------------------------
+struct AuthorizationCallbackContext {
+  TransactionService *service = nullptr;
+  std::string object_path;
+};
+
+// -----------------------------------------------------------------------------
 // Async callback invoked when polkit authorization completes.
 // Checks the authorization result and either proceeds with apply or returns an error.
+// Validates that the service and session still exist before accessing them to handle
+// shutdown race conditions where the callback fires after cleanup has started.
 // -----------------------------------------------------------------------------
 static void
 on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
-  TransactionSession *session = static_cast<TransactionSession *>(user_data);
+  std::unique_ptr<AuthorizationCallbackContext> context(static_cast<AuthorizationCallbackContext *>(user_data));
+  if (!context || !context->service) {
+    return;
+  }
+
+  // Check if service is shutting down before accessing the transaction map.
+  if (context->service->shutting_down.load()) {
+    DNF_UI_TRACE("Transaction service authorization callback ignored during shutdown path=%s",
+                 context->object_path.c_str());
+    return;
+  }
+
+  // Verify the session still exists (may have been released during authorization).
+  auto it = context->service->transactions.find(context->object_path);
+  if (it == context->service->transactions.end()) {
+    DNF_UI_TRACE("Transaction service authorization callback session not found path=%s", context->object_path.c_str());
+    return;
+  }
+
+  TransactionSession *session = it->second.get();
   if (!session || !session->pending_apply_invocation) {
     return;
   }
@@ -590,6 +623,11 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
   // Take ownership of the invocation, the async callback will reply to it.
   session->pending_apply_invocation = G_DBUS_METHOD_INVOCATION(g_object_ref(invocation));
 
+  // Create callback context with service pointer and object path for safe lookup.
+  auto *callback_context = new AuthorizationCallbackContext();
+  callback_context->service = session->service;
+  callback_context->object_path = session->object_path;
+
   DNF_UI_TRACE("Transaction service apply authorization start (async) path=%s", session->object_path.c_str());
   polkit_authority_check_authorization(authority,
                                        subject,
@@ -598,7 +636,7 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
                                        POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
                                        nullptr,
                                        on_apply_authorization_result,
-                                       session);
+                                       callback_context);
 
   g_object_unref(subject);
   g_object_unref(authority);
@@ -1099,9 +1137,27 @@ on_name_lost(GDBusConnection *, const gchar *, gpointer user_data)
 // Service cleanup
 // -----------------------------------------------------------------------------
 // Unregister service objects and release all owned GLib resources.
+// Cancels any pending async authorization operations by replying with errors
+// before destroying sessions to prevent use-after-free in async callbacks.
 static void
 cleanup_service(TransactionService &service)
 {
+  // Signal that shutdown is in progress to prevent async callbacks from accessing freed memory.
+  service.shutting_down = true;
+
+  // Reply to any pending authorization requests with an error before destroying sessions.
+  for (auto &[path, session] : service.transactions) {
+    if (session->pending_apply_invocation) {
+      DNF_UI_TRACE("Transaction service cancelling pending authorization during shutdown path=%s", path.c_str());
+      g_dbus_method_invocation_return_error(session->pending_apply_invocation,
+                                            G_DBUS_ERROR,
+                                            G_DBUS_ERROR_FAILED,
+                                            "Transaction service is shutting down.");
+      g_object_unref(session->pending_apply_invocation);
+      session->pending_apply_invocation = nullptr;
+    }
+  }
+
   for (auto &[path, session] : service.transactions) {
     if (service.connection && session->registration_id != 0) {
       g_dbus_connection_unregister_object(service.connection, session->registration_id);
