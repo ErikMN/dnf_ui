@@ -294,45 +294,96 @@ release_transaction_request(GDBusConnection *connection, const std::string &tran
 }
 
 // -----------------------------------------------------------------------------
-// Wait until the service request leaves the current running stage
+// State shared between wait_for_transaction_stage and its Finished signal handler.
+// -----------------------------------------------------------------------------
+struct FinishedWaitState {
+  bool received = false;
+  std::string stage;
+  bool success = false;
+  std::string details;
+};
+
+// -----------------------------------------------------------------------------
+// Wait until the service transaction request leaves the given running stage.
+// Subscribes to the Finished D-Bus signal so the wait wakes up immediately
+// when the service reports a terminal state.
+// context must already be the thread-default context of the calling thread so
+// that signal callbacks are dispatched on the same context that is iterated.
 // -----------------------------------------------------------------------------
 static bool
 wait_for_transaction_stage(GDBusConnection *connection,
                            const std::string &transaction_path,
                            const char *running_stage,
-                           GMainContext *signal_context,
+                           GMainContext *context,
                            TransactionServiceResult &result_out,
                            std::string &error_out)
 {
   error_out.clear();
-  std::string last_stage;
 
-  while (true) {
-    if (signal_context) {
-      while (g_main_context_pending(signal_context)) {
-        g_main_context_iteration(signal_context, FALSE);
-      }
-    }
+  // Subscribe to Finished before the initial state poll to close the narrow
+  // window where the service could finish between StartTransaction returning
+  // and the subscription being registered (TOCTOU race).
+  FinishedWaitState wait_state;
+  guint finished_id = g_dbus_connection_signal_subscribe(
+      connection,
+      kTransactionServiceName,
+      kTransactionServiceRequestInterface,
+      "Finished",
+      transaction_path.c_str(),
+      nullptr,
+      G_DBUS_SIGNAL_FLAGS_NONE,
+      +[](GDBusConnection *,
+          const gchar *,
+          const gchar *,
+          const gchar *,
+          const gchar *,
+          GVariant *parameters,
+          gpointer user_data) {
+        auto *state = static_cast<FinishedWaitState *>(user_data);
+        const gchar *stage = nullptr;
+        gboolean success = FALSE;
+        const gchar *details = nullptr;
+        g_variant_get(parameters, "(&sbs)", &stage, &success, &details);
+        state->stage = stage ? stage : "";
+        state->success = success;
+        state->details = details ? details : "";
+        state->received = true;
+      },
+      &wait_state,
+      nullptr);
 
-    if (!get_transaction_result(connection, transaction_path, result_out, error_out)) {
-      return false;
-    }
-
-    if (result_out.stage != last_stage) {
-      DNF_UI_TRACE("Transaction service client stage path=%s stage=%s finished=%d success=%d",
-                   transaction_path.c_str(),
-                   result_out.stage.c_str(),
-                   result_out.finished ? 1 : 0,
-                   result_out.success ? 1 : 0);
-      last_stage = result_out.stage;
-    }
-
-    if (result_out.stage != running_stage) {
-      return true;
-    }
-
-    g_usleep(200 * 1000);
+  // One initial GetResult call handles the case where the service already
+  // reached a terminal state before our Finished subscription was registered.
+  if (!get_transaction_result(connection, transaction_path, result_out, error_out)) {
+    g_dbus_connection_signal_unsubscribe(connection, finished_id);
+    return false;
   }
+
+  // Block on context until the Finished signal fires or the initial poll
+  // already shows a terminal state. Any other signals pending on context
+  // (such as Progress callbacks in the apply path) are also dispatched here.
+  while (!wait_state.received && result_out.stage == running_stage && !result_out.finished) {
+    g_main_context_iteration(context, TRUE);
+  }
+
+  g_dbus_connection_signal_unsubscribe(connection, finished_id);
+
+  // Populate result directly from the signal payload when the signal drove the
+  // exit, avoiding an extra GetResult round-trip.
+  if (wait_state.received) {
+    result_out.stage = wait_state.stage;
+    result_out.finished = true;
+    result_out.success = wait_state.success;
+    result_out.details = wait_state.details;
+  }
+
+  DNF_UI_TRACE("Transaction service client stage path=%s stage=%s finished=%d success=%d",
+               transaction_path.c_str(),
+               result_out.stage.c_str(),
+               result_out.finished ? 1 : 0,
+               result_out.success ? 1 : 0);
+
+  return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -394,7 +445,18 @@ transaction_service_client_preview_request(const TransactionRequest &request,
     return false;
   }
 
-  if (!wait_for_transaction_stage(connection, transaction_path_out, "preview-running", nullptr, result, error_out)) {
+  // Create a dedicated main context for the duration of the preview wait.
+  // The Finished signal subscription inside wait_for_transaction_stage is
+  // dispatched on the thread-default context, so it and the iterated context
+  // must be the same object.
+  GMainContext *wait_context = g_main_context_new();
+  g_main_context_push_thread_default(wait_context);
+  bool stage_ok =
+      wait_for_transaction_stage(connection, transaction_path_out, "preview-running", wait_context, result, error_out);
+  g_main_context_pop_thread_default(wait_context);
+  g_main_context_unref(wait_context);
+
+  if (!stage_ok) {
     std::string release_error;
     release_transaction_request(connection, transaction_path_out, release_error);
     g_object_unref(connection);
