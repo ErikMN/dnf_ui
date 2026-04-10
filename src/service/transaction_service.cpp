@@ -810,29 +810,26 @@ on_transaction_method_call(GDBusConnection *,
       return;
     }
 
-    session->cancelled = true;
-    if (session->stage == TransactionStage::PREVIEW_READY && session->finished.load()) {
-      session->stage = TransactionStage::CANCELLED;
-      session->success = false;
-      session->details = "Transaction preview was cancelled.";
-      emit_transaction_progress(session, "Transaction preview was cancelled.");
-      g_dbus_connection_emit_signal(
-          session->service->connection,
-          nullptr,
-          session->object_path.c_str(),
-          kTransactionInterface,
-          "Finished",
-          g_variant_new("(sbs)", transaction_stage_name(TransactionStage::CANCELLED), FALSE, session->details.c_str()),
-          nullptr);
+    // A transaction that has already reached a final state other than PREVIEW_READY
+    // (e.g. PREVIEW_FAILED, CANCELLED, APPLY_SUCCEEDED, APPLY_FAILED) has nothing left to cancel.
+    // Return success without re-emitting signals to avoid confusing the client.
+    if (session->finished.load() && session->stage != TransactionStage::PREVIEW_READY) {
       g_dbus_method_invocation_return_value(invocation, nullptr);
       return;
     }
 
-    if (!session->finished.load()) {
-      emit_transaction_progress(session, "Transaction preview was cancelled.");
-      emit_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
+    session->cancelled = true;
+
+    // If the preview worker already finished (PREVIEW_READY), clear the flag so
+    // emit_transaction_progress can send the cancellation line before the Finished signal.
+    // The reset is safe here: PREVIEW_READY is only reached after the worker exits,
+    // so no thread is concurrently modifying session->finished.
+    if (session->finished.load()) {
+      session->finished = false;
     }
 
+    emit_transaction_progress(session, "Transaction preview was cancelled.");
+    emit_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
     g_dbus_method_invocation_return_value(invocation, nullptr);
     return;
   }

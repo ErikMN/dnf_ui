@@ -306,7 +306,7 @@ struct FinishedWaitState {
 // -----------------------------------------------------------------------------
 // Wait until the service transaction request leaves the given running stage.
 // Subscribes to the Finished D-Bus signal so the wait wakes up immediately
-// when the service reports a terminal state.
+// when the service reports a final state.
 // context must already be the thread-default context of the calling thread so
 // that signal callbacks are dispatched on the same context that is iterated.
 // -----------------------------------------------------------------------------
@@ -353,14 +353,14 @@ wait_for_transaction_stage(GDBusConnection *connection,
       nullptr);
 
   // One initial GetResult call handles the case where the service already
-  // reached a terminal state before our Finished subscription was registered.
+  // reached a final state before our Finished subscription was registered.
   if (!get_transaction_result(connection, transaction_path, result_out, error_out)) {
     g_dbus_connection_signal_unsubscribe(connection, finished_id);
     return false;
   }
 
   // Block on context until the Finished signal fires or the initial poll
-  // already shows a terminal state. Any other signals pending on context
+  // already shows a final state. Any other signals pending on context
   // (such as Progress callbacks in the apply path) are also dispatched here.
   while (!wait_state.received && result_out.stage == running_stage && !result_out.finished) {
     g_main_context_iteration(context, TRUE);
