@@ -132,8 +132,7 @@ cppcheck:
 .PHONY: indent
 indent:
 	@echo "*** Formatting code"
-	@clang-format $(shell find src -name "*.cpp" -o -name "*.hpp") \
-		-style=file -i -fallback-style=none
+	@./utils/docker-clang-format.sh
 
 .PHONY: clean
 clean:
