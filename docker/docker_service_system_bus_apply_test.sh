@@ -43,6 +43,7 @@ docker run --rm \
   -e DEBUG_TRACE \
   -e SERVICE_TEST_INSTALL_SPEC=cowsay \
   -e SERVICE_SYSTEM_BUS_ALLOW_APPLY=yes \
+  -e SERVICE_TEST_DISABLE_AUTO_RELEASE=1 \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
   bash -c "make clean && make -j$(nproc) dnf_ui_transaction_service && bash /workspace/docker/docker_service_system_bus_inner.sh"

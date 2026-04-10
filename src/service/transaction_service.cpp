@@ -1021,8 +1021,14 @@ create_transaction_session(TransactionService *service,
   }
 
   // Watch for client disconnect to auto-release orphaned sessions.
-  session->owner_watch_id = g_bus_watch_name_on_connection(
-      service->connection, sender, G_BUS_NAME_WATCHER_FLAGS_NONE, nullptr, on_client_name_vanished, service, nullptr);
+  // NOTE: Only enable on system bus where clients are persistent desktop applications.
+  // Skip on session bus where test scripts use separate connections per call.
+  // Also skip if SERVICE_TEST_DISABLE_AUTO_RELEASE is set (for system bus testing with gdbus call).
+  const char *disable_auto_release = g_getenv("SERVICE_TEST_DISABLE_AUTO_RELEASE");
+  if (service->bus_type == G_BUS_TYPE_SYSTEM && (!disable_auto_release || g_strcmp0(disable_auto_release, "1") != 0)) {
+    session->owner_watch_id = g_bus_watch_name_on_connection(
+        service->connection, sender, G_BUS_NAME_WATCHER_FLAGS_NONE, nullptr, on_client_name_vanished, service, nullptr);
+  }
 
   TransactionSession *raw = session.get();
   service->transactions.emplace(session->object_path, std::move(session));
