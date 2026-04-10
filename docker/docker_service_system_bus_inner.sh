@@ -2,24 +2,23 @@
 set -e
 
 # Inner system bus smoke test used by the Docker service wrappers. It stages the
-# policy files, starts a private bus and polkitd, then exercises preview and
-# apply through the installed service contract.
+# policy files, starts a private bus and polkitd, then exercises preview, apply,
+# and orphan cleanup through the installed service contract.
 
-SERVICE_NAME="com.fedora.Dnfui.Transaction1"
-MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
-MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"
-RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
-PREVIEW_METHOD="com.fedora.Dnfui.TransactionRequest1.GetPreview"
-APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
-RELEASE_METHOD="com.fedora.Dnfui.TransactionRequest1.Release"
+# Make this script work from any directory:
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$PROJECT_ROOT/utils/transaction_service_paths.conf"
+
 TEST_USER="dnfuitest"
 INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
 ALLOW_APPLY="${SERVICE_SYSTEM_BUS_ALLOW_APPLY:-}"
+DISCONNECT_MODE="${SERVICE_SYSTEM_BUS_DISCONNECT:-}"
 TIMEOUT_SECONDS="${SERVICE_TEST_TIMEOUT_SECONDS:-180}"
-SERVICE_BIN="/workspace/dnf_ui_transaction_service"
-POLICY_FILE="/workspace/packaging/com.fedora.dnfui.policy"
-BUS_POLICY_FILE="/workspace/packaging/com.fedora.Dnfui.Transaction1.conf"
+SERVICE_BIN="$PROJECT_ROOT/$TRANSACTION_SERVICE_BIN_NAME"
+POLICY_FILE="$PROJECT_ROOT/$TRANSACTION_SERVICE_POLICY_FILE"
+BUS_POLICY_FILE="$PROJECT_ROOT/$TRANSACTION_SERVICE_DBUS_POLICY_FILE"
 RULES_FILE="/etc/polkit-1/rules.d/49-com.fedora.dnfui-test.rules"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -33,7 +32,7 @@ if [ ! -x "$SERVICE_BIN" ]; then
 fi
 
 if [ ! -f "$POLICY_FILE" ] || [ ! -f "$BUS_POLICY_FILE" ]; then
-  echo "*** Missing service packaging files in /workspace/packaging ***" >&2
+  echo "*** Missing service packaging files in $PROJECT_ROOT/packaging ***" >&2
   exit 1
 fi
 
@@ -44,6 +43,11 @@ fi
 
 if [ -n "$INSTALL_SPEC" ] && [ -n "$REINSTALL_SPEC" ]; then
   echo "*** Set only one of SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA ***" >&2
+  exit 1
+fi
+
+if [ -n "$ALLOW_APPLY" ] && [ -n "$DISCONNECT_MODE" ]; then
+  echo "*** Set only one of SERVICE_SYSTEM_BUS_ALLOW_APPLY or SERVICE_SYSTEM_BUS_DISCONNECT ***" >&2
   exit 1
 fi
 
@@ -87,9 +91,9 @@ wait_for_result() {
       env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
       gdbus call \
       --system \
-      --dest "$SERVICE_NAME" \
+      --dest "$TRANSACTION_SERVICE_NAME" \
       --object-path "$transaction_path" \
-      --method "$RESULT_METHOD")"
+      --method "$TRANSACTION_SERVICE_RESULT_METHOD")"
 
     if printf "%s\n" "$result" | grep -Fq "'$expected_stage', true, $expected_success,"; then
       printf "%s\n" "$result"
@@ -118,13 +122,70 @@ wait_for_result() {
   done
 }
 
+wait_for_release() {
+  local transaction_path="$1"
+  local deadline="$((SECONDS + TIMEOUT_SECONDS))"
+  local result=""
+  local status=0
+
+  while :; do
+    set +e
+    result="$(runuser -u "$TEST_USER" -- \
+      env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
+      gdbus call \
+      --system \
+      --dest "$TRANSACTION_SERVICE_NAME" \
+      --object-path "$transaction_path" \
+      --method "$TRANSACTION_SERVICE_RESULT_METHOD" 2>&1)"
+    status=$?
+    set -e
+
+    if [ "$status" -ne 0 ]; then
+      case "$result" in
+        *"UnknownObject"* | *"UnknownMethod"* | *"No such interface"* )
+          printf "%s\n" "$result"
+          return 0
+          ;;
+        * )
+          printf "%s\n" "$result"
+          echo "*** Transaction request did not fail with the expected release error ***" >&2
+          print_logs >&2
+          return 1
+          ;;
+      esac
+    fi
+
+    if printf "%s\n" "$result" | grep -Fq "'preview-running'"; then
+      :
+    elif printf "%s\n" "$result" | grep -Fq "'cancelled'"; then
+      :
+    elif printf "%s\n" "$result" | grep -Fq "'preview-ready'"; then
+      :
+    else
+      printf "%s\n" "$result"
+      echo "*** Transaction request stayed reachable in an unexpected state ***" >&2
+      print_logs >&2
+      return 1
+    fi
+
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "*** Timed out waiting for released transaction request to disappear after ${TIMEOUT_SECONDS} seconds ***" >&2
+      echo "*** Last observed result: $result ***" >&2
+      print_logs >&2
+      return 1
+    fi
+
+    sleep 1
+  done
+}
+
 if ! id "$TEST_USER" >/dev/null 2>&1; then
   useradd -m "$TEST_USER"
 fi
 
-install -D -m 0755 "$SERVICE_BIN" /usr/libexec/dnf_ui_transaction_service
-install -D -m 0644 "$POLICY_FILE" /usr/share/polkit-1/actions/com.fedora.dnfui.policy
-install -D -m 0644 "$BUS_POLICY_FILE" /usr/share/dbus-1/system.d/com.fedora.Dnfui.Transaction1.conf
+install -D -m 0755 "$SERVICE_BIN" "$TRANSACTION_SERVICE_BIN_DEST"
+install -D -m 0644 "$POLICY_FILE" "$TRANSACTION_SERVICE_POLICY_DEST"
+install -D -m 0644 "$BUS_POLICY_FILE" "$TRANSACTION_SERVICE_DBUS_POLICY_DEST"
 
 if [ -n "$ALLOW_APPLY" ]; then
   install -d /etc/polkit-1/rules.d
@@ -163,6 +224,9 @@ if [ -n "$ALLOW_APPLY" ]; then
     echo "*** Package spec: $REINSTALL_SPEC ***"
   fi
   echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
+elif [ -n "$DISCONNECT_MODE" ]; then
+  echo "*** Running transaction service system bus disconnect test ***"
+  echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 elif [ -n "$INSTALL_SPEC" ]; then
   echo "*** Running transaction service system bus install preview test ***"
   echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
@@ -179,15 +243,15 @@ if [ -n "$INSTALL_SPEC" ]; then
   start_reinstall="[]"
 fi
 
-gdbus wait --system "$SERVICE_NAME" >/dev/null
+gdbus wait --system "$TRANSACTION_SERVICE_NAME" >/dev/null
 
 reply="$(runuser -u "$TEST_USER" -- \
   env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
   gdbus call \
   --system \
-  --dest "$SERVICE_NAME" \
-  --object-path "$MANAGER_PATH" \
-  --method "$MANAGER_METHOD" \
+  --dest "$TRANSACTION_SERVICE_NAME" \
+  --object-path "$TRANSACTION_SERVICE_MANAGER_PATH" \
+  --method "$TRANSACTION_SERVICE_START_METHOD" \
   "$start_install" \
   "$start_remove" \
   "$start_reinstall")"
@@ -210,6 +274,14 @@ if [ -z "$transaction_path" ]; then
   exit 1
 fi
 
+if [ -n "$DISCONNECT_MODE" ]; then
+  echo "*** The StartTransaction caller has disconnected. Waiting for automatic cleanup. ***"
+  released_result="$(wait_for_release "$transaction_path")"
+  echo "$released_result"
+  print_logs
+  exit 0
+fi
+
 preview_result="$(wait_for_result "$transaction_path" "preview-ready" "true")"
 echo "$preview_result"
 
@@ -217,9 +289,9 @@ preview_data="$(runuser -u "$TEST_USER" -- \
   env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
   gdbus call \
   --system \
-  --dest "$SERVICE_NAME" \
+  --dest "$TRANSACTION_SERVICE_NAME" \
   --object-path "$transaction_path" \
-  --method "$PREVIEW_METHOD")"
+  --method "$TRANSACTION_SERVICE_PREVIEW_METHOD")"
 echo "$preview_data"
 
 expected_preview_spec="$REINSTALL_SPEC"
@@ -242,9 +314,9 @@ if [ -n "$ALLOW_APPLY" ]; then
     env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
     gdbus call \
     --system \
-    --dest "$SERVICE_NAME" \
+    --dest "$TRANSACTION_SERVICE_NAME" \
     --object-path "$transaction_path" \
-    --method "$APPLY_METHOD" >/dev/null
+    --method "$TRANSACTION_SERVICE_APPLY_METHOD" >/dev/null
 
   apply_result="$(wait_for_result "$transaction_path" "apply-succeeded" "true")"
   echo "$apply_result"
@@ -263,18 +335,18 @@ if [ -n "$ALLOW_APPLY" ]; then
     env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
     gdbus call \
     --system \
-    --dest "$SERVICE_NAME" \
+    --dest "$TRANSACTION_SERVICE_NAME" \
     --object-path "$transaction_path" \
-    --method "$RELEASE_METHOD" >/dev/null
+    --method "$TRANSACTION_SERVICE_RELEASE_METHOD" >/dev/null
 
   set +e
   released_result="$(runuser -u "$TEST_USER" -- \
     env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
     gdbus call \
     --system \
-    --dest "$SERVICE_NAME" \
+    --dest "$TRANSACTION_SERVICE_NAME" \
     --object-path "$transaction_path" \
-    --method "$RESULT_METHOD" 2>&1)"
+    --method "$TRANSACTION_SERVICE_RESULT_METHOD" 2>&1)"
   released_status=$?
   set -e
 
@@ -289,9 +361,9 @@ else
     env DBUS_SYSTEM_BUS_ADDRESS="$DBUS_SYSTEM_BUS_ADDRESS" \
     gdbus call \
     --system \
-    --dest "$SERVICE_NAME" \
+    --dest "$TRANSACTION_SERVICE_NAME" \
     --object-path "$transaction_path" \
-    --method "$APPLY_METHOD" 2>&1)"
+    --method "$TRANSACTION_SERVICE_APPLY_METHOD" 2>&1)"
   apply_status=$?
   set -e
 

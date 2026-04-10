@@ -6,6 +6,8 @@ LDLIBS = -lm
 PKGS = libdnf5 gtk4 polkit-gobject-1
 TEST_PKGS = libdnf5 gio-2.0 catch2-with-main
 
+include utils/transaction_service_paths.conf
+
 ifneq ($(filter test,$(MAKECMDGOALS)),)
   PKG_OK := $(shell pkg-config --exists $(TEST_PKGS) && echo yes)
   ifeq ($(PKG_OK),yes)
@@ -15,7 +17,7 @@ ifneq ($(filter test,$(MAKECMDGOALS)),)
     $(error "Missing test dependencies: please install development packages for $(TEST_PKGS)")
   endif
 else
-  ifeq ($(filter dockerrun dockertest dockerservicetest dockerserviceapplytest dockerservicesystemtest dockerservicesystemapplytest dockersetup cppcheck indent clean serviceuninstall servicesystemtest servicesystemapplytest,$(MAKECMDGOALS)),)
+  ifeq ($(filter dockerrun dockertest dockerservicetest dockerserviceapplytest dockerservicecanceltest dockerservicesystemtest dockerservicesystemapplytest dockerservicesystemdisconnecttest dockersetup cppcheck indent clean serviceuninstall servicesystemtest servicesystemapplytest servicesystemdisconnecttest,$(MAKECMDGOALS)),)
     PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
     ifeq ($(PKG_OK),yes)
       PKG_LIBS := $(shell pkg-config --libs $(PKGS))
@@ -55,6 +57,12 @@ TEST_OBJS = $(TEST_SRCS:.cpp=.o)
 TEST_DEPS = $(TEST_SRCS:.cpp=.d)
 
 CPPFLAGS += -Iinclude -Isrc
+
+TRANSACTION_SERVICE_BIN_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_BIN_NAME)
+TRANSACTION_SERVICE_POLICY_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_POLICY_FILE)
+TRANSACTION_SERVICE_DBUS_SERVICE_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_DBUS_SERVICE_FILE)
+TRANSACTION_SERVICE_DBUS_POLICY_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_DBUS_POLICY_FILE)
+TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_SYSTEMD_UNIT_FILE)
 
 -include $(APP_DEPS)
 -include $(SERVICE_BACKEND_DEPS)
@@ -119,7 +127,11 @@ test: dnf_ui_tests
 # Native transaction service development helpers:
 .PHONY: servicetest
 servicetest: dnf_ui_transaction_service
-	@./utils/test_transaction_service_poc.sh
+	@./utils/test_transaction_service_preview.sh
+
+.PHONY: servicecanceltest
+servicecanceltest: dnf_ui_transaction_service
+	@./utils/test_transaction_service_cancel.sh
 
 .PHONY: serviceapplytest
 serviceapplytest: dnf_ui_transaction_service
@@ -127,11 +139,34 @@ serviceapplytest: dnf_ui_transaction_service
 
 .PHONY: serviceinstall
 serviceinstall: dnf_ui_transaction_service
-	@./utils/install_transaction_service.sh
+	@test "$$(id -u)" -eq 0 || { echo "*** serviceinstall must run as root ***" >&2; exit 1; }
+	@test -x "$(TRANSACTION_SERVICE_BIN_SRC)" || { echo "*** Missing service binary: $(TRANSACTION_SERVICE_BIN_SRC) ***" >&2; echo "*** Build it first with: make dnf_ui_transaction_service ***" >&2; exit 1; }
+	@test -f "$(TRANSACTION_SERVICE_POLICY_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_POLICY_SRC) ***" >&2; exit 1; }
+	@test -f "$(TRANSACTION_SERVICE_DBUS_SERVICE_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_DBUS_SERVICE_SRC) ***" >&2; exit 1; }
+	@test -f "$(TRANSACTION_SERVICE_DBUS_POLICY_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_DBUS_POLICY_SRC) ***" >&2; exit 1; }
+	@test -f "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC) ***" >&2; exit 1; }
+	install -D -m 0755 "$(TRANSACTION_SERVICE_BIN_SRC)" "$(TRANSACTION_SERVICE_BIN_DEST)"
+	install -D -m 0644 "$(TRANSACTION_SERVICE_POLICY_SRC)" "$(TRANSACTION_SERVICE_POLICY_DEST)"
+	install -D -m 0644 "$(TRANSACTION_SERVICE_DBUS_SERVICE_SRC)" "$(TRANSACTION_SERVICE_DBUS_SERVICE_DEST)"
+	install -D -m 0644 "$(TRANSACTION_SERVICE_DBUS_POLICY_SRC)" "$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)"
+	install -D -m 0644 "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC)" "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
+	systemctl daemon-reload
+	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+	@echo "*** Installed $(TRANSACTION_SERVICE_NAME) service files for native testing. ***"
+	@echo "*** Run dnf_ui as a regular desktop user and apply a transaction to trigger the Polkit prompt. ***"
 
 .PHONY: serviceuninstall
 serviceuninstall:
-	@./utils/uninstall_transaction_service.sh
+	@test "$$(id -u)" -eq 0 || { echo "*** serviceuninstall must run as root ***" >&2; exit 1; }
+	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
+	rm -f "$(TRANSACTION_SERVICE_BIN_DEST)" \
+	      "$(TRANSACTION_SERVICE_POLICY_DEST)" \
+	      "$(TRANSACTION_SERVICE_DBUS_SERVICE_DEST)" \
+	      "$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)" \
+	      "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
+	systemctl daemon-reload
+	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+	@echo "*** Removed native transaction service files. ***"
 
 .PHONY: servicesystemtest
 servicesystemtest:
@@ -140,6 +175,10 @@ servicesystemtest:
 .PHONY: servicesystemapplytest
 servicesystemapplytest:
 	@SERVICE_SYSTEM_APPLY=yes ./utils/test_transaction_service_system_bus.sh
+
+.PHONY: servicesystemdisconnecttest
+servicesystemdisconnecttest:
+	@SERVICE_SYSTEM_DISCONNECT=yes ./utils/test_transaction_service_system_bus.sh
 
 # Docker app and transaction service helpers:
 # To test dark or light themes in Docker:
@@ -161,6 +200,10 @@ dockerservicetest:
 dockerserviceapplytest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_apply_test.sh
 
+.PHONY: dockerservicecanceltest
+dockerservicecanceltest:
+	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_cancel_test.sh
+
 .PHONY: dockerservicesystemtest
 dockerservicesystemtest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_test.sh
@@ -168,6 +211,10 @@ dockerservicesystemtest:
 .PHONY: dockerservicesystemapplytest
 dockerservicesystemapplytest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_apply_test.sh
+
+.PHONY: dockerservicesystemdisconnecttest
+dockerservicesystemdisconnecttest:
+	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_disconnect_test.sh
 
 .PHONY: dockersetup
 dockersetup:

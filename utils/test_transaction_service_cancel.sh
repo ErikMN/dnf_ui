@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Session bus smoke test for transaction preview cancellation. This exercises
+# the request object state changes for Cancel, GetPreview, and Release.
+
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -17,13 +20,8 @@ if [ ! -x "$SERVICE_BIN" ]; then
   exit 1
 fi
 
-if [ "$(id -u)" -ne 0 ]; then
-  echo "*** serviceapplytest must run as root because the session bus apply test performs a real transaction without Polkit. ***" >&2
-  exit 1
-fi
-
 if [ -z "$INSTALL_SPEC" ] && [ -z "$REINSTALL_SPEC" ]; then
-  echo "*** Set SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA before running serviceapplytest ***" >&2
+  echo "*** Set SERVICE_TEST_INSTALL_SPEC or SERVICE_TEST_REINSTALL_NEVRA before running servicecanceltest ***" >&2
   exit 1
 fi
 
@@ -38,15 +36,7 @@ cleanup_log() {
 }
 trap cleanup_log EXIT
 
-echo "*** Running transaction service apply test ***"
-echo "*** WARNING: This test applies a real package transaction on the current system. ***"
-if [ -n "$INSTALL_SPEC" ]; then
-  echo "*** Package spec: $INSTALL_SPEC ***"
-else
-  echo "*** Package spec: $REINSTALL_SPEC ***"
-fi
-echo "*** Use only a harmless package for install tests. ***"
-echo "*** Use only a non critical installed package for reinstall tests. ***"
+echo "*** Running transaction service cancel test ***"
 echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 
 SERVICE_BIN="$SERVICE_BIN" \
@@ -54,8 +44,8 @@ SERVICE_NAME="$TRANSACTION_SERVICE_NAME" \
 MANAGER_PATH="$TRANSACTION_SERVICE_MANAGER_PATH" \
 MANAGER_METHOD="$TRANSACTION_SERVICE_START_METHOD" \
 RESULT_METHOD="$TRANSACTION_SERVICE_RESULT_METHOD" \
+CANCEL_METHOD="$TRANSACTION_SERVICE_CANCEL_METHOD" \
 PREVIEW_METHOD="$TRANSACTION_SERVICE_PREVIEW_METHOD" \
-APPLY_METHOD="$TRANSACTION_SERVICE_APPLY_METHOD" \
 RELEASE_METHOD="$TRANSACTION_SERVICE_RELEASE_METHOD" \
 INSTALL_SPEC="$INSTALL_SPEC" \
 REINSTALL_SPEC="$REINSTALL_SPEC" \
@@ -84,8 +74,6 @@ dbus-run-session -- bash <<'EOF'
       fi
 
       if printf "%s\n" "$result" | grep -Fq "'preview-running'"; then
-        :
-      elif printf "%s\n" "$result" | grep -Fq "'apply-running'"; then
         :
       else
         printf "%s\n" "$result"
@@ -120,10 +108,8 @@ dbus-run-session -- bash <<'EOF'
 
   start_install="[]"
   start_reinstall="[]"
-  expected_preview_spec="$REINSTALL_SPEC"
   if [ -n "$INSTALL_SPEC" ]; then
     start_install="[\"$INSTALL_SPEC\"]"
-    expected_preview_spec="$INSTALL_SPEC"
   else
     start_reinstall="[\"$REINSTALL_SPEC\"]"
   fi
@@ -155,41 +141,36 @@ dbus-run-session -- bash <<'EOF'
     exit 1
   fi
 
-  preview_result="$(wait_for_result "$transaction_path" "preview-ready" "true")"
-  echo "$preview_result"
-
-  preview_data="$(gdbus call \
-    --session \
-    --dest "$SERVICE_NAME" \
-    --object-path "$transaction_path" \
-    --method "$PREVIEW_METHOD")"
-  echo "$preview_data"
-
-  case "$preview_data" in
-    *"$expected_preview_spec"* )
-      ;;
-    * )
-      echo "*** Structured preview did not contain the expected package spec ***" >&2
-      exit 1
-      ;;
-  esac
-
-  echo "*** WARNING: Applying a real package transaction now. ***"
-
   gdbus call \
     --session \
     --dest "$SERVICE_NAME" \
     --object-path "$transaction_path" \
-    --method "$APPLY_METHOD" >/dev/null
+    --method "$CANCEL_METHOD" >/dev/null
 
-  apply_result="$(wait_for_result "$transaction_path" "apply-succeeded" "true")"
-  echo "$apply_result"
+  cancelled_result="$(wait_for_result "$transaction_path" "cancelled" "false")"
+  echo "$cancelled_result"
 
-  case "$apply_result" in
-    *"Transaction applied successfully."* )
+  set +e
+  preview_output="$(gdbus call \
+    --session \
+    --dest "$SERVICE_NAME" \
+    --object-path "$transaction_path" \
+    --method "$PREVIEW_METHOD" 2>&1)"
+  preview_status=$?
+  set -e
+
+  echo "$preview_output"
+
+  if [ "$preview_status" -eq 0 ]; then
+    echo "*** Cancelled transaction unexpectedly returned preview data ***" >&2
+    exit 1
+  fi
+
+  case "$preview_output" in
+    *"Transaction preview is not available."* )
       ;;
     * )
-      echo "*** Transaction apply result did not contain the expected success text ***" >&2
+      echo "*** Cancelled transaction did not reject GetPreview as expected ***" >&2
       exit 1
       ;;
   esac
@@ -210,7 +191,7 @@ dbus-run-session -- bash <<'EOF'
   set -e
 
   if [ "$released_status" -eq 0 ]; then
-    echo "*** Released transaction request is still reachable ***" >&2
+    echo "*** Released cancelled transaction is still reachable ***" >&2
     exit 1
   fi
 

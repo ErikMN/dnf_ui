@@ -4,12 +4,13 @@ set -e
 # Native system bus smoke test for the installed transaction service. The apply
 # mode is meant to be run as a regular desktop user so Polkit can prompt.
 
-SERVICE_NAME="com.fedora.Dnfui.Transaction1"
-MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
-MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"
-RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
-APPLY_METHOD="com.fedora.Dnfui.TransactionRequest1.Apply"
+# Make this script work from any directory:
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$PROJECT_ROOT/utils/transaction_service_paths.conf"
+
 APPLY_MODE="${SERVICE_SYSTEM_APPLY:-}"
+DISCONNECT_MODE="${SERVICE_SYSTEM_DISCONNECT:-}"
 INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
 REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
 TIMEOUT_SECONDS="${SERVICE_TEST_TIMEOUT_SECONDS:-180}"
@@ -29,6 +30,11 @@ if [ -n "$INSTALL_SPEC" ] && [ -n "$REINSTALL_SPEC" ]; then
   exit 1
 fi
 
+if [ -n "$APPLY_MODE" ] && [ -n "$DISCONNECT_MODE" ]; then
+  echo "*** Set only one of SERVICE_SYSTEM_APPLY or SERVICE_SYSTEM_DISCONNECT ***" >&2
+  exit 1
+fi
+
 wait_for_result() {
   local transaction_path="$1"
   local expected_stage="$2"
@@ -39,9 +45,9 @@ wait_for_result() {
   while :; do
     result="$(gdbus call \
       --system \
-      --dest "$SERVICE_NAME" \
+      --dest "$TRANSACTION_SERVICE_NAME" \
       --object-path "$transaction_path" \
-      --method "$RESULT_METHOD")"
+      --method "$TRANSACTION_SERVICE_RESULT_METHOD")"
 
     if printf "%s\n" "$result" | grep -Fq "'$expected_stage', true, $expected_success,"; then
       printf "%s\n" "$result"
@@ -68,6 +74,58 @@ wait_for_result() {
   done
 }
 
+wait_for_release() {
+  local transaction_path="$1"
+  local deadline="$((SECONDS + TIMEOUT_SECONDS))"
+  local result=""
+  local status=0
+
+  while :; do
+    set +e
+    result="$(gdbus call \
+      --system \
+      --dest "$TRANSACTION_SERVICE_NAME" \
+      --object-path "$transaction_path" \
+      --method "$TRANSACTION_SERVICE_RESULT_METHOD" 2>&1)"
+    status=$?
+    set -e
+
+    if [ "$status" -ne 0 ]; then
+      case "$result" in
+        *"UnknownObject"* | *"UnknownMethod"* | *"No such interface"* )
+          printf "%s\n" "$result"
+          return 0
+          ;;
+        * )
+          printf "%s\n" "$result"
+          echo "*** Transaction request did not fail with the expected release error ***" >&2
+          return 1
+          ;;
+      esac
+    fi
+
+    if printf "%s\n" "$result" | grep -Fq "'preview-running'"; then
+      :
+    elif printf "%s\n" "$result" | grep -Fq "'cancelled'"; then
+      :
+    elif printf "%s\n" "$result" | grep -Fq "'preview-ready'"; then
+      :
+    else
+      printf "%s\n" "$result"
+      echo "*** Transaction request stayed reachable in an unexpected state ***" >&2
+      return 1
+    fi
+
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "*** Timed out waiting for released transaction request to disappear after ${TIMEOUT_SECONDS} seconds ***" >&2
+      echo "*** Last observed result: $result ***" >&2
+      return 1
+    fi
+
+    sleep 1
+  done
+}
+
 if [ -n "$APPLY_MODE" ]; then
   echo "*** Running native transaction service apply test ***"
   echo "*** WARNING: This test applies a real package transaction on the current system. ***"
@@ -78,6 +136,9 @@ if [ -n "$APPLY_MODE" ]; then
   fi
   echo "*** Use only a harmless package for install tests. ***"
   echo "*** Use only a non critical installed package for reinstall tests. ***"
+  echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
+elif [ -n "$DISCONNECT_MODE" ]; then
+  echo "*** Running native transaction service disconnect test ***"
   echo "*** Result timeout: ${TIMEOUT_SECONDS} seconds ***"
 else
   echo "*** Running native transaction service preview test ***"
@@ -94,9 +155,9 @@ fi
 
 reply="$(gdbus call \
   --system \
-  --dest "$SERVICE_NAME" \
-  --object-path "$MANAGER_PATH" \
-  --method "$MANAGER_METHOD" \
+  --dest "$TRANSACTION_SERVICE_NAME" \
+  --object-path "$TRANSACTION_SERVICE_MANAGER_PATH" \
+  --method "$TRANSACTION_SERVICE_START_METHOD" \
   "$start_install" \
   "[]" \
   "$start_reinstall")"
@@ -119,6 +180,13 @@ if [ -z "$transaction_path" ]; then
   exit 1
 fi
 
+if [ -n "$DISCONNECT_MODE" ]; then
+  echo "*** The StartTransaction caller has disconnected. Waiting for automatic cleanup. ***"
+  released_result="$(wait_for_release "$transaction_path")"
+  echo "$released_result"
+  exit 0
+fi
+
 preview_result="$(wait_for_result "$transaction_path" "preview-ready" "true")"
 echo "$preview_result"
 
@@ -128,9 +196,9 @@ if [ -n "$APPLY_MODE" ]; then
 
   gdbus call \
     --system \
-    --dest "$SERVICE_NAME" \
+    --dest "$TRANSACTION_SERVICE_NAME" \
     --object-path "$transaction_path" \
-    --method "$APPLY_METHOD" >/dev/null
+    --method "$TRANSACTION_SERVICE_APPLY_METHOD" >/dev/null
 
   apply_result="$(wait_for_result "$transaction_path" "apply-succeeded" "true")"
   echo "$apply_result"

@@ -4,17 +4,15 @@ set -e
 # Session bus smoke test for the standalone transaction service binary. This is
 # the smallest native check for the D-Bus manager and preview flow.
 
-SERVICE_NAME="com.fedora.Dnfui.Transaction1"
-MANAGER_PATH="/com/fedora/Dnfui/Transaction1"
-MANAGER_METHOD="com.fedora.Dnfui.Transaction1.StartTransaction"
-RESULT_METHOD="com.fedora.Dnfui.TransactionRequest1.GetResult"
-INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
-REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
-
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVICE_BIN="$PROJECT_ROOT/dnf_ui_transaction_service"
+source "$PROJECT_ROOT/utils/transaction_service_paths.conf"
+
+SERVICE_BIN="$PROJECT_ROOT/$TRANSACTION_SERVICE_BIN_NAME"
+INSTALL_SPEC="${SERVICE_TEST_INSTALL_SPEC:-}"
+REINSTALL_SPEC="${SERVICE_TEST_REINSTALL_NEVRA:-}"
+TIMEOUT_SECONDS="${SERVICE_TEST_TIMEOUT_SECONDS:-180}"
 
 if [ ! -x "$SERVICE_BIN" ]; then
   echo "*** Missing service binary: $SERVICE_BIN ***" >&2
@@ -41,13 +39,14 @@ trap cleanup_log EXIT
 echo "*** Running transaction service preview test ***"
 
 SERVICE_BIN="$SERVICE_BIN" \
-SERVICE_NAME="$SERVICE_NAME" \
-MANAGER_PATH="$MANAGER_PATH" \
-MANAGER_METHOD="$MANAGER_METHOD" \
-RESULT_METHOD="$RESULT_METHOD" \
+SERVICE_NAME="$TRANSACTION_SERVICE_NAME" \
+MANAGER_PATH="$TRANSACTION_SERVICE_MANAGER_PATH" \
+MANAGER_METHOD="$TRANSACTION_SERVICE_START_METHOD" \
+RESULT_METHOD="$TRANSACTION_SERVICE_RESULT_METHOD" \
 INSTALL_SPEC="$INSTALL_SPEC" \
 REINSTALL_SPEC="$REINSTALL_SPEC" \
 LOG_FILE="$LOG_FILE" \
+TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
 dbus-run-session -- bash <<'EOF'
   set -e
 
@@ -101,7 +100,7 @@ dbus-run-session -- bash <<'EOF'
     exit 1
   fi
 
-  deadline=$((SECONDS + 30))
+  deadline=$((SECONDS + TIMEOUT_SECONDS))
   while :; do
     result="$(gdbus call \
       --session \
@@ -111,7 +110,7 @@ dbus-run-session -- bash <<'EOF'
 
     if printf "%s\n" "$result" | grep -Fq "'preview-running'"; then
       if [ "$SECONDS" -ge "$deadline" ]; then
-        echo "*** Timed out waiting for transaction preview result ***" >&2
+        echo "*** Timed out waiting for transaction preview result after ${TIMEOUT_SECONDS} seconds ***" >&2
         exit 1
       fi
       sleep 1

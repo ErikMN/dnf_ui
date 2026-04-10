@@ -16,16 +16,21 @@ Run all tests:
 --------------------------------------------------------------------------------
 
 Native C++ tests:
+
+export DEBUG_TRACE=y
+
 make test
 
 Native transaction service tests:
 SERVICE_TEST_INSTALL_SPEC=cowsay make servicetest
+SERVICE_TEST_INSTALL_SPEC=cowsay make servicecanceltest
 sudo SERVICE_TEST_REINSTALL_NEVRA=<installed-non-critical-package> make serviceapplytest
 
 Native system bus transaction service tests:
 sudo make serviceinstall
 SERVICE_TEST_INSTALL_SPEC=cowsay make servicesystemtest
 SERVICE_TEST_REINSTALL_NEVRA=<installed-non-critical-package> make servicesystemapplytest
+SERVICE_TEST_INSTALL_SPEC=cowsay make servicesystemdisconnecttest
 sudo make serviceuninstall
 
 Docker C++ tests:
@@ -33,11 +38,13 @@ make dockertest
 
 Docker transaction service tests:
 make dockerservicetest
+make dockerservicecanceltest
 make dockerserviceapplytest
 
 Docker system bus transaction service tests:
 make dockerservicesystemtest
 make dockerservicesystemapplytest
+make dockerservicesystemdisconnecttest
 
 --------------------------------------------------------------------------------
 Native Polkit test:
@@ -54,7 +61,7 @@ SERVICE_TEST_REINSTALL_NEVRA=<installed-non-critical-package> make servicesystem
 Run dnf_ui as a regular desktop user and apply a transaction to test the
 desktop Polkit prompt.
 
-serviceinstall is a native development helper, not the final packaging flow.
+serviceinstall is a native development make target, not the final packaging flow.
 Choose a non critical installed package for native apply tests.
 
 sudo make serviceuninstall
@@ -75,6 +82,7 @@ Docker service test:
 
 make dockerservicesystemtest DEBUG_TRACE=y
 make dockerservicesystemapplytest DEBUG_TRACE=y
+make dockerservicesystemdisconnecttest DEBUG_TRACE=y
 make dockerrun DEBUG_TRACE=y
 
 Use native Fedora to test the real desktop Polkit prompt.

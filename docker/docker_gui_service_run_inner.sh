@@ -4,9 +4,13 @@ set -e
 # Docker GUI run helper that starts the app and transaction service on a shared
 # session bus for manual transaction testing inside the container.
 
-SERVICE_NAME="com.fedora.Dnfui.Transaction1"
-SERVICE_BIN="/workspace/dnf_ui_transaction_service"
-APP_BIN="/workspace/dnf_ui"
+# Make this script work from any directory:
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$PROJECT_ROOT/utils/transaction_service_paths.conf"
+
+SERVICE_BIN="$PROJECT_ROOT/$TRANSACTION_SERVICE_BIN_NAME"
+APP_BIN="$PROJECT_ROOT/dnf_ui"
 
 echo "*** Building app and transaction service ***"
 make clean
@@ -28,6 +32,6 @@ dbus-run-session -- bash -lc '
   "'"$SERVICE_BIN"'" --session >/tmp/dnf_ui_transaction_service.log 2>&1 &
   service_pid=$!
   trap "kill $service_pid >/dev/null 2>&1 || true; wait $service_pid >/dev/null 2>&1 || true" EXIT
-  gdbus wait --session "'"$SERVICE_NAME"'" >/dev/null
+  gdbus wait --session "'"$TRANSACTION_SERVICE_NAME"'" >/dev/null
   "'"$APP_BIN"'"
 '
