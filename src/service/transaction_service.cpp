@@ -108,6 +108,7 @@ struct TransactionSession {
   TransactionStage stage = TransactionStage::PREVIEW_RUNNING;
   bool success = false;
   std::string details;
+  GDBusMethodInvocation *pending_apply_invocation = nullptr;
 };
 
 struct TransactionService {
@@ -137,8 +138,20 @@ static void emit_transaction_finished(TransactionSession *session,
 // -----------------------------------------------------------------------------
 static std::string format_transaction_preview_details(const TransactionPreview &preview);
 static const char *transaction_stage_name(TransactionStage stage);
+
+// -----------------------------------------------------------------------------
+// Transaction authorization helpers
+// -----------------------------------------------------------------------------
+static void on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointer user_data);
 static bool
-authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation, std::string &error_out);
+start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation, std::string &error_out);
+static void complete_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation);
+
+// -----------------------------------------------------------------------------
+// Transaction execution helpers
+// -----------------------------------------------------------------------------
+static gboolean start_transaction_preview(gpointer user_data);
+static gboolean start_transaction_apply(gpointer user_data);
 
 // -----------------------------------------------------------------------------
 // Transaction request conversion
@@ -447,9 +460,93 @@ set_transaction_running(TransactionSession *session, TransactionStage stage)
   session->details.clear();
 }
 
-// Authorize one Apply call for the D-Bus sender that requested it.
+// -----------------------------------------------------------------------------
+// Complete the Apply request after authorization succeeds.
+// Called either immediately on session bus or from async callback on system bus.
+// -----------------------------------------------------------------------------
+static void
+complete_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation)
+{
+  if (!session || !invocation) {
+    return;
+  }
+
+  bool expected = false;
+  if (!session->service->apply_running.compare_exchange_strong(expected, true)) {
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Another transaction apply is already running.");
+    return;
+  }
+
+  session->cancelled = false;
+  set_transaction_running(session, TransactionStage::APPLY_RUNNING);
+  g_dbus_method_invocation_return_value(invocation, nullptr);
+  g_idle_add_full(G_PRIORITY_DEFAULT, start_transaction_apply, session, nullptr);
+}
+
+// -----------------------------------------------------------------------------
+// Async callback invoked when polkit authorization completes.
+// Checks the authorization result and either proceeds with apply or returns an error.
+// -----------------------------------------------------------------------------
+static void
+on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointer user_data)
+{
+  TransactionSession *session = static_cast<TransactionSession *>(user_data);
+  if (!session || !session->pending_apply_invocation) {
+    return;
+  }
+
+  GDBusMethodInvocation *invocation = session->pending_apply_invocation;
+  session->pending_apply_invocation = nullptr;
+
+  // Verify the session is still in a valid state for apply (user may have cancelled)
+  if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction state changed during authorization.");
+    g_object_unref(invocation);
+    return;
+  }
+
+  GError *error = nullptr;
+  PolkitAuthority *authority = POLKIT_AUTHORITY(source_object);
+  PolkitAuthorizationResult *result = polkit_authority_check_authorization_finish(authority, res, &error);
+
+  if (!result) {
+    std::string error_msg = error ? error->message : "Authorization check failed.";
+    DNF_UI_TRACE("Transaction service apply authorization failed path=%s error=%s",
+                 session->object_path.c_str(),
+                 error_msg.c_str());
+    g_clear_error(&error);
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "%s", error_msg.c_str());
+    g_object_unref(invocation);
+    return;
+  }
+
+  bool authorized = polkit_authorization_result_get_is_authorized(result);
+  g_object_unref(result);
+
+  if (!authorized) {
+    DNF_UI_TRACE("Transaction service apply authorization denied path=%s", session->object_path.c_str());
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "Not authorized to apply package transactions.");
+    g_object_unref(invocation);
+    return;
+  }
+
+  DNF_UI_TRACE("Transaction service apply authorization granted path=%s", session->object_path.c_str());
+  complete_apply_request(session, invocation);
+  g_object_unref(invocation);
+}
+
+// -----------------------------------------------------------------------------
+// Start asynchronous authorization for an Apply request.
+// On session bus: returns true immediately (authorization skipped for testing).
+// On system bus: initiates async polkit check, returns true (callback handles result).
+// Returns false only if initialization fails (error_out is set).
+// -----------------------------------------------------------------------------
 static bool
-authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation, std::string &error_out)
+start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation, std::string &error_out)
 {
   error_out.clear();
 
@@ -460,6 +557,7 @@ authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invo
 
   // Session bus mode remains available for local development and Docker tests.
   if (session->service->bus_type != G_BUS_TYPE_SYSTEM) {
+    DNF_UI_TRACE("Transaction service apply authorization skipped (session bus) path=%s", session->object_path.c_str());
     return true;
   }
 
@@ -478,32 +576,24 @@ authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invo
   }
 
   PolkitSubject *subject = polkit_system_bus_name_new(sender);
-  PolkitAuthorizationResult *result =
-      polkit_authority_check_authorization_sync(authority,
-                                                subject,
-                                                kApplyActionId,
-                                                nullptr,
-                                                POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
-                                                nullptr,
-                                                &error);
+
+  // Take ownership of the invocation, the async callback will reply to it.
+  session->pending_apply_invocation = G_DBUS_METHOD_INVOCATION(g_object_ref(invocation));
+
+  DNF_UI_TRACE("Transaction service apply authorization start (async) path=%s", session->object_path.c_str());
+  polkit_authority_check_authorization(authority,
+                                       subject,
+                                       kApplyActionId,
+                                       nullptr,
+                                       POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
+                                       nullptr,
+                                       on_apply_authorization_result,
+                                       session);
 
   g_object_unref(subject);
   g_object_unref(authority);
 
-  if (!result) {
-    error_out = error ? error->message : "Authorization check failed.";
-    g_clear_error(&error);
-    return false;
-  }
-
-  bool authorized = polkit_authorization_result_get_is_authorized(result);
-  g_object_unref(result);
-
-  if (!authorized) {
-    error_out = "Not authorized to apply package transactions.";
-    return false;
-  }
-
+  // Async authorization started successfully: callback will reply to invocation.
   return true;
 }
 
@@ -657,6 +747,13 @@ on_transaction_method_call(GDBusConnection *,
 
   if (g_strcmp0(method_name, "Cancel") == 0) {
     DNF_UI_TRACE("Transaction service cancel path=%s", object_path);
+
+    if (session->pending_apply_invocation) {
+      g_dbus_method_invocation_return_error(
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Cannot cancel while authorization is pending.");
+      return;
+    }
+
     if (session->stage == TransactionStage::APPLY_RUNNING) {
       g_dbus_method_invocation_return_error(invocation,
                                             G_DBUS_ERROR,
@@ -700,28 +797,32 @@ on_transaction_method_call(GDBusConnection *,
     }
 
     std::string error_out;
-    if (!authorize_apply_request(session, invocation, error_out)) {
-      DNF_UI_TRACE("Transaction service apply authorization failed path=%s", object_path);
+    if (!start_authorize_apply_request(session, invocation, error_out)) {
+      DNF_UI_TRACE(
+          "Transaction service apply authorization start failed path=%s error=%s", object_path, error_out.c_str());
       g_dbus_method_invocation_return_error(
           invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "%s", error_out.c_str());
       return;
     }
 
-    bool expected = false;
-    if (!session->service->apply_running.compare_exchange_strong(expected, true)) {
-      g_dbus_method_invocation_return_error(
-          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Another transaction apply is already running.");
-      return;
+    // Session bus: authorization succeeded immediately, proceed with apply.
+    // System bus: async authorization in progress, callback will complete the request.
+    if (session->service->bus_type != G_BUS_TYPE_SYSTEM) {
+      complete_apply_request(session, invocation);
     }
 
-    session->cancelled = false;
-    set_transaction_running(session, TransactionStage::APPLY_RUNNING);
-    g_dbus_method_invocation_return_value(invocation, nullptr);
-    g_idle_add_full(G_PRIORITY_DEFAULT, start_transaction_apply, session, nullptr);
     return;
   }
 
   if (g_strcmp0(method_name, "Release") == 0) {
+    if (session->pending_apply_invocation) {
+      g_dbus_method_invocation_return_error(invocation,
+                                            G_DBUS_ERROR,
+                                            G_DBUS_ERROR_FAILED,
+                                            "Transaction request cannot be released while authorization is pending.");
+      return;
+    }
+
     if (!session->finished.load()) {
       g_dbus_method_invocation_return_error(invocation,
                                             G_DBUS_ERROR,
