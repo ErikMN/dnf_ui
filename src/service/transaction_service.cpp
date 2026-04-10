@@ -105,6 +105,7 @@ struct TransactionSession {
   TransactionPreview preview;
   std::atomic<bool> finished { false };
   std::atomic<bool> cancelled { false };
+  std::atomic<bool> release_requested { false };
   TransactionStage stage = TransactionStage::PREVIEW_RUNNING;
   bool success = false;
   std::string details;
@@ -135,6 +136,7 @@ static void emit_transaction_finished(TransactionSession *session,
                                       TransactionStage stage,
                                       bool success,
                                       const std::string &details);
+static void queue_transaction_release(TransactionSession *session);
 
 // -----------------------------------------------------------------------------
 // Transaction preview formatting
@@ -251,11 +253,25 @@ dispatch_transaction_release(gpointer user_data)
   }
 
   TransactionSession *session = it->second.get();
+  session->release_requested = true;
 
   // Stop watching the client's bus name since the session is being released.
   if (session->owner_watch_id != 0) {
     g_bus_unwatch_name(session->owner_watch_id);
     session->owner_watch_id = 0;
+  }
+
+  // A disconnected client cannot complete a pending authorization request.
+  if (session->pending_apply_invocation) {
+    g_object_unref(session->pending_apply_invocation);
+    session->pending_apply_invocation = nullptr;
+  }
+
+  // Keep the session alive until running preview or apply work has reached a
+  // finished state. Worker threads still hold a raw session pointer.
+  if (!session->finished.load()) {
+    session->cancelled = true;
+    return G_SOURCE_REMOVE;
   }
 
   if (release->service->connection && session->registration_id != 0) {
@@ -306,6 +322,12 @@ emit_transaction_finished(TransactionSession *session, TransactionStage stage, b
                                 "Finished",
                                 g_variant_new("(sbs)", transaction_stage_name(stage), success, details.c_str()),
                                 nullptr);
+
+  // A disconnected client cannot call Release after the running work ends, so
+  // finish processing is responsible for completing the deferred cleanup.
+  if (session->release_requested.load()) {
+    queue_transaction_release(session);
+  }
 }
 
 // Queue one transaction progress line back onto the service main loop.
