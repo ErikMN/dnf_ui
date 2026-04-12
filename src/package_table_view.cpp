@@ -411,18 +411,48 @@ get_context_menu_pending_action(SearchWidgets *widgets, const std::string &nevra
   return false;
 }
 
+struct ContextMenuActionData {
+  SearchWidgets *widgets = nullptr;
+  PackageRow row;
+  void (*action)(SearchWidgets *widgets, const PackageRow &pkg) = nullptr;
+};
+
+static void
+context_menu_action_data_free(gpointer p)
+{
+  delete static_cast<ContextMenuActionData *>(p);
+}
+
 // Add one transaction action to the package context menu.
 static void
 append_context_menu_action(GtkBox *box,
                            const char *label,
                            gboolean sensitive,
-                           GCallback callback,
-                           SearchWidgets *widgets)
+                           SearchWidgets *widgets,
+                           const PackageRow &row,
+                           void (*action)(SearchWidgets *widgets, const PackageRow &pkg))
 {
   GtkWidget *button = gtk_button_new_with_label(label);
   gtk_widget_set_halign(button, GTK_ALIGN_FILL);
   gtk_widget_set_sensitive(button, sensitive);
-  g_signal_connect(button, "clicked", callback, widgets);
+  auto *data = new ContextMenuActionData { widgets, row, action };
+  g_signal_connect_data(
+      button,
+      "clicked",
+      G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+        ContextMenuActionData *data = static_cast<ContextMenuActionData *>(user_data);
+        if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
+          gtk_popover_popdown(GTK_POPOVER(popover));
+        }
+        if (!data || !data->widgets || !data->action) {
+          return;
+        }
+
+        data->action(data->widgets, data->row);
+      }),
+      data,
+      +[](gpointer data, GClosure *) { context_menu_action_data_free(data); },
+      GConnectFlags(0));
   gtk_box_append(box, button);
 }
 
@@ -469,35 +499,23 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
   append_context_menu_action(GTK_BOX(box),
                              install_label,
                              install_state != PackageInstallState::INSTALLED,
-                             G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
-                               if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
-                                 gtk_popover_popdown(GTK_POPOVER(popover));
-                               }
-                               pending_transaction_on_install_button_clicked(button, user_data);
-                             }),
-                             widgets);
+                             widgets,
+                             row,
+                             pending_transaction_toggle_install_for_package);
 
   append_context_menu_action(GTK_BOX(box),
                              remove_label,
                              install_state == PackageInstallState::INSTALLED,
-                             G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
-                               if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
-                                 gtk_popover_popdown(GTK_POPOVER(popover));
-                               }
-                               pending_transaction_on_remove_button_clicked(button, user_data);
-                             }),
-                             widgets);
+                             widgets,
+                             row,
+                             pending_transaction_toggle_remove_for_package);
 
   append_context_menu_action(GTK_BOX(box),
                              reinstall_label,
                              install_state == PackageInstallState::INSTALLED,
-                             G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
-                               if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
-                                 gtk_popover_popdown(GTK_POPOVER(popover));
-                               }
-                               pending_transaction_on_reinstall_button_clicked(button, user_data);
-                             }),
-                             widgets);
+                             widgets,
+                             row,
+                             pending_transaction_toggle_reinstall_for_package);
 
   g_signal_connect(popover,
                    "closed",

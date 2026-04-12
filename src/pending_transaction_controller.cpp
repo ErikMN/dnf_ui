@@ -194,6 +194,84 @@ get_pending_action_type(SearchWidgets *widgets, const std::string &nevra, Pendin
   return false;
 }
 
+// Toggle the pending install state for one package row.
+void
+pending_transaction_toggle_install_for_package(SearchWidgets *widgets, const PackageRow &pkg)
+{
+  if (!widgets) {
+    return;
+  }
+
+  PendingAction::Type existing_type;
+  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
+  if (has_existing && existing_type == PendingAction::INSTALL) {
+    remove_pending_action(widgets, pkg.nevra);
+    refresh_pending_tab(widgets);
+    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
+  } else {
+    remove_pending_action(widgets, pkg.nevra);
+    widgets->transaction.actions.push_back({ PendingAction::INSTALL, pkg.nevra });
+    refresh_pending_tab(widgets);
+    ui_helpers_set_status(widgets->query.status_label, ("Marked for install: " + pkg.name).c_str(), "blue");
+  }
+
+  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
+  invalidate_service_preview(widgets);
+  package_table_refresh_statuses(widgets);
+}
+
+// Toggle the pending remove state for one package row.
+void
+pending_transaction_toggle_remove_for_package(SearchWidgets *widgets, const PackageRow &pkg)
+{
+  if (!widgets) {
+    return;
+  }
+
+  PendingAction::Type existing_type;
+  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
+  if (has_existing && existing_type == PendingAction::REMOVE) {
+    remove_pending_action(widgets, pkg.nevra);
+    refresh_pending_tab(widgets);
+    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
+  } else {
+    remove_pending_action(widgets, pkg.nevra);
+    widgets->transaction.actions.push_back({ PendingAction::REMOVE, pkg.nevra });
+    refresh_pending_tab(widgets);
+    ui_helpers_set_status(widgets->query.status_label, ("Marked for removal: " + pkg.name).c_str(), "blue");
+  }
+
+  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
+  invalidate_service_preview(widgets);
+  package_table_refresh_statuses(widgets);
+}
+
+// Toggle the pending reinstall state for one package row.
+void
+pending_transaction_toggle_reinstall_for_package(SearchWidgets *widgets, const PackageRow &pkg)
+{
+  if (!widgets) {
+    return;
+  }
+
+  PendingAction::Type existing_type;
+  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
+  if (has_existing && existing_type == PendingAction::REINSTALL) {
+    remove_pending_action(widgets, pkg.nevra);
+    refresh_pending_tab(widgets);
+    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
+  } else {
+    remove_pending_action(widgets, pkg.nevra);
+    widgets->transaction.actions.push_back({ PendingAction::REINSTALL, pkg.nevra });
+    refresh_pending_tab(widgets);
+    ui_helpers_set_status(widgets->query.status_label, ("Marked for reinstall: " + pkg.name).c_str(), "blue");
+  }
+
+  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
+  invalidate_service_preview(widgets);
+  package_table_refresh_statuses(widgets);
+}
+
 // Split the pending queue into install, remove, and reinstall transaction specs.
 static void
 build_pending_transaction_specs(const SearchWidgets *widgets,
@@ -390,26 +468,7 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
     ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
     return;
   }
-
-  // Toggle pending install
-  PendingAction::Type existing_type;
-  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
-  if (has_existing && existing_type == PendingAction::INSTALL) {
-    remove_pending_action(widgets, pkg.nevra);
-    refresh_pending_tab(widgets);
-    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
-  } else {
-    // If it was pending REMOVE (or anything else), replace it with INSTALL
-    remove_pending_action(widgets, pkg.nevra);
-    widgets->transaction.actions.push_back({ PendingAction::INSTALL, pkg.nevra });
-    refresh_pending_tab(widgets);
-    ui_helpers_set_status(widgets->query.status_label, ("Marked for install: " + pkg.name).c_str(), "blue");
-  }
-  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
-  invalidate_service_preview(widgets);
-
-  // Refresh status badges without rebuilding the package table.
-  package_table_refresh_statuses(widgets);
+  pending_transaction_toggle_install_for_package(widgets, pkg);
 }
 
 // -----------------------------------------------------------------------------
@@ -426,26 +485,7 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
     ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
     return;
   }
-
-  // Toggle pending remove
-  PendingAction::Type existing_type;
-  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
-  if (has_existing && existing_type == PendingAction::REMOVE) {
-    remove_pending_action(widgets, pkg.nevra);
-    refresh_pending_tab(widgets);
-    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
-  } else {
-    // If it was pending INSTALL (or anything else), replace it with REMOVE
-    remove_pending_action(widgets, pkg.nevra);
-    widgets->transaction.actions.push_back({ PendingAction::REMOVE, pkg.nevra });
-    refresh_pending_tab(widgets);
-    ui_helpers_set_status(widgets->query.status_label, ("Marked for removal: " + pkg.name).c_str(), "blue");
-  }
-  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
-  invalidate_service_preview(widgets);
-
-  // Refresh status badges without rebuilding the package table.
-  package_table_refresh_statuses(widgets);
+  pending_transaction_toggle_remove_for_package(widgets, pkg);
 }
 
 // -----------------------------------------------------------------------------
@@ -461,23 +501,7 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
     ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
     return;
   }
-
-  PendingAction::Type existing_type;
-  bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
-  if (has_existing && existing_type == PendingAction::REINSTALL) {
-    remove_pending_action(widgets, pkg.nevra);
-    refresh_pending_tab(widgets);
-    ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
-  } else {
-    remove_pending_action(widgets, pkg.nevra);
-    widgets->transaction.actions.push_back({ PendingAction::REINSTALL, pkg.nevra });
-    refresh_pending_tab(widgets);
-    ui_helpers_set_status(widgets->query.status_label, ("Marked for reinstall: " + pkg.name).c_str(), "blue");
-  }
-  ui_helpers_update_action_button_labels(widgets, pkg.nevra);
-  invalidate_service_preview(widgets);
-
-  package_table_refresh_statuses(widgets);
+  pending_transaction_toggle_reinstall_for_package(widgets, pkg);
 }
 
 // -----------------------------------------------------------------------------
