@@ -208,6 +208,7 @@ cancel_active_package_list_request(SearchWidgets *widgets)
     return;
   }
 
+  uint64_t request_id = widgets->query_state.current_package_list_request_id;
   PackageListRequestKind kind = widgets->query_state.current_package_list_request_kind;
   GCancellable *c = widgets->query_state.package_list_cancellable;
   if (!g_cancellable_is_cancelled(c)) {
@@ -217,7 +218,10 @@ cancel_active_package_list_request(SearchWidgets *widgets)
   // Release only the spinner slot owned by this request so other running tasks
   // can keep their progress indication visible.
   widgets_spinner_release(widgets->query.spinner);
-  restore_package_list_controls(widgets);
+
+  // Fully release request ownership so the UI and internal request state stay aligned.
+  end_package_list_request(widgets, request_id, kind);
+
   ui_helpers_set_status(widgets->query.status_label, package_list_cancelled_status(kind), "gray");
 }
 
@@ -687,6 +691,9 @@ void
 package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  cancel_active_package_list_request(widgets);
+
   widgets->results.current_packages.clear();
   widgets->results.selected_nevra.clear();
   package_table_fill_package_view(widgets, {});
