@@ -102,6 +102,7 @@ struct TransactionSession {
   TransactionService *service = nullptr;
   guint registration_id = 0;
   std::string object_path;
+  // Protects preview, stage, success, details, and pending_apply_invocation.
   std::mutex state_mutex;
   TransactionRequest request;
   TransactionPreview preview;
@@ -265,9 +266,12 @@ dispatch_transaction_release(gpointer user_data)
   }
 
   // A disconnected client cannot complete a pending authorization request.
-  if (session->pending_apply_invocation) {
-    g_object_unref(session->pending_apply_invocation);
-    session->pending_apply_invocation = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+    if (session->pending_apply_invocation) {
+      g_object_unref(session->pending_apply_invocation);
+      session->pending_apply_invocation = nullptr;
+    }
   }
 
   // Keep the session alive until running preview or apply work has reached a
@@ -565,6 +569,7 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
 
   TransactionSession *session = it->second.get();
   GDBusMethodInvocation *invocation = nullptr;
+  bool preview_ready = false;
   {
     std::lock_guard<std::mutex> lock(session->state_mutex);
     if (!session || !session->pending_apply_invocation) {
@@ -572,17 +577,15 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
     }
     invocation = session->pending_apply_invocation;
     session->pending_apply_invocation = nullptr;
+    preview_ready = session->stage == TransactionStage::PREVIEW_READY && session->finished.load() && session->success;
   }
 
   // Verify the session is still in a valid state for apply (user may have cancelled)
-  {
-    std::lock_guard<std::mutex> lock(session->state_mutex);
-    if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
-      g_dbus_method_invocation_return_error(
-          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction state changed during authorization.");
-      g_object_unref(invocation);
-      return;
-    }
+  if (!preview_ready) {
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction state changed during authorization.");
+    g_object_unref(invocation);
+    return;
   }
 
   GError *error = nullptr;
@@ -655,9 +658,17 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
 
   PolkitSubject *subject = polkit_system_bus_name_new(sender);
 
-  // Take ownership of the invocation, the async callback will reply to it.
+  // Reserve the pending authorization slot before starting the async request.
+  // This keeps concurrent Apply calls from starting two authorization checks for
+  // the same transaction request object.
   {
     std::lock_guard<std::mutex> lock(session->state_mutex);
+    if (session->pending_apply_invocation) {
+      error_out = "Apply authorization is already in progress.";
+      g_object_unref(subject);
+      g_object_unref(authority);
+      return false;
+    }
     session->pending_apply_invocation = G_DBUS_METHOD_INVOCATION(g_object_ref(invocation));
   }
 
@@ -837,13 +848,22 @@ on_transaction_method_call(GDBusConnection *,
   if (g_strcmp0(method_name, "Cancel") == 0) {
     DNF_UI_TRACE("Transaction service cancel path=%s", object_path);
 
-    if (session->pending_apply_invocation) {
+    bool has_pending_apply = false;
+    TransactionStage stage = TransactionStage::PREVIEW_RUNNING;
+    bool finished = session->finished.load();
+    {
+      std::lock_guard<std::mutex> lock(session->state_mutex);
+      has_pending_apply = session->pending_apply_invocation != nullptr;
+      stage = session->stage;
+    }
+
+    if (has_pending_apply) {
       g_dbus_method_invocation_return_error(
           invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Cannot cancel while authorization is pending.");
       return;
     }
 
-    if (session->stage == TransactionStage::APPLY_RUNNING) {
+    if (stage == TransactionStage::APPLY_RUNNING) {
       g_dbus_method_invocation_return_error(invocation,
                                             G_DBUS_ERROR,
                                             G_DBUS_ERROR_NOT_SUPPORTED,
@@ -854,7 +874,7 @@ on_transaction_method_call(GDBusConnection *,
     // A transaction that has already reached a final state other than PREVIEW_READY
     // (e.g. PREVIEW_FAILED, CANCELLED, APPLY_SUCCEEDED, APPLY_FAILED) has nothing left to cancel.
     // Return success without re-emitting signals to avoid confusing the client.
-    if (session->finished.load() && session->stage != TransactionStage::PREVIEW_READY) {
+    if (finished && stage != TransactionStage::PREVIEW_READY) {
       g_dbus_method_invocation_return_value(invocation, nullptr);
       return;
     }
@@ -865,7 +885,7 @@ on_transaction_method_call(GDBusConnection *,
     // emit_transaction_progress can send the cancellation line before the Finished signal.
     // The reset is safe here: PREVIEW_READY is only reached after the worker exits,
     // so no thread is concurrently modifying session->finished.
-    if (session->finished.load()) {
+    if (finished) {
       session->finished = false;
     }
 
@@ -876,18 +896,15 @@ on_transaction_method_call(GDBusConnection *,
   }
 
   if (g_strcmp0(method_name, "Apply") == 0) {
+    bool preview_ready = false;
     {
       std::lock_guard<std::mutex> lock(session->state_mutex);
-      if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
-        g_dbus_method_invocation_return_error(
-            invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview must succeed before apply can start.");
-        return;
-      }
+      preview_ready = session->stage == TransactionStage::PREVIEW_READY && session->finished.load() && session->success;
     }
 
-    if (session->pending_apply_invocation) {
+    if (!preview_ready) {
       g_dbus_method_invocation_return_error(
-          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Apply authorization is already in progress.");
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview must succeed before apply can start.");
       return;
     }
 
@@ -910,7 +927,13 @@ on_transaction_method_call(GDBusConnection *,
   }
 
   if (g_strcmp0(method_name, "Release") == 0) {
-    if (session->pending_apply_invocation) {
+    bool has_pending_apply = false;
+    {
+      std::lock_guard<std::mutex> lock(session->state_mutex);
+      has_pending_apply = session->pending_apply_invocation != nullptr;
+    }
+
+    if (has_pending_apply) {
       g_dbus_method_invocation_return_error(invocation,
                                             G_DBUS_ERROR,
                                             G_DBUS_ERROR_FAILED,
@@ -932,13 +955,13 @@ on_transaction_method_call(GDBusConnection *,
   }
 
   if (g_strcmp0(method_name, "GetPreview") == 0) {
+    std::lock_guard<std::mutex> lock(session->state_mutex);
+
     if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
       g_dbus_method_invocation_return_error(
           invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview is not available.");
       return;
     }
-
-    std::lock_guard<std::mutex> lock(session->state_mutex);
 
     GVariantBuilder install_builder;
     GVariantBuilder upgrade_builder;
@@ -1205,15 +1228,19 @@ cleanup_service(TransactionService &service)
 
   // Reply to any pending authorization requests with an error before destroying sessions.
   for (auto &[path, session] : service.transactions) {
-    if (session->pending_apply_invocation) {
+    GDBusMethodInvocation *pending_apply_invocation = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(session->state_mutex);
+      pending_apply_invocation = session->pending_apply_invocation;
+      session->pending_apply_invocation = nullptr;
+    }
+
+    if (pending_apply_invocation) {
       keep_alive_until_exit = true;
       DNF_UI_TRACE("Transaction service cancelling pending authorization during shutdown path=%s", path.c_str());
-      g_dbus_method_invocation_return_error(session->pending_apply_invocation,
-                                            G_DBUS_ERROR,
-                                            G_DBUS_ERROR_FAILED,
-                                            "Transaction service is shutting down.");
-      g_object_unref(session->pending_apply_invocation);
-      session->pending_apply_invocation = nullptr;
+      g_dbus_method_invocation_return_error(
+          pending_apply_invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction service is shutting down.");
+      g_object_unref(pending_apply_invocation);
     }
 
     if (!session->finished.load()) {
