@@ -145,12 +145,14 @@ serviceinstall: dnf_ui_transaction_service
 	@test -f "$(TRANSACTION_SERVICE_DBUS_SERVICE_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_DBUS_SERVICE_SRC) ***" >&2; exit 1; }
 	@test -f "$(TRANSACTION_SERVICE_DBUS_POLICY_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_DBUS_POLICY_SRC) ***" >&2; exit 1; }
 	@test -f "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC) ***" >&2; exit 1; }
+	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
 	install -D -m 0755 "$(TRANSACTION_SERVICE_BIN_SRC)" "$(TRANSACTION_SERVICE_BIN_DEST)"
 	install -D -m 0644 "$(TRANSACTION_SERVICE_POLICY_SRC)" "$(TRANSACTION_SERVICE_POLICY_DEST)"
 	install -D -m 0644 "$(TRANSACTION_SERVICE_DBUS_SERVICE_SRC)" "$(TRANSACTION_SERVICE_DBUS_SERVICE_DEST)"
 	install -D -m 0644 "$(TRANSACTION_SERVICE_DBUS_POLICY_SRC)" "$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)"
 	install -D -m 0644 "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC)" "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
 	systemctl daemon-reload
+	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
 	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
 	@echo "*** Installed $(TRANSACTION_SERVICE_NAME) service files for native testing. ***"
 	@echo "*** Run dnf_ui as a regular desktop user and apply a transaction to trigger the Polkit prompt. ***"
@@ -165,6 +167,7 @@ serviceuninstall:
 	      "$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)" \
 	      "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
 	systemctl daemon-reload
+	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
 	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
 	@echo "*** Removed native transaction service files. ***"
 
