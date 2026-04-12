@@ -441,14 +441,19 @@ append_context_menu_action(GtkBox *box,
       "clicked",
       G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
         ContextMenuActionData *data = static_cast<ContextMenuActionData *>(user_data);
-        if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
-          gtk_popover_popdown(GTK_POPOVER(popover));
-        }
         if (!data || !data->widgets || !data->action) {
           return;
         }
 
-        data->action(data->widgets, data->row);
+        SearchWidgets *widgets = data->widgets;
+        PackageRow row = data->row;
+        void (*action)(SearchWidgets *widgets, const PackageRow &pkg) = data->action;
+
+        if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
+          gtk_popover_popdown(GTK_POPOVER(popover));
+        }
+
+        action(widgets, row);
       }),
       data,
       +[](gpointer data, GClosure *) { context_menu_action_data_free(data); },
