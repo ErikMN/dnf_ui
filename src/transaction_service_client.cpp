@@ -15,6 +15,7 @@
 #include <gio/gio.h>
 #include <glib.h>
 
+#include <mutex>
 #include <string>
 
 namespace {
@@ -33,6 +34,12 @@ struct TransactionServiceProgressForwarder {
   const std::function<void(const std::string &)> *progress_callback = nullptr;
 };
 
+struct TransactionServiceConnectionCache {
+  std::mutex mutex;
+  GDBusConnection *connection = nullptr;
+  GBusType bus_type = G_BUS_TYPE_SYSTEM;
+};
+
 // -----------------------------------------------------------------------------
 // Select the D-Bus bus used by the transaction service client
 // -----------------------------------------------------------------------------
@@ -46,6 +53,16 @@ get_transaction_service_bus_type()
   }
 
   return G_BUS_TYPE_SYSTEM;
+}
+
+// -----------------------------------------------------------------------------
+// Return the process-local cache that keeps the GUI service connection alive
+// -----------------------------------------------------------------------------
+static TransactionServiceConnectionCache &
+get_transaction_service_connection_cache()
+{
+  static TransactionServiceConnectionCache cache;
+  return cache;
 }
 
 // -----------------------------------------------------------------------------
@@ -85,14 +102,46 @@ connect_transaction_service(std::string &error_out)
 {
   error_out.clear();
 
-  GError *error = nullptr;
   GBusType bus_type = get_transaction_service_bus_type();
+  TransactionServiceConnectionCache &cache = get_transaction_service_connection_cache();
+
+  {
+    std::lock_guard<std::mutex> lock(cache.mutex);
+    if (cache.connection && cache.bus_type == bus_type && !g_dbus_connection_is_closed(cache.connection)) {
+      DNF_UI_TRACE("Transaction service client connect bus=%s cached",
+                   bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
+      return G_DBUS_CONNECTION(g_object_ref(cache.connection));
+    }
+
+    if (cache.connection) {
+      g_object_unref(cache.connection);
+      cache.connection = nullptr;
+    }
+  }
+
   DNF_UI_TRACE("Transaction service client connect bus=%s", bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
+
+  GError *error = nullptr;
   GDBusConnection *connection = g_bus_get_sync(bus_type, nullptr, &error);
   if (!connection) {
     error_out = error ? error->message : "Could not connect to the transaction service bus.";
     g_clear_error(&error);
     return nullptr;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(cache.mutex);
+    if (!cache.connection) {
+      cache.connection = G_DBUS_CONNECTION(g_object_ref(connection));
+      cache.bus_type = bus_type;
+    } else if (cache.bus_type == bus_type && !g_dbus_connection_is_closed(cache.connection)) {
+      g_object_unref(connection);
+      return G_DBUS_CONNECTION(g_object_ref(cache.connection));
+    } else {
+      g_object_unref(cache.connection);
+      cache.connection = G_DBUS_CONNECTION(g_object_ref(connection));
+      cache.bus_type = bus_type;
+    }
   }
 
   return connection;
