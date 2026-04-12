@@ -474,15 +474,17 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
     return;
   }
 
-  if (!select_package_table_row(GTK_COLUMN_VIEW(view), row.nevra)) {
+  graphene_point_t anchor_point = GRAPHENE_POINT_INIT(static_cast<float>(x), static_cast<float>(y));
+  graphene_point_t menu_point;
+  if (!gtk_widget_compute_point(anchor, view, &anchor_point, &menu_point)) {
     return;
   }
 
   GtkWidget *popover = gtk_popover_new();
-  gtk_widget_set_parent(popover, anchor);
+  gtk_widget_set_parent(popover, view);
   gtk_popover_set_has_arrow(GTK_POPOVER(popover), FALSE);
 
-  GdkRectangle rect = { static_cast<int>(x), static_cast<int>(y), 1, 1 };
+  GdkRectangle rect = { static_cast<int>(menu_point.x), static_cast<int>(menu_point.y), 1, 1 };
   gtk_popover_set_pointing_to(GTK_POPOVER(popover), &rect);
 
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
