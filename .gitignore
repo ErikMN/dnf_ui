@@ -2,6 +2,7 @@ dnf_ui
 dnf_ui_transaction_service
 dnf_ui_tests
 .history
+build/
 *.exe
 *.o
 *.d

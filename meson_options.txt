@@ -1,0 +1,20 @@
+option(
+  'build_tests',
+  type: 'boolean',
+  value: false,
+  description: 'Build the Catch2 test executable',
+)
+
+option(
+  'debug_trace',
+  type: 'boolean',
+  value: false,
+  description: 'Enable DNF_UI_DEBUG_TRACE logging',
+)
+
+option(
+  'final_build',
+  type: 'boolean',
+  value: false,
+  description: 'Enable the stricter warning set used by FINAL=y builds',
+)

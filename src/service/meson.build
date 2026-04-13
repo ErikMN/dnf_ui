@@ -1,0 +1,17 @@
+service_sources = files(
+  'transaction_service.cpp',
+  'transaction_service_main.cpp',
+)
+
+dnf_ui_transaction_service = executable(
+  'dnf_ui_transaction_service',
+  backend_sources + service_sources,
+  include_directories: src_inc,
+  dependencies: [
+    libdnf5_dep,
+    polkit_dep,
+  ],
+  install: true,
+  install_dir: get_option('libexecdir'),
+  install_tag: 'transaction-service',
+)

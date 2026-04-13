@@ -8,6 +8,8 @@ RUN dnf install -y \
     polkit \
     gcc-c++ \
     make \
+    meson \
+    ninja-build \
     pkgconf \
     cmake \
     git \
