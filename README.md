@@ -27,6 +27,7 @@ Interfaces, behavior, and features may change while the application is being sta
 - View package details, files, dependencies, and changelog information
 - Mark packages for install, reinstall, and removal
 - Review a transaction summary before applying changes
+- Apply transactions through a privileged system service with Polkit authorization
 - Cancel long-running package queries
 - Show search history
 - Hide or show the history and information panes
@@ -46,14 +47,60 @@ The goal is not to experiment for its own sake, but to build something genuinely
 
 Build dependencies:
 
-- libdnf5
-- gtk4
+- libdnf5-devel
+- gtk4-devel
+- polkit
+- polkit-devel
 
 Build final and run:
 
 ```sh
 FINAL=y make && ./dnf_ui
 ```
+
+## Polkit integration
+
+DNF UI uses a small privileged transaction service for package apply operations.
+
+The GUI runs as the regular desktop user, while the service runs on D-Bus and is
+responsible for the privileged transaction step.
+
+[Polkit](https://github.com/polkit-org/polkit) is used only for the apply step:
+
+- Transaction preview is prepared through the service
+- The GUI shows the summary dialog
+- Apply is authorized by Polkit on the native system bus
+
+This keeps the main application **unprivileged** while still allowing normal desktop
+authentication when a transaction is applied.
+
+### Native service install for development
+
+For native Polkit testing from the source tree, install the service files with:
+
+```sh
+make clean && make -j1
+sudo make serviceinstall
+```
+
+Then run the app as a regular desktop user:
+
+```sh
+./dnf_ui
+```
+
+When you apply a transaction, the desktop Polkit prompt should appear.
+
+Remove the development service install with:
+
+```sh
+sudo make serviceuninstall
+```
+
+**NOTE:**
+
+- `serviceinstall` is a development helper, not the final packaging flow
+- Choose a non critical installed package for native apply tests
 
 ### Tests
 
@@ -82,11 +129,24 @@ Run the application:
 make dockerrun
 ```
 
+Run the system bus service smoke tests in Docker:
+
+```sh
+make dockerservicesystemtest
+make dockerservicesystemapplytest
+```
+
 Run the test suite in Docker:
 
 ```sh
 make dockertest
 ```
+
+Docker notes:
+
+- `make dockerrun` uses the session bus service path for convenience
+- Use the `dockerservicesystem*` targets to test the real system bus authorization flow
+- Use native Fedora to test the real desktop Polkit prompt
 
 ## Screenshot
 
