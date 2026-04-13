@@ -841,6 +841,8 @@ on_transaction_method_call(GDBusConnection *,
                            GDBusMethodInvocation *invocation,
                            gpointer user_data)
 {
+  (void)object_path;
+
   TransactionSession *session = static_cast<TransactionSession *>(user_data);
   if (!session) {
     g_dbus_method_invocation_return_error(
@@ -1035,6 +1037,7 @@ static const GDBusInterfaceVTable kTransactionVTable = {
   on_transaction_method_call,
   nullptr,
   nullptr,
+  nullptr,
 };
 
 // -----------------------------------------------------------------------------
@@ -1046,6 +1049,8 @@ static const GDBusInterfaceVTable kTransactionVTable = {
 static void
 on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer user_data)
 {
+  (void)connection;
+
   TransactionService *service = static_cast<TransactionService *>(user_data);
   if (!service || !name) {
     return;
@@ -1175,6 +1180,7 @@ on_manager_method_call(GDBusConnection *,
 
 static const GDBusInterfaceVTable kManagerVTable = {
   on_manager_method_call,
+  nullptr,
   nullptr,
   nullptr,
 };
