@@ -117,6 +117,7 @@ struct TransactionSession {
 
 struct TransactionService {
   GMainLoop *loop = nullptr;
+  GMainContext *main_context = nullptr;
   GDBusConnection *connection = nullptr;
   GDBusNodeInfo *manager_node_info = nullptr;
   GDBusNodeInfo *transaction_node_info = nullptr;
@@ -349,7 +350,7 @@ queue_transaction_progress(TransactionSession *session, const std::string &line)
   auto *message = new QueuedProgressMessage();
   message->session = session;
   message->line = line;
-  g_main_context_invoke(nullptr, dispatch_transaction_progress, message);
+  g_main_context_invoke(session->service->main_context, dispatch_transaction_progress, message);
 }
 
 // Queue the final state update for one transaction request object.
@@ -368,7 +369,7 @@ queue_transaction_finished(TransactionSession *session,
   result->stage = stage;
   result->success = success;
   result->details = details;
-  g_main_context_invoke(nullptr, dispatch_transaction_finished, result);
+  g_main_context_invoke(session->service->main_context, dispatch_transaction_finished, result);
 }
 
 // Queue cleanup of one finished transaction request object.
@@ -382,7 +383,7 @@ queue_transaction_release(TransactionSession *session)
   auto *release = new QueuedSessionRelease();
   release->service = session->service;
   release->object_path = session->object_path;
-  g_main_context_invoke(nullptr, dispatch_transaction_release, release);
+  g_main_context_invoke(session->service->main_context, dispatch_transaction_release, release);
 }
 
 // Format the resolved disk space change for the transaction summary text.
@@ -570,7 +571,7 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
   bool preview_ready = false;
   {
     std::lock_guard<std::mutex> lock(session->state_mutex);
-    if (!session || !session->pending_apply_invocation) {
+    if (!session->pending_apply_invocation) {
       return;
     }
     invocation = session->pending_apply_invocation;
@@ -756,6 +757,16 @@ start_transaction_preview(gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
+// RAII guard that clears the service-wide apply_running flag when it goes out
+// of scope, ensuring the flag is reset even if the apply worker exits early.
+struct ApplyGuard {
+  std::atomic<bool> &flag;
+  ~ApplyGuard()
+  {
+    flag = false;
+  }
+};
+
 // Run the authorized package transaction in a worker thread.
 static void
 run_transaction_apply(TransactionSession *session)
@@ -765,6 +776,7 @@ run_transaction_apply(TransactionSession *session)
   }
 
   std::string error_out;
+  ApplyGuard apply_guard { session->service->apply_running };
   queue_transaction_progress(session, "Loading package base...");
   auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
@@ -790,8 +802,6 @@ run_transaction_apply(TransactionSession *session)
   } else {
     details = error_out;
   }
-
-  session->service->apply_running = false;
 
   DNF_UI_TRACE("Transaction service apply done path=%s success=%d", session->object_path.c_str(), success ? 1 : 0);
   queue_transaction_finished(session, stage, success, details);
@@ -848,11 +858,12 @@ on_transaction_method_call(GDBusConnection *,
 
     bool has_pending_apply = false;
     TransactionStage stage = TransactionStage::PREVIEW_RUNNING;
-    bool finished = session->finished.load();
+    bool finished = false;
     {
       std::lock_guard<std::mutex> lock(session->state_mutex);
       has_pending_apply = session->pending_apply_invocation != nullptr;
       stage = session->stage;
+      finished = session->finished.load();
     }
 
     if (has_pending_apply) {
@@ -953,12 +964,17 @@ on_transaction_method_call(GDBusConnection *,
   }
 
   if (g_strcmp0(method_name, "GetPreview") == 0) {
-    std::lock_guard<std::mutex> lock(session->state_mutex);
+    TransactionPreview preview_copy;
+    {
+      std::lock_guard<std::mutex> lock(session->state_mutex);
 
-    if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
-      g_dbus_method_invocation_return_error(
-          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview is not available.");
-      return;
+      if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
+        g_dbus_method_invocation_return_error(
+            invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview is not available.");
+        return;
+      }
+
+      preview_copy = session->preview;
     }
 
     GVariantBuilder install_builder;
@@ -973,11 +989,12 @@ on_transaction_method_call(GDBusConnection *,
     g_variant_builder_init(&reinstall_builder, G_VARIANT_TYPE("as"));
     g_variant_builder_init(&remove_builder, G_VARIANT_TYPE("as"));
 
-    append_transaction_preview_array(install_builder, session->preview.install);
-    append_transaction_preview_array(upgrade_builder, session->preview.upgrade);
-    append_transaction_preview_array(downgrade_builder, session->preview.downgrade);
-    append_transaction_preview_array(reinstall_builder, session->preview.reinstall);
-    append_transaction_preview_array(remove_builder, session->preview.remove);
+    append_transaction_preview_array(install_builder, preview_copy.install);
+    append_transaction_preview_array(upgrade_builder, preview_copy.upgrade);
+    append_transaction_preview_array(downgrade_builder, preview_copy.downgrade);
+    append_transaction_preview_array(reinstall_builder, preview_copy.reinstall);
+    append_transaction_preview_array(remove_builder, preview_copy.remove);
+    const gint64 disk_space_delta = static_cast<gint64>(preview_copy.disk_space_delta);
 
     // Return the preview arrays in the same order as the GetPreview D-Bus signature.
     g_dbus_method_invocation_return_value(invocation,
@@ -987,20 +1004,27 @@ on_transaction_method_call(GDBusConnection *,
                                                         &downgrade_builder,
                                                         &reinstall_builder,
                                                         &remove_builder,
-                                                        static_cast<gint64>(session->preview.disk_space_delta)));
+                                                        disk_space_delta));
     return;
   }
 
   if (g_strcmp0(method_name, "GetResult") == 0) {
-    std::lock_guard<std::mutex> lock(session->state_mutex);
+    const char *stage_name = nullptr;
+    bool finished = false;
+    bool success = false;
+    std::string details;
+
+    {
+      std::lock_guard<std::mutex> lock(session->state_mutex);
+      stage_name = transaction_stage_name(session->stage);
+      finished = session->finished.load();
+      success = session->success;
+      details = session->details;
+    }
 
     // Return stage, finished, success, and details in the GetResult reply order.
     g_dbus_method_invocation_return_value(invocation,
-                                          g_variant_new("(sbbs)",
-                                                        transaction_stage_name(session->stage),
-                                                        session->finished.load(),
-                                                        session->success,
-                                                        session->details.c_str()));
+                                          g_variant_new("(sbbs)", stage_name, finished, success, details.c_str()));
     return;
   }
 
@@ -1243,6 +1267,7 @@ cleanup_service(TransactionService &service)
 
     if (!session->finished.load()) {
       keep_alive_until_exit = true;
+      session->cancelled = true;
     }
   }
 
@@ -1304,6 +1329,7 @@ transaction_service_run(const TransactionServiceOptions &options)
   auto service = std::make_unique<TransactionService>();
   service->bus_type = options.bus_type;
   service->loop = g_main_loop_new(nullptr, FALSE);
+  service->main_context = g_main_loop_get_context(service->loop);
 
   GError *error = nullptr;
   service->manager_node_info = g_dbus_node_info_new_for_xml(kManagerIntrospectionXml, &error);
