@@ -41,4 +41,4 @@ docker run --rm \
   -e SERVICE_SYSTEM_BUS_DISCONNECT=yes \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
-  bash -c "make clean && make -j$(nproc) dnf_ui_transaction_service && bash /workspace/docker/docker_service_system_bus_inner.sh"
+  bash -c "./utils/meson_build.sh service && bash /workspace/docker/docker_service_system_bus_inner.sh"

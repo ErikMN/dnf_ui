@@ -16,7 +16,7 @@ TIMEOUT_SECONDS="${SERVICE_TEST_TIMEOUT_SECONDS:-180}"
 
 if [ ! -x "$SERVICE_BIN" ]; then
   echo "*** Missing service binary: $SERVICE_BIN ***" >&2
-  echo "*** Build it first with: make dnf_ui_transaction_service ***" >&2
+  echo "*** Build it first with: ./utils/meson_build.sh service ***" >&2
   exit 1
 fi
 

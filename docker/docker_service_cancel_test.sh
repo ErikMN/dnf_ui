@@ -41,4 +41,4 @@ docker run --rm -it \
   -e SERVICE_TEST_INSTALL_SPEC=cowsay \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
-  bash -c "make clean && make -j$(nproc) servicecanceltest"
+  bash -c "./utils/meson_build.sh service && ./utils/test_transaction_service_cancel.sh"

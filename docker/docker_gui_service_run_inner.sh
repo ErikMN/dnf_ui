@@ -13,8 +13,7 @@ SERVICE_BIN="$PROJECT_ROOT/$TRANSACTION_SERVICE_BIN_NAME"
 APP_BIN="$PROJECT_ROOT/dnf_ui"
 
 echo "*** Building app and transaction service ***"
-make clean
-make -j"$(nproc)"
+"$PROJECT_ROOT/utils/meson_build.sh" all
 
 for path in "$SERVICE_BIN" "$APP_BIN"; do
   if [ ! -x "$path" ]; then
