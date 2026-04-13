@@ -27,8 +27,6 @@
 #include <utility>
 #include <vector>
 
-namespace {
-
 // -----------------------------------------------------------------------------
 // Transaction service D-Bus names and introspection data
 // -----------------------------------------------------------------------------
@@ -1295,8 +1293,6 @@ cleanup_service(TransactionService &service)
     service.loop = nullptr;
   }
 }
-
-} // namespace
 
 // -----------------------------------------------------------------------------
 // Transaction service entrypoint
