@@ -1,5 +1,4 @@
 MESON ?= meson
-NPROC ?= $(shell nproc)
 
 include utils/transaction_service_paths.conf
 
@@ -53,11 +52,41 @@ APP_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/src/$(APP_BIN_NAME)
 SERVICE_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/src/service/$(TRANSACTION_SERVICE_BIN_NAME)
 TEST_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/test/$(TEST_BIN_NAME)
 
+SERVICE_INSTALL_FILES = \
+	"$(TRANSACTION_SERVICE_BIN_DEST)" \
+	"$(TRANSACTION_SERVICE_POLICY_DEST)" \
+	"$(TRANSACTION_SERVICE_DBUS_SERVICE_DEST)" \
+	"$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)" \
+	"$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
+
+APP_INSTALL_FILES = \
+	"$(APP_BIN_DEST)" \
+	$(SERVICE_INSTALL_FILES)
+
+# Require root for targets that change the live system:
+define require_root
+	@test "$$(id -u)" -eq 0 || { echo "*** $(1) must run as root ***" >&2; exit 1; }
+endef
+
+# Stop the transaction service if it is currently running:
+define stop_transaction_service
+	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
+endef
+
+# Reload systemd and D-Bus state after service file changes:
+define refresh_transaction_service_state
+	systemctl daemon-reload
+	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
+	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+endef
+
 .DEFAULT_GOAL := all
 
+# Build the app and transaction service:
 .PHONY: all
 all: dnf_ui dnf_ui_transaction_service
 
+# Configure the active Meson build directory:
 .PHONY: _meson_setup
 _meson_setup:
 	if [ -d "$(MESON_BUILD_DIR)" ]; then \
@@ -66,39 +95,36 @@ _meson_setup:
 		$(MESON) setup "$(MESON_BUILD_DIR)" $(MESON_SETUP_ARGS); \
 	fi
 
-.PHONY: debug
-debug:
-	@echo "*** Meson build directory: $(MESON_BUILD_DIR)"
-	@echo "*** Build type: $(MESON_BUILD_TYPE)"
-	@echo "*** Final build: $(MESON_FINAL_BUILD)"
-	@echo "*** Address sanitizer: $(MESON_SANITIZE)"
-	@echo "*** Debug trace: $(MESON_DEBUG_TRACE)"
-	@echo "*** Build tests: $(MESON_BUILD_TESTS)"
-
+# Build the app binary:
 .PHONY: dnf_ui
 dnf_ui: _meson_setup
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui
 	ln -sfn "$(APP_BUILD_PATH)" "$(APP_BIN_NAME)"
 
+# Build the transaction service binary:
 .PHONY: dnf_ui_transaction_service
 dnf_ui_transaction_service: _meson_setup
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_transaction_service
 	ln -sfn "$(SERVICE_BUILD_PATH)" "$(TRANSACTION_SERVICE_BIN_NAME)"
 
+# Build the backend test binary:
 .PHONY: dnf_ui_tests
 dnf_ui_tests: _meson_setup
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_tests
 	ln -sfn "$(TEST_BUILD_PATH)" "$(TEST_BIN_NAME)"
 
+# Run the app from the current build:
 .PHONY: run
 run: dnf_ui
 	@./$(APP_BIN_NAME)
 
+# Run the backend test suite:
 .PHONY: test
 test: dnf_ui_tests
 	@echo "*** Running backend test suite ***"
 	@./$(TEST_BIN_NAME)
 
+# Install the app and service files from the current build:
 .PHONY: install
 install: all
 	@if [ -z "$$DESTDIR" ] && [ "$$(id -u)" -ne 0 ]; then \
@@ -112,111 +138,110 @@ install: all
 		gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null; \
 	fi
 
+# Remove the installed app and service files:
 .PHONY: uninstall
 uninstall:
-	@test "$$(id -u)" -eq 0 || { echo "*** uninstall must run as root ***" >&2; exit 1; }
-	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
-	rm -f "$(APP_BIN_DEST)" \
-	      "$(TRANSACTION_SERVICE_BIN_DEST)" \
-	      "$(TRANSACTION_SERVICE_POLICY_DEST)" \
-	      "$(TRANSACTION_SERVICE_DBUS_SERVICE_DEST)" \
-	      "$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)" \
-	      "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
-	systemctl daemon-reload
-	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
-	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+	$(call require_root,uninstall)
+	$(call stop_transaction_service)
+	rm -f $(APP_INSTALL_FILES)
+	$(call refresh_transaction_service_state)
 	@echo "*** Removed installed DNF UI runtime files. ***"
 
-# Native transaction service development helpers:
+# Run the session bus preview smoke test:
 .PHONY: servicetest
 servicetest: dnf_ui_transaction_service
 	@./utils/test_transaction_service_preview.sh
 
+# Run the session bus cancel smoke test:
 .PHONY: servicecanceltest
 servicecanceltest: dnf_ui_transaction_service
 	@./utils/test_transaction_service_cancel.sh
 
+# Run the session bus apply smoke test:
 .PHONY: serviceapplytest
 serviceapplytest: dnf_ui_transaction_service
 	@./utils/test_transaction_service_apply.sh
 
+# Install the native transaction service files for development:
 .PHONY: serviceinstall
 serviceinstall: dnf_ui_transaction_service
-	@test "$$(id -u)" -eq 0 || { echo "*** serviceinstall must run as root ***" >&2; exit 1; }
-	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
+	$(call require_root,serviceinstall)
+	$(call stop_transaction_service)
 	$(MESON) install -C "$(MESON_BUILD_DIR)" --only-changed --tags transaction-service
-	systemctl daemon-reload
-	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
-	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+	$(call refresh_transaction_service_state)
 	@echo "*** Installed $(TRANSACTION_SERVICE_NAME) service files for native testing. ***"
 	@echo "*** Run dnf_ui as a regular desktop user and apply a transaction to trigger the Polkit prompt. ***"
 
+# Remove the native transaction service files:
 .PHONY: serviceuninstall
 serviceuninstall:
-	@test "$$(id -u)" -eq 0 || { echo "*** serviceuninstall must run as root ***" >&2; exit 1; }
-	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
-	rm -f "$(TRANSACTION_SERVICE_BIN_DEST)" \
-	      "$(TRANSACTION_SERVICE_POLICY_DEST)" \
-	      "$(TRANSACTION_SERVICE_DBUS_SERVICE_DEST)" \
-	      "$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)" \
-	      "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
-	systemctl daemon-reload
-	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
-	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+	$(call require_root,serviceuninstall)
+	$(call stop_transaction_service)
+	rm -f $(SERVICE_INSTALL_FILES)
+	$(call refresh_transaction_service_state)
 	@echo "*** Removed native transaction service files. ***"
 
+# Run the native system bus preview smoke test:
 .PHONY: servicesystemtest
 servicesystemtest:
 	@./utils/test_transaction_service_system_bus.sh
 
+# Run the native system bus apply smoke test:
 .PHONY: servicesystemapplytest
 servicesystemapplytest:
 	@SERVICE_SYSTEM_APPLY=yes ./utils/test_transaction_service_system_bus.sh
 
+# Run the native system bus disconnect smoke test:
 .PHONY: servicesystemdisconnecttest
 servicesystemdisconnecttest:
 	@SERVICE_SYSTEM_DISCONNECT=yes ./utils/test_transaction_service_system_bus.sh
 
-# Docker app and transaction service helpers:
-# To test dark or light themes in Docker:
-# make dockerrun THEME=dark
-# make dockerrun THEME=light
+# Run the app in Docker:
 .PHONY: dockerrun
 dockerrun:
 	@THEME="$(THEME)" DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_build.sh
 
+# Run the backend test suite in Docker:
 .PHONY: dockertest
 dockertest:
 	@./docker/docker_test.sh
 
+# Run the session bus preview smoke test in Docker:
 .PHONY: dockerservicetest
 dockerservicetest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_test.sh
 
+# Run the session bus apply smoke test in Docker:
 .PHONY: dockerserviceapplytest
 dockerserviceapplytest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_apply_test.sh
 
+# Run the session bus cancel smoke test in Docker:
 .PHONY: dockerservicecanceltest
 dockerservicecanceltest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_cancel_test.sh
 
+# Run the system bus preview smoke test in Docker:
 .PHONY: dockerservicesystemtest
 dockerservicesystemtest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_test.sh
 
+# Run the system bus apply smoke test in Docker:
 .PHONY: dockerservicesystemapplytest
 dockerservicesystemapplytest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_apply_test.sh
 
+# Run the system bus disconnect smoke test in Docker:
 .PHONY: dockerservicesystemdisconnecttest
 dockerservicesystemdisconnecttest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_disconnect_test.sh
 
+# Build the Docker development image:
 .PHONY: dockersetup
 dockersetup:
 	@./docker/docker_setup.sh
 
+# Run valgrind on the app binary:
 .PHONY: valgrind
 valgrind: dnf_ui
 	@valgrind \
@@ -227,6 +252,7 @@ valgrind: dnf_ui
 		--track-fds=yes \
 		./$(APP_BIN_NAME)
 
+# Run cppcheck on the source tree:
 .PHONY: cppcheck
 cppcheck:
 	@echo "*** Static code analysis"
@@ -236,11 +262,13 @@ cppcheck:
 		--suppress=unusedStructMember \
 		--suppress=knownConditionTrueFalse
 
+# Run clang format through the Docker helper:
 .PHONY: indent
 indent:
 	@echo "*** Formatting code"
 	@./utils/docker-clang-format.sh
 
+# Remove generated build output and symlinks:
 .PHONY: clean
 clean:
 	rm -rf "$(MESON_BUILD_ROOT)"
