@@ -47,15 +47,34 @@ The goal is not to experiment for its own sake, but to build something genuinely
 
 Build dependencies:
 
+- meson
+- ninja-build
 - libdnf5-devel
 - gtk4-devel
 - polkit
 - polkit-devel
 
+Meson handles the real build and install logic.
+The `Makefile` is a thin task runner for the common developer commands.
+
+Build and run:
+
+```sh
+make && ./dnf_ui
+```
+
 Build final and run:
 
 ```sh
 FINAL=y make && ./dnf_ui
+```
+
+Run the Meson setup directly:
+
+```sh
+meson setup build/debug --prefix /usr --libexecdir libexec
+meson compile -C build/debug
+./build/debug/src/dnf_ui
 ```
 
 ## Polkit integration
@@ -79,7 +98,7 @@ authentication when a transaction is applied.
 For native Polkit testing from the source tree, install the service files with:
 
 ```sh
-make clean && make -j1
+make
 sudo make serviceinstall
 ```
 
@@ -101,6 +120,7 @@ sudo make serviceuninstall
 
 - `serviceinstall` is a development helper, not the final packaging flow
 - Choose a non critical installed package for native apply tests
+- `make serviceinstall` installs the Meson built service files from the current build tree
 
 ### Tests
 

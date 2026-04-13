@@ -4,6 +4,7 @@ NOTES
 Useful commands:
 --------------------------------------------------------------------------------
 
+sudo dnf install meson ninja-build
 sudo dnf install libdnf5-devel libdnf-cli-devel
 sudo dnf install gtk4-devel
 sudo dnf install polkit-devel polkit
@@ -14,6 +15,9 @@ sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
 --------------------------------------------------------------------------------
 Run all tests:
 --------------------------------------------------------------------------------
+
+Meson handles the real build and install logic.
+The Makefile is a thin task runner for the common commands below.
 
 Native C++ tests:
 
@@ -50,7 +54,7 @@ make dockerservicesystemdisconnecttest
 Native Polkit test:
 --------------------------------------------------------------------------------
 
-make clean && make -j1
+make
 sudo make serviceinstall
 
 SERVICE_TEST_INSTALL_SPEC=cowsay make servicesystemtest
@@ -62,6 +66,7 @@ Run dnf_ui as a regular desktop user and apply a transaction to test the
 desktop Polkit prompt.
 
 serviceinstall is a native development make target, not the final packaging flow.
+serviceinstall installs the Meson built service files from the current build tree.
 Choose a non critical installed package for native apply tests.
 
 sudo make serviceuninstall
