@@ -211,7 +211,6 @@ build_main_ui(AppWidgets *ui)
   ui->vbox_root = vbox_root;
 
   GtkWidget *outer_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
-  gtk_box_append(GTK_BOX(vbox_root), outer_paned);
   gtk_paned_set_position(GTK_PANED(outer_paned), 200);
 
   GtkWidget *vbox_main = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
@@ -242,7 +241,7 @@ build_main_ui(AppWidgets *ui)
 
   // --- Search bar row ---
   GtkWidget *hbox_search = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-  gtk_box_append(GTK_BOX(vbox_main), hbox_search);
+  gtk_box_append(GTK_BOX(vbox_root), hbox_search);
 
   GtkWidget *entry = gtk_entry_new();
   gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Search available packages...");
@@ -268,11 +267,11 @@ build_main_ui(AppWidgets *ui)
   ui->spinner = spinner;
 
   // --- Flat line separator below Search bar ---
-  gtk_box_append(GTK_BOX(vbox_main), create_thin_separator());
+  gtk_box_append(GTK_BOX(vbox_root), create_thin_separator());
 
   // --- Buttons row ---
   GtkWidget *hbox_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-  gtk_box_append(GTK_BOX(vbox_main), hbox_buttons);
+  gtk_box_append(GTK_BOX(vbox_root), hbox_buttons);
 
   GtkWidget *list_button = gtk_button_new_with_label("List Installed");
   gtk_box_append(GTK_BOX(hbox_buttons), list_button);
@@ -307,7 +306,7 @@ build_main_ui(AppWidgets *ui)
 
   // --- Transaction buttons row (Install / Reinstall / Remove / Apply) ---
   GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-  gtk_box_append(GTK_BOX(vbox_main), hbox_tx_buttons);
+  gtk_box_append(GTK_BOX(vbox_root), hbox_tx_buttons);
 
   GtkWidget *install_button = gtk_button_new_with_label("Mark for Install");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), install_button);
@@ -330,16 +329,20 @@ build_main_ui(AppWidgets *ui)
   ui->clear_pending_button = clear_pending_button;
 
   // --- Flat line separator ---
-  gtk_box_append(GTK_BOX(vbox_main), create_thin_separator());
+  gtk_box_append(GTK_BOX(vbox_root), create_thin_separator());
 
   GtkWidget *status_label = gtk_label_new("Ready.");
   gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
   gtk_label_set_selectable(GTK_LABEL(status_label), TRUE);
   gtk_label_set_wrap(GTK_LABEL(status_label), TRUE);
-  gtk_box_append(GTK_BOX(vbox_main), status_label);
+  gtk_box_append(GTK_BOX(vbox_root), status_label);
   ui->status_label = status_label;
 
-  gtk_box_append(GTK_BOX(vbox_main), create_thin_separator());
+  gtk_box_append(GTK_BOX(vbox_root), create_thin_separator());
+
+  // History panel and package list fill the remaining space below the toolbar
+  gtk_widget_set_vexpand(outer_paned, TRUE);
+  gtk_box_append(GTK_BOX(vbox_root), outer_paned);
 
   // --- Inner paned (packages top / details bottom) ---
   GtkWidget *inner_paned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
