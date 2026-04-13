@@ -1,11 +1,12 @@
 #!/bin/sh
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "$0")" && pwd)
+
 echo "*** Git hook start"
 echo
 
 echo "*** Formatting source files with clang-format..."
-find src -type f \( -name "*.cpp" -o -name "*.hpp" \) -print0 |
-  xargs -0 clang-format -style=file -i -fallback-style=none
+"$SCRIPT_DIR/../utils/docker-clang-format.sh"
 
 echo
 echo "*** Git hook done"
