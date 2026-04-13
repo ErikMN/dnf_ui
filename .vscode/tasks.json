@@ -86,7 +86,7 @@
       "detail": "Clean, build and run the app",
       "type": "shell",
       "command": [
-        "make clean && make && ./${workspaceFolderBasename}"
+        "make clean && make && ./build/debug/src/dnf_ui"
       ],
       "group": "build",
       "presentation": {
@@ -112,7 +112,7 @@
       "detail": "Run the app",
       "type": "shell",
       "command": [
-        "./${workspaceFolderBasename}"
+        "./build/debug/src/dnf_ui"
       ],
       "group": "build",
       "presentation": {
@@ -138,7 +138,7 @@
       "detail": "Memcheck the app",
       "type": "shell",
       "command": [
-        "valgrind --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes ./${workspaceFolderBasename}"
+        "valgrind --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes ./build/debug/src/dnf_ui"
       ],
       "group": "build",
       "presentation": {
