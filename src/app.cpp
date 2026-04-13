@@ -341,19 +341,19 @@ build_main_ui(AppWidgets *ui)
 
   gtk_box_append(GTK_BOX(vbox_main), create_thin_separator());
 
-  // --- Inner paned (packages | details/files tabs) ---
-  GtkWidget *inner_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  // --- Inner paned (packages top / details bottom) ---
+  GtkWidget *inner_paned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
   gtk_box_append(GTK_BOX(vbox_main), inner_paned);
   gtk_widget_set_vexpand(inner_paned, TRUE);
   gtk_widget_set_hexpand(inner_paned, TRUE);
   int pos = config_load_paned_position();
   if (pos < 100) {
-    pos = 300;
+    pos = 400;
   }
   gtk_paned_set_position(GTK_PANED(inner_paned), pos);
   ui->inner_paned = inner_paned;
 
-  // --- Left: package list ---
+  // --- Top: package list ---
   GtkWidget *scrolled_list = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scrolled_list, TRUE);
   gtk_widget_set_vexpand(scrolled_list, TRUE);
@@ -364,7 +364,7 @@ build_main_ui(AppWidgets *ui)
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_list), listbox);
   ui->listbox = listbox;
 
-  // --- Right: notebook with tabs ---
+  // --- Bottom: notebook with tabs ---
   GtkWidget *notebook = gtk_notebook_new();
   gtk_widget_set_hexpand(notebook, TRUE);
   gtk_widget_set_vexpand(notebook, TRUE);
