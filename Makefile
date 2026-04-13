@@ -78,11 +78,12 @@ define stop_transaction_service
 	systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
 endef
 
-# Reload systemd and D-Bus state after service file changes:
+# Reload systemd, D-Bus, and Polkit state after service file changes:
 define refresh_transaction_service_state
 	systemctl daemon-reload
 	systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
 	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+	systemctl reload polkit.service >/dev/null 2>&1 || true
 endef
 
 .DEFAULT_GOAL := all
@@ -142,9 +143,7 @@ install:
 	fi
 	$(MESON) install -C "$(MESON_BUILD_DIR)" --no-rebuild --only-changed
 	@if [ -z "$$DESTDIR" ]; then \
-		systemctl daemon-reload; \
-		systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true; \
-		gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null; \
+		$(call refresh_transaction_service_state) \
 	fi
 
 # Remove the installed app and service files:
