@@ -120,7 +120,7 @@ sudo make serviceuninstall
 
 - `serviceinstall` is a development helper, not the final packaging flow
 - Choose a non critical installed package for native apply tests
-- `make serviceinstall` installs the Meson built service files from the current build tree
+- `sudo make serviceinstall` installs the already built Meson service files from the current build tree and does not rebuild
 
 ### Tests
 

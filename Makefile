@@ -68,6 +68,11 @@ define require_root
 	@test "$$(id -u)" -eq 0 || { echo "*** $(1) must run as root ***" >&2; exit 1; }
 endef
 
+# Require a built artifact before install with no rebuild:
+define require_built_file
+	@test -e "$(1)" || { echo "*** Build target missing: $(1). Build as normal user first. ***" >&2; exit 1; }
+endef
+
 # Stop the transaction service if it is currently running:
 define stop_transaction_service
 	systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
@@ -87,8 +92,7 @@ endef
 all: dnf_ui dnf_ui_transaction_service
 
 # Configure the active Meson build directory:
-.PHONY: _meson_setup
-_meson_setup:
+$(MESON_BUILD_DIR)/build.ninja:
 	if [ -d "$(MESON_BUILD_DIR)" ]; then \
 		$(MESON) setup "$(MESON_BUILD_DIR)" --reconfigure $(MESON_SETUP_ARGS); \
 	else \
@@ -97,19 +101,19 @@ _meson_setup:
 
 # Build the app binary:
 .PHONY: dnf_ui
-dnf_ui: _meson_setup
+dnf_ui: $(MESON_BUILD_DIR)/build.ninja
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui
 	ln -sfn "$(APP_BUILD_PATH)" "$(APP_BIN_NAME)"
 
 # Build the transaction service binary:
 .PHONY: dnf_ui_transaction_service
-dnf_ui_transaction_service: _meson_setup
+dnf_ui_transaction_service: $(MESON_BUILD_DIR)/build.ninja
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_transaction_service
 	ln -sfn "$(SERVICE_BUILD_PATH)" "$(TRANSACTION_SERVICE_BIN_NAME)"
 
 # Build the backend test binary:
 .PHONY: dnf_ui_tests
-dnf_ui_tests: _meson_setup
+dnf_ui_tests: $(MESON_BUILD_DIR)/build.ninja
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_tests
 	ln -sfn "$(TEST_BUILD_PATH)" "$(TEST_BIN_NAME)"
 
@@ -126,15 +130,17 @@ test: dnf_ui_tests
 
 # Install the app and service files from the current build:
 .PHONY: install
-install: all
+install:
 	@if [ -z "$$DESTDIR" ] && [ "$$(id -u)" -ne 0 ]; then \
 		echo "*** install must run as root unless DESTDIR is set ***" >&2; \
 		exit 1; \
 	fi
+	$(call require_built_file,$(APP_BUILD_PATH))
+	$(call require_built_file,$(SERVICE_BUILD_PATH))
 	@if [ -z "$$DESTDIR" ]; then \
 		$(call stop_transaction_service) \
 	fi
-	$(MESON) install -C "$(MESON_BUILD_DIR)" --only-changed
+	$(MESON) install -C "$(MESON_BUILD_DIR)" --no-rebuild --only-changed
 	@if [ -z "$$DESTDIR" ]; then \
 		systemctl daemon-reload; \
 		systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true; \
@@ -167,10 +173,11 @@ serviceapplytest: dnf_ui_transaction_service
 
 # Install the native transaction service files for development:
 .PHONY: serviceinstall
-serviceinstall: dnf_ui_transaction_service
+serviceinstall:
 	$(call require_root,serviceinstall)
+	$(call require_built_file,$(SERVICE_BUILD_PATH))
 	$(call stop_transaction_service)
-	$(MESON) install -C "$(MESON_BUILD_DIR)" --only-changed --tags transaction-service
+	$(MESON) install -C "$(MESON_BUILD_DIR)" --no-rebuild --only-changed --tags transaction-service
 	$(call refresh_transaction_service_state)
 	@echo "*** Installed $(TRANSACTION_SERVICE_NAME) service files for native testing. ***"
 	@echo "*** Run dnf_ui as a regular desktop user and apply a transaction to trigger the Polkit prompt. ***"
