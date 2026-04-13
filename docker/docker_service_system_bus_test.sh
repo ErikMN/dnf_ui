@@ -37,8 +37,9 @@ docker run --rm \
   -e FINAL \
   -e ASAN \
   -e DEBUG_TRACE \
+  -e DNF_UI_MESON_BUILD_ROOT=/tmp/dnf_ui-build \
   -e SERVICE_TEST_INSTALL_SPEC=cowsay \
   -e SERVICE_TEST_DISABLE_AUTO_RELEASE=1 \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
-  bash -c "./utils/meson_build.sh service && bash /workspace/docker/docker_service_system_bus_inner.sh"
+  bash -c 'BUILD_DIR="$(./utils/meson_build.sh build-dir)" && ./utils/meson_build.sh service && SERVICE_BIN="$BUILD_DIR/src/service/dnf_ui_transaction_service" bash /workspace/docker/docker_service_system_bus_inner.sh'

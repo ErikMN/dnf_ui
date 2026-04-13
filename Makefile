@@ -70,13 +70,13 @@ endef
 
 # Stop the transaction service if it is currently running:
 define stop_transaction_service
-	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
+	systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
 endef
 
 # Reload systemd and D-Bus state after service file changes:
 define refresh_transaction_service_state
 	systemctl daemon-reload
-	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
+	systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
 	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
 endef
 
@@ -130,6 +130,9 @@ install: all
 	@if [ -z "$$DESTDIR" ] && [ "$$(id -u)" -ne 0 ]; then \
 		echo "*** install must run as root unless DESTDIR is set ***" >&2; \
 		exit 1; \
+	fi
+	@if [ -z "$$DESTDIR" ]; then \
+		$(call stop_transaction_service) \
 	fi
 	$(MESON) install -C "$(MESON_BUILD_DIR)" --only-changed
 	@if [ -z "$$DESTDIR" ]; then \

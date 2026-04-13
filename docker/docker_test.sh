@@ -34,6 +34,7 @@ docker run --rm -it \
   -w /workspace \
   -e FINAL \
   -e ASAN \
+  -e DNF_UI_MESON_BUILD_ROOT=/tmp/dnf_ui-build \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
   bash -c 'BUILD_DIR="$(./utils/meson_build.sh build-dir)" && ./utils/meson_build.sh tests && meson test -C "$BUILD_DIR" --print-errorlogs'

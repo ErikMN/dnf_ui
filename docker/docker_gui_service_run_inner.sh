@@ -9,8 +9,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$PROJECT_ROOT/utils/transaction_service_paths.conf"
 
-SERVICE_BIN="$PROJECT_ROOT/$TRANSACTION_SERVICE_BIN_NAME"
-APP_BIN="$PROJECT_ROOT/dnf_ui"
+export DNF_UI_MESON_BUILD_ROOT="/tmp/dnf_ui-build"
+BUILD_DIR="$("$PROJECT_ROOT/utils/meson_build.sh" build-dir)"
+SERVICE_BIN="$BUILD_DIR/src/service/$TRANSACTION_SERVICE_BIN_NAME"
+APP_BIN="$BUILD_DIR/src/dnf_ui"
 
 echo "*** Building app and transaction service ***"
 "$PROJECT_ROOT/utils/meson_build.sh" all
