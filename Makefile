@@ -1,128 +1,131 @@
-CXX = g++
-CXXFLAGS += -std=c++20 -Werror -MMD -MP -pipe -fdiagnostics-color=always
-PROGS = dnf_ui dnf_ui_transaction_service
-LDLIBS = -lm
-
-PKGS = libdnf5 gtk4 polkit-gobject-1
-TEST_PKGS = libdnf5 gio-2.0 catch2-with-main
+MESON ?= meson
+NPROC ?= $(shell nproc)
 
 include utils/transaction_service_paths.conf
 
-ifneq ($(filter test,$(MAKECMDGOALS)),)
-  PKG_OK := $(shell pkg-config --exists $(TEST_PKGS) && echo yes)
-  ifeq ($(PKG_OK),yes)
-    PKG_LIBS := $(shell pkg-config --libs $(TEST_PKGS))
-    PKG_CFLAGS := $(shell pkg-config --cflags $(TEST_PKGS))
-  else
-    $(error "Missing test dependencies: please install development packages for $(TEST_PKGS)")
-  endif
+APP_BIN_NAME = dnf_ui
+APP_BIN_DEST = /usr/bin/dnf_ui
+TEST_BIN_NAME = dnf_ui_tests
+
+ifeq ($(FINAL),y)
+  MESON_BUILD_NAME = final
+  MESON_BUILD_TYPE = release
+  MESON_FINAL_BUILD = true
+  MESON_WARNING_LEVEL = 3
 else
-  ifeq ($(filter dockerrun dockertest dockerservicetest dockerserviceapplytest dockerservicecanceltest dockerservicesystemtest dockerservicesystemapplytest dockerservicesystemdisconnecttest dockersetup cppcheck indent clean serviceuninstall servicesystemtest servicesystemapplytest servicesystemdisconnecttest,$(MAKECMDGOALS)),)
-    PKG_OK := $(shell pkg-config --exists $(PKGS) && echo yes)
-    ifeq ($(PKG_OK),yes)
-      PKG_LIBS := $(shell pkg-config --libs $(PKGS))
-      PKG_CFLAGS := $(shell pkg-config --cflags $(PKGS))
-    else
-      $(error "Missing dependencies: please install development packages for $(PKGS)")
-    endif
-  endif
+  MESON_BUILD_NAME = debug
+  MESON_BUILD_TYPE = debug
+  MESON_FINAL_BUILD = false
+  MESON_WARNING_LEVEL = 0
 endif
 
-LDLIBS += $(PKG_LIBS)
-CPPFLAGS += $(PKG_CFLAGS)
-
-APP_SRCS = $(wildcard src/*.cpp)
-APP_OBJS = $(APP_SRCS:.cpp=.o)
-APP_DEPS = $(APP_SRCS:.cpp=.d)
-
-SERVICE_BACKEND_SRCS = \
-	src/base_manager.cpp \
-	src/dnf_backend.cpp
-SERVICE_BACKEND_OBJS = $(SERVICE_BACKEND_SRCS:.cpp=.o)
-SERVICE_BACKEND_DEPS = $(SERVICE_BACKEND_SRCS:.cpp=.d)
-
-SERVICE_SRCS = $(wildcard src/service/*.cpp)
-SERVICE_OBJS = $(SERVICE_SRCS:.cpp=.o)
-SERVICE_DEPS = $(SERVICE_SRCS:.cpp=.d)
-
-TEST_SRCS = \
-    test/test_backend.cpp \
-    test/test_search.cpp \
-    test/test_transaction_preview.cpp \
-    test/test_transaction_request.cpp \
-    src/base_manager.cpp \
-    src/dnf_backend.cpp
-
-TEST_OBJS = $(TEST_SRCS:.cpp=.o)
-TEST_DEPS = $(TEST_SRCS:.cpp=.d)
-
-CPPFLAGS += -Iinclude -Isrc
-
-TRANSACTION_SERVICE_BIN_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_BIN_NAME)
-TRANSACTION_SERVICE_POLICY_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_POLICY_FILE)
-TRANSACTION_SERVICE_DBUS_SERVICE_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_DBUS_SERVICE_FILE)
-TRANSACTION_SERVICE_DBUS_POLICY_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_DBUS_POLICY_FILE)
-TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC = $(CURDIR)/$(TRANSACTION_SERVICE_SYSTEMD_UNIT_FILE)
-
--include $(APP_DEPS)
--include $(SERVICE_BACKEND_DEPS)
--include $(SERVICE_DEPS)
--include $(TEST_DEPS)
-
-# FINAL=y
-ifeq ($(FINAL), y)
-  LDFLAGS += -s
-  CXXFLAGS += -DNDEBUG_BUILD -g0 -O2
-  CXXFLAGS += -Wpedantic -Wextra -Wmaybe-uninitialized
-  CXXFLAGS += -W -Wformat=2 -Wpointer-arith
-  CXXFLAGS += -Wdisabled-optimization -Wfloat-equal -Wall
+ifeq ($(ASAN),y)
+  MESON_SANITIZE = address
 else
-  # ASAN=y
-  CXXFLAGS += -g3 -DDEBUG_BUILD
-  ifeq ($(ASAN), y)
-    CXXFLAGS += -fsanitize=address -O1 -fno-omit-frame-pointer
-    LDLIBS += -fsanitize=address
-  endif
+  MESON_SANITIZE = none
 endif
 
-# DEBUG_TRACE=y
-ifeq ($(DEBUG_TRACE), y)
-  CXXFLAGS += -DDNF_UI_DEBUG_TRACE
+ifeq ($(DEBUG_TRACE),y)
+  MESON_DEBUG_TRACE = true
+else
+  MESON_DEBUG_TRACE = false
 endif
+
+ifneq ($(filter test $(TEST_BIN_NAME),$(MAKECMDGOALS)),)
+  MESON_BUILD_TESTS = true
+else
+  MESON_BUILD_TESTS = false
+endif
+
+MESON_BUILD_ROOT = build
+MESON_BUILD_DIR = $(MESON_BUILD_ROOT)/$(MESON_BUILD_NAME)
+MESON_SETUP_ARGS = \
+	--prefix /usr \
+	--libexecdir libexec \
+	--buildtype $(MESON_BUILD_TYPE) \
+	-Dwarning_level=$(MESON_WARNING_LEVEL) \
+	-Dbuild_tests=$(MESON_BUILD_TESTS) \
+	-Ddebug_trace=$(MESON_DEBUG_TRACE) \
+	-Dfinal_build=$(MESON_FINAL_BUILD) \
+	-Db_sanitize=$(MESON_SANITIZE)
+
+APP_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/src/$(APP_BIN_NAME)
+SERVICE_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/src/service/$(TRANSACTION_SERVICE_BIN_NAME)
+TEST_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/test/$(TEST_BIN_NAME)
+
+.DEFAULT_GOAL := all
 
 .PHONY: all
-all: $(PROGS)
+all: dnf_ui dnf_ui_transaction_service
+
+.PHONY: _meson_setup
+_meson_setup:
+	if [ -d "$(MESON_BUILD_DIR)" ]; then \
+		$(MESON) setup "$(MESON_BUILD_DIR)" --reconfigure $(MESON_SETUP_ARGS); \
+	else \
+		$(MESON) setup "$(MESON_BUILD_DIR)" $(MESON_SETUP_ARGS); \
+	fi
 
 .PHONY: debug
 debug:
-	@echo "*** Debug info:"
-	@echo "App source-files:" $(APP_SRCS)
-	@echo "App object-files:" $(APP_OBJS)
-	@echo "Service backend source-files:" $(SERVICE_BACKEND_SRCS)
-	@echo "Service backend object-files:" $(SERVICE_BACKEND_OBJS)
-	@echo "Service source-files:" $(SERVICE_SRCS)
-	@echo "Service object-files:" $(SERVICE_OBJS)
-	@echo "Compiler-flags:" $(CXXFLAGS)
-	@echo "Linker-flags:" $(LDFLAGS)
-	@echo "Linker-libs:" $(LDLIBS)
+	@echo "*** Meson build directory: $(MESON_BUILD_DIR)"
+	@echo "*** Build type: $(MESON_BUILD_TYPE)"
+	@echo "*** Final build: $(MESON_FINAL_BUILD)"
+	@echo "*** Address sanitizer: $(MESON_SANITIZE)"
+	@echo "*** Debug trace: $(MESON_DEBUG_TRACE)"
+	@echo "*** Build tests: $(MESON_BUILD_TESTS)"
 
-dnf_ui: $(APP_OBJS)
-	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
+.PHONY: dnf_ui
+dnf_ui: _meson_setup
+	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui
+	ln -sfn "$(APP_BUILD_PATH)" "$(APP_BIN_NAME)"
 
-dnf_ui_transaction_service: $(SERVICE_BACKEND_OBJS) $(SERVICE_OBJS)
-	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
+.PHONY: dnf_ui_transaction_service
+dnf_ui_transaction_service: _meson_setup
+	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_transaction_service
+	ln -sfn "$(SERVICE_BUILD_PATH)" "$(TRANSACTION_SERVICE_BIN_NAME)"
+
+.PHONY: dnf_ui_tests
+dnf_ui_tests: _meson_setup
+	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_tests
+	ln -sfn "$(TEST_BUILD_PATH)" "$(TEST_BIN_NAME)"
 
 .PHONY: run
-run: $(PROGS)
-	@./$(PROGS)
-
-dnf_ui_tests: $(TEST_OBJS)
-	$(CXX) $(LDFLAGS) $^ $(LDLIBS) -o $@
+run: dnf_ui
+	@./$(APP_BIN_NAME)
 
 .PHONY: test
 test: dnf_ui_tests
 	@echo "*** Running backend test suite ***"
-	@./dnf_ui_tests
+	@./$(TEST_BIN_NAME)
+
+.PHONY: install
+install: all
+	@if [ -z "$$DESTDIR" ] && [ "$$(id -u)" -ne 0 ]; then \
+		echo "*** install must run as root unless DESTDIR is set ***" >&2; \
+		exit 1; \
+	fi
+	$(MESON) install -C "$(MESON_BUILD_DIR)" --only-changed
+	@if [ -z "$$DESTDIR" ]; then \
+		systemctl daemon-reload; \
+		systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true; \
+		gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null; \
+	fi
+
+.PHONY: uninstall
+uninstall:
+	@test "$$(id -u)" -eq 0 || { echo "*** uninstall must run as root ***" >&2; exit 1; }
+	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
+	rm -f "$(APP_BIN_DEST)" \
+	      "$(TRANSACTION_SERVICE_BIN_DEST)" \
+	      "$(TRANSACTION_SERVICE_POLICY_DEST)" \
+	      "$(TRANSACTION_SERVICE_DBUS_SERVICE_DEST)" \
+	      "$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)" \
+	      "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
+	systemctl daemon-reload
+	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
+	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
+	@echo "*** Removed installed DNF UI runtime files. ***"
 
 # Native transaction service development helpers:
 .PHONY: servicetest
@@ -140,17 +143,8 @@ serviceapplytest: dnf_ui_transaction_service
 .PHONY: serviceinstall
 serviceinstall: dnf_ui_transaction_service
 	@test "$$(id -u)" -eq 0 || { echo "*** serviceinstall must run as root ***" >&2; exit 1; }
-	@test -x "$(TRANSACTION_SERVICE_BIN_SRC)" || { echo "*** Missing service binary: $(TRANSACTION_SERVICE_BIN_SRC) ***" >&2; echo "*** Build it first with: make dnf_ui_transaction_service ***" >&2; exit 1; }
-	@test -f "$(TRANSACTION_SERVICE_POLICY_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_POLICY_SRC) ***" >&2; exit 1; }
-	@test -f "$(TRANSACTION_SERVICE_DBUS_SERVICE_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_DBUS_SERVICE_SRC) ***" >&2; exit 1; }
-	@test -f "$(TRANSACTION_SERVICE_DBUS_POLICY_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_DBUS_POLICY_SRC) ***" >&2; exit 1; }
-	@test -f "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC)" || { echo "*** Missing packaging file: $(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC) ***" >&2; exit 1; }
 	-systemctl stop "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
-	install -D -m 0755 "$(TRANSACTION_SERVICE_BIN_SRC)" "$(TRANSACTION_SERVICE_BIN_DEST)"
-	install -D -m 0644 "$(TRANSACTION_SERVICE_POLICY_SRC)" "$(TRANSACTION_SERVICE_POLICY_DEST)"
-	install -D -m 0644 "$(TRANSACTION_SERVICE_DBUS_SERVICE_SRC)" "$(TRANSACTION_SERVICE_DBUS_SERVICE_DEST)"
-	install -D -m 0644 "$(TRANSACTION_SERVICE_DBUS_POLICY_SRC)" "$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)"
-	install -D -m 0644 "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_SRC)" "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
+	$(MESON) install -C "$(MESON_BUILD_DIR)" --only-changed --tags transaction-service
 	systemctl daemon-reload
 	-systemctl reset-failed "$(TRANSACTION_SERVICE_SYSTEMD_UNIT_NAME)" >/dev/null 2>&1 || true
 	gdbus call --system --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.ReloadConfig >/dev/null
@@ -224,14 +218,14 @@ dockersetup:
 	@./docker/docker_setup.sh
 
 .PHONY: valgrind
-valgrind: $(PROGS)
+valgrind: dnf_ui
 	@valgrind \
 		--tool=memcheck \
 		--leak-check=yes \
 		--show-reachable=yes \
 		--num-callers=20 \
 		--track-fds=yes \
-		./$(PROGS)
+		./$(APP_BIN_NAME)
 
 .PHONY: cppcheck
 cppcheck:
@@ -249,4 +243,5 @@ indent:
 
 .PHONY: clean
 clean:
-	$(RM) $(PROGS) dnf_ui_tests $(APP_OBJS) $(SERVICE_BACKEND_OBJS) $(SERVICE_OBJS) $(TEST_OBJS) $(APP_DEPS) $(SERVICE_BACKEND_DEPS) $(SERVICE_DEPS) $(TEST_DEPS)
+	rm -rf "$(MESON_BUILD_ROOT)"
+	rm -f "$(APP_BIN_NAME)" "$(TRANSACTION_SERVICE_BIN_NAME)" "$(TEST_BIN_NAME)"
