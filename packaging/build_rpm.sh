@@ -7,9 +7,26 @@ SPEC_FILE="${SPEC_FILE:-$PROJECT_ROOT/dnf-ui.spec}"
 RPM_TOPDIR="${RPM_TOPDIR:-$PROJECT_ROOT/rpmbuild}"
 RPM_TMPDIR="${RPM_TMPDIR:-$RPM_TOPDIR/TMP}"
 
+PACKAGE_NAME="$(rpmspec -q --srpm --qf '%{NAME}\n' "$SPEC_FILE" | head -n 1)"
+
 "$SCRIPT_DIR/build_srpm.sh"
 
 rpmbuild -ba \
   --define "_topdir $RPM_TOPDIR" \
   --define "_tmppath $RPM_TMPDIR" \
   "$RPM_TOPDIR/SPECS/$(basename "$SPEC_FILE")"
+
+LATEST_RPM="$(
+  find "$RPM_TOPDIR/RPMS" -type f \
+    -name "${PACKAGE_NAME}-*.rpm" \
+    ! -name "${PACKAGE_NAME}-debuginfo-*.rpm" \
+    ! -name "${PACKAGE_NAME}-debugsource-*.rpm" \
+    -printf '%T@ %p\n' |
+    sort -n |
+    tail -1 |
+    cut -d' ' -f2-
+)"
+
+test -n "$LATEST_RPM"
+
+ln -sfn "$LATEST_RPM" "$PROJECT_ROOT/dnf-ui-latest.rpm"

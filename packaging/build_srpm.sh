@@ -41,3 +41,14 @@ rpmbuild -bs \
   --define "_topdir $RPM_TOPDIR" \
   --define "_tmppath $RPM_TMPDIR" \
   "$RPM_TOPDIR/SPECS/$(basename "$SPEC_FILE")"
+
+LATEST_SRPM="$(
+  find "$RPM_TOPDIR/SRPMS" -type f -name "*.src.rpm" -printf '%T@ %p\n' |
+    sort -n |
+    tail -1 |
+    cut -d' ' -f2-
+)"
+
+test -n "$LATEST_SRPM"
+
+ln -sfn "$LATEST_SRPM" "$PROJECT_ROOT/dnf-ui-latest.src.rpm"

@@ -354,3 +354,4 @@ clean:
 .PHONY: distclean
 distclean: clean
 	$(RM) -r rpmbuild
+	$(RM) dnf-ui-latest.rpm dnf-ui-latest.src.rpm
