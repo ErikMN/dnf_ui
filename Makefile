@@ -113,7 +113,8 @@ endef
 all: dnf_ui dnf_ui_transaction_service
 
 # Configure the active Meson build directory:
-$(MESON_BUILD_DIR)/build.ninja:
+.PHONY: meson-setup
+meson-setup:
 	if [ -d "$(MESON_BUILD_DIR)" ]; then \
 		$(MESON) setup "$(MESON_BUILD_DIR)" --reconfigure $(MESON_SETUP_ARGS); \
 	else \
@@ -122,19 +123,19 @@ $(MESON_BUILD_DIR)/build.ninja:
 
 # Build the desktop app binary and update the local convenience symlink:
 .PHONY: dnf_ui
-dnf_ui: $(MESON_BUILD_DIR)/build.ninja
+dnf_ui: meson-setup
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui
 	ln -sfn "$(APP_BUILD_PATH)" "$(APP_BIN_NAME)"
 
 # Build the native transaction service binary and update the local symlink:
 .PHONY: dnf_ui_transaction_service
-dnf_ui_transaction_service: $(MESON_BUILD_DIR)/build.ninja
+dnf_ui_transaction_service: meson-setup
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_transaction_service
 	ln -sfn "$(SERVICE_BUILD_PATH)" "$(TRANSACTION_SERVICE_BIN_NAME)"
 
 # Build the backend test binary and update the local symlink:
 .PHONY: dnf_ui_tests
-dnf_ui_tests: $(MESON_BUILD_DIR)/build.ninja
+dnf_ui_tests: meson-setup
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_tests
 	ln -sfn "$(TEST_BUILD_PATH)" "$(TEST_BIN_NAME)"
 
