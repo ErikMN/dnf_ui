@@ -8,21 +8,63 @@
 // TODO: Consider switching to GKeyFile or JSON for more structured data
 // -----------------------------------------------------------------------------
 #include "config.hpp"
-#include <fstream>
+#include <algorithm>
 #include <filesystem>
+#include <fstream>
 
 #include <glib.h>
 
-// -----------------------------------------------------------------------------
-// Config helpers for saving/restoring user settings
-// -----------------------------------------------------------------------------
+namespace {
+constexpr int DEFAULT_PANED_POSITION = 300;
+constexpr int DEFAULT_WINDOW_WIDTH = 1200;
+constexpr int DEFAULT_WINDOW_HEIGHT = 820;
+constexpr int MIN_WINDOW_WIDTH = 600;
+constexpr int MIN_WINDOW_HEIGHT = 400;
+
+std::filesystem::path
+config_file_path()
+{
+  const char *config_dir = g_get_user_config_dir();
+  if (!config_dir || !*config_dir) {
+    return {};
+  }
+
+  return std::filesystem::path(config_dir) / "dnf_ui.conf";
+}
+
+bool
+config_try_parse_int(const std::map<std::string, std::string> &config, const char *key, int &value_out)
+{
+  auto it = config.find(key);
+  if (it == config.end()) {
+    return false;
+  }
+
+  try {
+    size_t parsed_chars = 0;
+    int parsed = std::stoi(it->second, &parsed_chars);
+    if (parsed_chars != it->second.size()) {
+      return false;
+    }
+
+    value_out = parsed;
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+} // namespace
+
 std::map<std::string, std::string>
 config_load_map()
 {
   std::map<std::string, std::string> config;
-  const char *home = g_get_home_dir();
-  std::string config_path = std::string(home ? home : "") + "/.config/dnf_ui.conf";
-  std::ifstream file(config_path);
+  std::filesystem::path path = config_file_path();
+  if (path.empty()) {
+    return config;
+  }
+
+  std::ifstream file(path);
   if (!file.good()) {
     return config;
   }
@@ -47,10 +89,17 @@ config_load_map()
 void
 config_save_map(const std::map<std::string, std::string> &config)
 {
-  const char *home = g_get_home_dir();
-  std::string config_dir = std::string(home ? home : "") + "/.config";
-  std::filesystem::create_directories(config_dir);
-  std::ofstream file(config_dir + "/dnf_ui.conf");
+  std::filesystem::path path = config_file_path();
+  if (path.empty()) {
+    return;
+  }
+
+  std::filesystem::create_directories(path.parent_path());
+  std::ofstream file(path);
+  if (!file.good()) {
+    return;
+  }
+
   for (auto &[k, v] : config) {
     file << k << "=" << v << "\n";
   }
@@ -60,11 +109,12 @@ int
 config_load_paned_position()
 {
   auto config = config_load_map();
-  if (config.count("paned_position")) {
-    return std::stoi(config["paned_position"]);
+  int position = DEFAULT_PANED_POSITION;
+  if (config_try_parse_int(config, "paned_position", position)) {
+    return position;
   }
 
-  return 300;
+  return DEFAULT_PANED_POSITION;
 }
 
 void
@@ -79,15 +129,19 @@ void
 config_load_window_geometry(GtkWindow *window)
 {
   auto config = config_load_map();
-  int w = 1200, h = 820;
-  if (config.count("window_width"))
-    w = std::stoi(config["window_width"]);
-  if (config.count("window_height"))
-    h = std::stoi(config["window_height"]);
-  if (w < 600)
-    w = 1200;
-  if (h < 400)
-    h = 820;
+  int w = DEFAULT_WINDOW_WIDTH;
+  int h = DEFAULT_WINDOW_HEIGHT;
+
+  config_try_parse_int(config, "window_width", w);
+  config_try_parse_int(config, "window_height", h);
+
+  if (w < MIN_WINDOW_WIDTH) {
+    w = DEFAULT_WINDOW_WIDTH;
+  }
+  if (h < MIN_WINDOW_HEIGHT) {
+    h = DEFAULT_WINDOW_HEIGHT;
+  }
+
   gtk_window_set_default_size(window, w, h);
 }
 
@@ -95,24 +149,18 @@ void
 config_save_window_geometry(GtkWindow *window)
 {
   auto config = config_load_map();
-  int w = 1200, h = 820;
+  int w = 0;
+  int h = 0;
 
-  // GTK4 build: use gtk_window_get_default_size() and gtk_widget_compute_bounds()
-  int default_w = 0, default_h = 0;
-  gtk_window_get_default_size(window, &default_w, &default_h);
-
-  if (default_w > 0 && default_h > 0) {
-    w = default_w;
-    h = default_h;
-  } else {
-    // fallback to compute bounds if no default size set
-    graphene_rect_t bounds;
-    if (gtk_widget_compute_bounds(GTK_WIDGET(window), nullptr, &bounds)) {
-      w = static_cast<int>(bounds.size.width);
-      h = static_cast<int>(bounds.size.height);
-    }
+  // In GTK4 the default size tracks user-driven resize changes and preserves
+  // the last non-maximized size, which makes it the right value to persist.
+  gtk_window_get_default_size(window, &w, &h);
+  if (w <= 0 || h <= 0) {
+    return;
   }
 
+  w = std::max(w, MIN_WINDOW_WIDTH);
+  h = std::max(h, MIN_WINDOW_HEIGHT);
   config["window_width"] = std::to_string(w);
   config["window_height"] = std::to_string(h);
   config_save_map(config);

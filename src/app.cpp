@@ -633,16 +633,6 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
   // Intercept window close so unapplied marked changes can be confirmed first.
   g_signal_connect(ui->window, "close-request", G_CALLBACK(on_main_window_close_request), widgets);
 
-  // Save window geometry and paned position when window is unrealized (destroyed)
-  g_signal_connect(ui->window,
-                   "unrealize",
-                   G_CALLBACK(+[](GtkWidget *widget, gpointer user_data) {
-                     GtkWindow *w = GTK_WINDOW(widget);
-                     config_save_window_geometry(w);
-                     config_save_paned_position(GTK_PANED(user_data));
-                   }),
-                   ui->inner_paned);
-
   // Live-update: save pane position whenever the user moves the divider
   g_signal_connect(ui->inner_paned,
                    "notify::position",
@@ -752,18 +742,19 @@ on_main_window_close_request(GtkWindow *window, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
-  // TODO: FIXME: This is broken
-  // Save paned position on close
-  config_save_window_geometry(window);
-  if (widgets && widgets->results.inner_paned) {
-    config_save_paned_position(widgets->results.inner_paned);
-  }
-
   if (!widgets || widgets->window_state.allow_close_with_pending) {
+    config_save_window_geometry(window);
+    if (widgets && widgets->results.inner_paned) {
+      config_save_paned_position(widgets->results.inner_paned);
+    }
     return FALSE;
   }
 
   if (widgets->transaction.actions.empty()) {
+    config_save_window_geometry(window);
+    if (widgets->results.inner_paned) {
+      config_save_paned_position(widgets->results.inner_paned);
+    }
     return FALSE;
   }
 
