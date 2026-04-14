@@ -347,5 +347,10 @@ indent:
 # Remove generated build output and symlinks:
 .PHONY: clean
 clean:
-	rm -rf "$(MESON_BUILD_ROOT)"
-	rm -f "$(APP_BIN_NAME)" "$(TRANSACTION_SERVICE_BIN_NAME)" "$(TEST_BIN_NAME)"
+	$(RM) -r "$(MESON_BUILD_ROOT)"
+	$(RM) "$(APP_BIN_NAME)" "$(TRANSACTION_SERVICE_BIN_NAME)" "$(TEST_BIN_NAME)"
+
+# Remove everything:
+.PHONY: distclean
+distclean: clean
+	$(RM) -r rpmbuild
