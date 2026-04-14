@@ -127,7 +127,7 @@ sudo make serviceuninstall
 Test dependencies:
 
 - gio-2.0
-- catch2-with-main
+- catch-devel on Fedora, which provides `pkgconfig(catch2-with-main)`
 
 Run the test suite:
 

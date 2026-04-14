@@ -1,3 +1,5 @@
+# Fedora ships Catch2 v3 as the catch-devel package, which provides
+# pkgconfig(catch2-with-main).
 catch2_dep = dependency('catch2-with-main')
 gio_dep = dependency('gio-2.0')
 

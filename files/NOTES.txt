@@ -8,7 +8,7 @@ sudo dnf install meson ninja-build
 sudo dnf install libdnf5-devel libdnf-cli-devel
 sudo dnf install gtk4-devel
 sudo dnf install polkit-devel polkit
-sudo dnf install catch2-devel
+sudo dnf install catch-devel
 
 sudo dnf --disablerepo='rpmfusion*' install gtk4-devel
 
