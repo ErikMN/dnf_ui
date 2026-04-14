@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DNF UI
+Comment=Browse packages and apply DNF transactions
+Exec=dnf_ui
+Icon=com.fedora.dnfui
+Terminal=false
+StartupNotify=true
+Categories=Settings;PackageManager;GTK;
+Keywords=dnf;packages;rpm;fedora;updates;

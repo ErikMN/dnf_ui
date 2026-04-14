@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.fedora.dnfui</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>DNF UI</name>
+  <summary>Graphical package manager frontend for Fedora</summary>
+  <developer id="com.fedora">
+    <name>ErikMN</name>
+  </developer>
+  <url type="homepage">https://github.com/ErikMN/dnf_ui</url>
+  <launchable type="desktop-id">com.fedora.dnfui.desktop</launchable>
+  <description>
+    <p>
+      DNF UI is a GTK frontend for Fedora package management built on libdnf5.
+      It focuses on fast package browsing, clear transaction review, and a
+      dependable native desktop workflow.
+    </p>
+    <p>
+      Package changes are applied through a small privileged transaction service
+      with Polkit authorization, while the main graphical application continues
+      to run as the regular desktop user.
+    </p>
+  </description>
+  <provides>
+    <binary>dnf_ui</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>PackageManager</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>
