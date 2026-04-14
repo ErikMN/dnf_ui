@@ -3,6 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DEFAULT_BUILD_ROOT="$PROJECT_ROOT/build"
 
 if [ "${FINAL:-}" = "y" ]; then
   BUILD_NAME="final"
@@ -28,11 +29,30 @@ else
   DEBUG_TRACE_BUILD="false"
 fi
 
-BUILD_ROOT="${DNF_UI_MESON_BUILD_ROOT:-$PROJECT_ROOT/build}"
+BUILD_ROOT="${DNF_UI_MESON_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
 BUILD_DIR="$BUILD_ROOT/$BUILD_NAME"
 APP_BIN="$PROJECT_ROOT/dnf_ui"
 SERVICE_BIN="$PROJECT_ROOT/dnf_ui_transaction_service"
 TEST_BIN="$PROJECT_ROOT/dnf_ui_tests"
+
+# Keep repo-root convenience symlinks for the default native build tree, but
+# avoid rewriting the workspace when callers intentionally build elsewhere
+# (for example Docker builds under /tmp).
+LINK_ROOT_SYMLINKS="${DNF_UI_LINK_ROOT_SYMLINKS:-auto}"
+case "$LINK_ROOT_SYMLINKS" in
+auto)
+  if [ "$BUILD_ROOT" = "$DEFAULT_BUILD_ROOT" ]; then
+    LINK_ROOT_SYMLINKS="yes"
+  else
+    LINK_ROOT_SYMLINKS="no"
+  fi
+  ;;
+yes | no) ;;
+*)
+  echo "*** Set DNF_UI_LINK_ROOT_SYMLINKS to yes, no, or auto ***" >&2
+  exit 1
+  ;;
+esac
 
 build_tests="false"
 target_names=()
@@ -101,14 +121,14 @@ fi
 
 meson compile -C "$BUILD_DIR" "${target_names[@]}"
 
-if [ "$link_app" = "yes" ]; then
+if [ "$LINK_ROOT_SYMLINKS" = "yes" ] && [ "$link_app" = "yes" ]; then
   ln -sfn "$BUILD_DIR/src/dnf_ui" "$APP_BIN"
 fi
 
-if [ "$link_service" = "yes" ]; then
+if [ "$LINK_ROOT_SYMLINKS" = "yes" ] && [ "$link_service" = "yes" ]; then
   ln -sfn "$BUILD_DIR/src/service/dnf_ui_transaction_service" "$SERVICE_BIN"
 fi
 
-if [ "$link_tests" = "yes" ]; then
+if [ "$LINK_ROOT_SYMLINKS" = "yes" ] && [ "$link_tests" = "yes" ]; then
   ln -sfn "$BUILD_DIR/test/dnf_ui_tests" "$TEST_BIN"
 fi
