@@ -80,12 +80,14 @@ TEST_CASE("Transaction preview reports a friendly resolve error for an impossibl
   std::string error;
   std::vector<std::string> progress_lines;
 
+  // clang-format off
   bool ok = dnf_backend_preview_transaction({"___definitely_not_a_real_package_246810___"},
                                             {},
                                             {},
                                             preview,
                                             error,
                                             [&](const std::string &line) { progress_lines.push_back(line); });
+  // clang-format on
 
   REQUIRE_FALSE(ok);
   REQUIRE(error.find("Unable to resolve transaction.") != std::string::npos);
@@ -108,12 +110,14 @@ TEST_CASE("Transaction preview resolves a reinstall request for an installed pac
   std::string error;
   std::vector<std::string> progress_lines;
 
+  // clang-format off
   bool ok = dnf_backend_preview_transaction({},
                                             {},
                                             {installed_row.nevra},
                                             preview,
                                             error,
                                             [&](const std::string &line) { progress_lines.push_back(line); });
+  // clang-format on
 
   INFO(error);
   REQUIRE(ok);
