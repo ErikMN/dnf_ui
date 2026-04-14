@@ -4,6 +4,7 @@ dnf_ui_tests
 .history
 build/
 rpmbuild/
+*.rpm
 *.exe
 *.o
 *.d
