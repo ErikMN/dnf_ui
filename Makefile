@@ -84,6 +84,11 @@ define require_root
 	@test "$$(id -u)" -eq 0 || { echo "*** $(1) must run as root ***" >&2; exit 1; }
 endef
 
+# Keep native build output owned by the regular user:
+define require_non_root
+	@test "$$(id -u)" -ne 0 || { echo "*** $(1) must run as a normal user. Build first, then use sudo make install/serviceinstall/uninstall/serviceuninstall as needed. ***" >&2; exit 1; }
+endef
+
 # Require a built artifact before install with no rebuild:
 define require_built_file
 	@test -e "$(1)" || { echo "*** Build target missing: $(1). Build as normal user first. ***" >&2; exit 1; }
@@ -115,6 +120,7 @@ all: dnf_ui dnf_ui_transaction_service
 # Configure the active Meson build directory:
 .PHONY: meson-setup
 meson-setup:
+	$(call require_non_root,native build targets)
 	if [ -d "$(MESON_BUILD_DIR)" ]; then \
 		$(MESON) setup "$(MESON_BUILD_DIR)" --reconfigure $(MESON_SETUP_ARGS); \
 	else \
