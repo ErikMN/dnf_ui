@@ -1,3 +1,7 @@
+# -----------------------------------------------------------------------------
+# Build configuration
+# -----------------------------------------------------------------------------
+
 MESON ?= meson
 
 include utils/transaction_service_paths.conf
@@ -52,6 +56,11 @@ APP_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/src/$(APP_BIN_NAME)
 SERVICE_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/src/service/$(TRANSACTION_SERVICE_BIN_NAME)
 TEST_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/test/$(TEST_BIN_NAME)
 
+# Service-only native install:
+# - Transaction service binary
+# - Polkit policy
+# - D-Bus service and policy
+# - systemd unit
 SERVICE_INSTALL_FILES = \
 	"$(TRANSACTION_SERVICE_BIN_DEST)" \
 	"$(TRANSACTION_SERVICE_POLICY_DEST)" \
@@ -59,9 +68,16 @@ SERVICE_INSTALL_FILES = \
 	"$(TRANSACTION_SERVICE_DBUS_POLICY_DEST)" \
 	"$(TRANSACTION_SERVICE_SYSTEMD_UNIT_DEST)"
 
+# Full native install:
+# - Desktop app binary
+# - All transaction service files above
 APP_INSTALL_FILES = \
 	"$(APP_BIN_DEST)" \
 	$(SERVICE_INSTALL_FILES)
+
+# -----------------------------------------------------------------------------
+# Shared helper rules
+# -----------------------------------------------------------------------------
 
 # Require root for targets that change the live system:
 define require_root
@@ -88,7 +104,11 @@ endef
 
 .DEFAULT_GOAL := all
 
-# Build the app and transaction service:
+# -----------------------------------------------------------------------------
+# Native build and local run targets
+# -----------------------------------------------------------------------------
+
+# Build both native runtime binaries in the active Meson directory:
 .PHONY: all
 all: dnf_ui dnf_ui_transaction_service
 
@@ -100,19 +120,19 @@ $(MESON_BUILD_DIR)/build.ninja:
 		$(MESON) setup "$(MESON_BUILD_DIR)" $(MESON_SETUP_ARGS); \
 	fi
 
-# Build the app binary:
+# Build the desktop app binary and update the local convenience symlink:
 .PHONY: dnf_ui
 dnf_ui: $(MESON_BUILD_DIR)/build.ninja
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui
 	ln -sfn "$(APP_BUILD_PATH)" "$(APP_BIN_NAME)"
 
-# Build the transaction service binary:
+# Build the native transaction service binary and update the local symlink:
 .PHONY: dnf_ui_transaction_service
 dnf_ui_transaction_service: $(MESON_BUILD_DIR)/build.ninja
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_transaction_service
 	ln -sfn "$(SERVICE_BUILD_PATH)" "$(TRANSACTION_SERVICE_BIN_NAME)"
 
-# Build the backend test binary:
+# Build the backend test binary and update the local symlink:
 .PHONY: dnf_ui_tests
 dnf_ui_tests: $(MESON_BUILD_DIR)/build.ninja
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_tests
@@ -129,7 +149,14 @@ test: dnf_ui_tests
 	@echo "*** Running backend test suite ***"
 	@./$(TEST_BIN_NAME)
 
-# Install the app and service files from the current build:
+# -----------------------------------------------------------------------------
+# Native install targets
+# -----------------------------------------------------------------------------
+
+# Install:
+# - Full native install
+# - Installs the desktop app plus all transaction service files
+# - Can stage into DESTDIR without root
 .PHONY: install
 install:
 	@if [ -z "$$DESTDIR" ] && [ "$$(id -u)" -ne 0 ]; then \
@@ -146,7 +173,9 @@ ifeq ($(strip $(DESTDIR)),)
 	$(call refresh_transaction_service_state)
 endif
 
-# Remove the installed app and service files:
+# Uninstall:
+# - Full native uninstall
+# - Removes the desktop app plus all transaction service files
 .PHONY: uninstall
 uninstall:
 	$(call require_root,uninstall)
@@ -155,22 +184,10 @@ uninstall:
 	$(call refresh_transaction_service_state)
 	@echo "*** Removed installed DNF UI runtime files. ***"
 
-# Run the session bus preview smoke test:
-.PHONY: servicetest
-servicetest: dnf_ui_transaction_service
-	@./utils/test_transaction_service_preview.sh
-
-# Run the session bus cancel smoke test:
-.PHONY: servicecanceltest
-servicecanceltest: dnf_ui_transaction_service
-	@./utils/test_transaction_service_cancel.sh
-
-# Run the session bus apply smoke test:
-.PHONY: serviceapplytest
-serviceapplytest: dnf_ui_transaction_service
-	@./utils/test_transaction_service_apply.sh
-
-# Install the native transaction service files for development:
+# Service install:
+# - Native service-only install
+# - Installs the transaction service binary and its system integration files
+# - Does not install the desktop app binary
 .PHONY: serviceinstall
 serviceinstall:
 	$(call require_root,serviceinstall)
@@ -181,7 +198,9 @@ serviceinstall:
 	@echo "*** Installed $(TRANSACTION_SERVICE_NAME) service files for native testing. ***"
 	@echo "*** Run dnf_ui as a regular desktop user and apply a transaction to trigger the Polkit prompt. ***"
 
-# Remove the native transaction service files:
+# Service uninstall:
+# - Native service-only uninstall
+# - Removes the transaction service files but leaves the desktop app binary intact
 .PHONY: serviceuninstall
 serviceuninstall:
 	$(call require_root,serviceuninstall)
@@ -190,20 +209,48 @@ serviceuninstall:
 	$(call refresh_transaction_service_state)
 	@echo "*** Removed native transaction service files. ***"
 
-# Run the native system bus preview smoke test:
+# -----------------------------------------------------------------------------
+# Native transaction service smoke tests
+# -----------------------------------------------------------------------------
+
+# Session bus smoke test: preview flow from the locally built service binary
+.PHONY: servicetest
+servicetest: dnf_ui_transaction_service
+	@./utils/test_transaction_service_preview.sh
+
+# Session bus smoke test: cancel flow from the locally built service binary
+.PHONY: servicecanceltest
+servicecanceltest: dnf_ui_transaction_service
+	@./utils/test_transaction_service_cancel.sh
+
+# Session bus smoke test: apply flow from the locally built service binary
+.PHONY: serviceapplytest
+serviceapplytest: dnf_ui_transaction_service
+	@./utils/test_transaction_service_apply.sh
+
+# System bus smoke test against the natively installed service
 .PHONY: servicesystemtest
 servicesystemtest:
 	@./utils/test_transaction_service_system_bus.sh
 
-# Run the native system bus apply smoke test:
+# System bus smoke test: apply flow against the natively installed service
 .PHONY: servicesystemapplytest
 servicesystemapplytest:
 	@SERVICE_SYSTEM_APPLY=yes ./utils/test_transaction_service_system_bus.sh
 
-# Run the native system bus disconnect smoke test:
+# System bus smoke test: disconnect flow against the natively installed service
 .PHONY: servicesystemdisconnecttest
 servicesystemdisconnecttest:
 	@SERVICE_SYSTEM_DISCONNECT=yes ./utils/test_transaction_service_system_bus.sh
+
+# -----------------------------------------------------------------------------
+# Docker targets
+# -----------------------------------------------------------------------------
+
+# Build the Docker development image:
+.PHONY: dockersetup
+dockersetup:
+	@./docker/docker_setup.sh
 
 # Run the app in Docker:
 .PHONY: dockerrun
@@ -245,12 +292,11 @@ dockerservicesystemapplytest:
 dockerservicesystemdisconnecttest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_disconnect_test.sh
 
-# Build the Docker development image:
-.PHONY: dockersetup
-dockersetup:
-	@./docker/docker_setup.sh
+# -----------------------------------------------------------------------------
+# Developer utility targets
+# -----------------------------------------------------------------------------
 
-# Run valgrind on the app binary:
+# FIXME: Run valgrind on the app binary:
 .PHONY: valgrind
 valgrind: dnf_ui
 	@valgrind \
@@ -261,7 +307,7 @@ valgrind: dnf_ui
 		--track-fds=yes \
 		./$(APP_BIN_NAME)
 
-# Run cppcheck on the source tree:
+# FIXME: Run cppcheck on the source tree:
 .PHONY: cppcheck
 cppcheck:
 	@echo "*** Static code analysis"
@@ -271,7 +317,7 @@ cppcheck:
 		--suppress=unusedStructMember \
 		--suppress=knownConditionTrueFalse
 
-# Run clang format through the Docker helper:
+# Run clang format in Docker:
 .PHONY: indent
 indent:
 	@echo "*** Formatting code"
