@@ -300,6 +300,20 @@ dockerservicesystemdisconnecttest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_system_bus_disconnect_test.sh
 
 # -----------------------------------------------------------------------------
+# RPM packaging targets
+# -----------------------------------------------------------------------------
+
+# Build the source tarball and source RPM in ./rpmbuild:
+.PHONY: srpm
+srpm:
+	@./packaging/build_srpm.sh
+
+# Build binary and source RPMs in ./rpmbuild:
+.PHONY: rpm
+rpm:
+	@./packaging/build_rpm.sh
+
+# -----------------------------------------------------------------------------
 # Developer utility targets
 # -----------------------------------------------------------------------------
 

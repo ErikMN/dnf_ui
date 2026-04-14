@@ -7,11 +7,11 @@ License:        MIT
 URL:            https://github.com/ErikMN/dnf_ui
 Source0:        %{name}-%{version}.tar.gz
 
+BuildRequires:  appstream
 BuildRequires:  desktop-file-utils
 BuildRequires:  gcc-c++
 BuildRequires:  meson
 BuildRequires:  ninja-build
-BuildRequires:  pkgconfig(appstream)
 BuildRequires:  pkgconfig(catch2-with-main)
 BuildRequires:  pkgconfig(gio-2.0)
 BuildRequires:  pkgconfig(gtk4)

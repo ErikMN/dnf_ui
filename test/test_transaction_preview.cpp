@@ -16,21 +16,6 @@
 namespace {
 
 // -----------------------------------------------------------------------------
-// Find one installed package row by package name
-// -----------------------------------------------------------------------------
-const PackageRow *
-find_package_row_by_name(const std::vector<PackageRow> &rows, const std::string &name)
-{
-  for (const auto &row : rows) {
-    if (row.name == name) {
-      return &row;
-    }
-  }
-
-  return nullptr;
-}
-
-// -----------------------------------------------------------------------------
 // Return true when one progress line contains the expected text
 // -----------------------------------------------------------------------------
 bool

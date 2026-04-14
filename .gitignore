@@ -3,6 +3,7 @@ dnf_ui_transaction_service
 dnf_ui_tests
 .history
 build/
+rpmbuild/
 *.exe
 *.o
 *.d
