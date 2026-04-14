@@ -138,13 +138,13 @@ install:
 	fi
 	$(call require_built_file,$(APP_BUILD_PATH))
 	$(call require_built_file,$(SERVICE_BUILD_PATH))
-	@if [ -z "$$DESTDIR" ]; then \
-		$(call stop_transaction_service) \
-	fi
+ifeq ($(strip $(DESTDIR)),)
+	$(call stop_transaction_service)
+endif
 	$(MESON) install -C "$(MESON_BUILD_DIR)" --no-rebuild --only-changed
-	@if [ -z "$$DESTDIR" ]; then \
-		$(call refresh_transaction_service_state) \
-	fi
+ifeq ($(strip $(DESTDIR)),)
+	$(call refresh_transaction_service_state)
+endif
 
 # Remove the installed app and service files:
 .PHONY: uninstall
