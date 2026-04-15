@@ -313,6 +313,16 @@ srpm:
 rpm:
 	@./packaging/build_rpm.sh
 
+# Build the source RPM in Docker:
+.PHONY: dockersrpm
+dockersrpm:
+	@./docker/docker_rpm_build.sh srpm
+
+# Build binary and source RPMs in Docker:
+.PHONY: dockerrpm
+dockerrpm:
+	@./docker/docker_rpm_build.sh rpm
+
 # -----------------------------------------------------------------------------
 # Developer utility targets
 # -----------------------------------------------------------------------------

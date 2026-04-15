@@ -2,7 +2,9 @@ FROM fedora:latest
 
 # Install dependencies:
 RUN dnf install -y \
+    appstream \
     catch-devel \
+    desktop-file-utils \
     gtk4-devel \
     libdnf5-devel \
     polkit-devel \
@@ -14,9 +16,11 @@ RUN dnf install -y \
     pkgconf \
     cmake \
     git \
+    rpm-build \
     mesa-libEGL \
     mesa-libGL \
     mesa-libGLES \
+    systemd-rpm-macros \
     dbus-daemon \
     dbus-glib \
     && dnf clean all

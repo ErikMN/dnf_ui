@@ -40,6 +40,10 @@ sudo make serviceuninstall
 Docker C++ tests:
 make dockertest
 
+Docker RPM builds:
+make dockersrpm
+make dockerrpm
+
 Docker transaction service tests:
 make dockerservicetest
 make dockerservicecanceltest
