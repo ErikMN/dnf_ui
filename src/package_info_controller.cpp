@@ -107,16 +107,15 @@ package_info_clear_selected_package_state(SearchWidgets *widgets)
 static void
 update_selected_package_actions(SearchWidgets *widgets, const PackageRow &selected)
 {
-  // Enable install for new packages and upgrade candidates, while
-  // remove and reinstall stay reserved for the exact installed row.
-  PackageInstallState install_state = dnf_backend_get_package_install_state(selected);
+  // Install stays available for repo candidates. Remove remains tied to the
+  // exact installed row, and reinstall is only enabled when the same NEVRA is
+  // still available from a repository.
+  bool installed_exact = dnf_backend_is_package_installed_exact(selected);
 
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button),
-                           install_state != PackageInstallState::INSTALLED);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button),
-                           install_state == PackageInstallState::INSTALLED);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), !installed_exact);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button), installed_exact);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
-                           install_state == PackageInstallState::INSTALLED);
+                           installed_exact && dnf_backend_can_reinstall_package(selected));
   ui_helpers_update_action_button_labels(widgets, selected.nevra);
 }
 

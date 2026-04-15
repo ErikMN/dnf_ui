@@ -16,8 +16,23 @@
 // -----------------------------------------------------------------------------
 // Structured package metadata used by the GTK presentation layer.
 // Keeps the full NEVRA for internal selection and transactions while exposing
-// friendlier fields for list and column-based views.
+// friendlier fields for list and column-based views. The repo candidate relation
+// describes how the installed row compares to the newest visible repo-backed
+// candidate for the same name+arch tuple:
+//   UNKNOWN: repo provenance was not checked or could not be resolved
+//   NONE: no visible repo candidate exists for that name+arch tuple
+//   SAME: installed and visible repo candidate resolve to the same EVR
+//   NEWER: the visible repo candidate is newer than the installed row
+//   OLDER: the installed row is newer than the visible repo candidate
 // -----------------------------------------------------------------------------
+enum class PackageRepoCandidateRelation {
+  UNKNOWN,
+  NONE,
+  SAME,
+  NEWER,
+  OLDER,
+};
+
 struct PackageRow {
   std::string nevra;
   std::string name;
@@ -27,6 +42,7 @@ struct PackageRow {
   std::string arch;
   std::string repo;
   std::string summary;
+  PackageRepoCandidateRelation repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN;
 
   const std::string &get_epoch() const
   {
@@ -59,10 +75,14 @@ struct PackageRow {
 
 // Backend-owned install state so the UI can reason about package actions
 // without depending on libdnf5 headers or EVR comparison details.
+// These values are presentation-oriented and may depend on repo provenance
+// being known for the visible row.
 enum class PackageInstallState {
   AVAILABLE,
   UPGRADEABLE,
   INSTALLED,
+  LOCAL_ONLY,
+  INSTALLED_NEWER_THAN_REPO,
 };
 
 // Resolved transaction preview used by the confirmation dialog before apply.
@@ -82,15 +102,38 @@ extern std::atomic<bool> g_exact_match;
 extern std::mutex g_installed_mutex;
 extern std::set<std::string> g_installed_nevras;
 
+// Refresh the installed-package snapshot used by the UI for exact-installed
+// checks and upgrade-state classification.
 void dnf_backend_refresh_installed_nevras();
+
+// Classify one visible package row for UI status badges and action gating.
 PackageInstallState dnf_backend_get_package_install_state(const PackageRow &row);
 
+// Return true only when this exact NEVRA is installed on the current system.
+bool dnf_backend_is_package_installed_exact(const PackageRow &row);
+
+// Return true when the exact installed NEVRA can be reinstalled from currently
+// available package sources. Local-only packages therefore return false.
+bool dnf_backend_can_reinstall_package(const PackageRow &row);
+
 // Structured package row queries used by the main package list presentation.
-// Callers that do not need cancellation can pass nullptr as the cancellable.
+// Browse and search results use a merged package view: the newest repo candidate
+// for each name+arch pair plus any installed-only local RPMs that are missing
+// from enabled repositories. Callers that do not need cancellation can pass
+// nullptr as the cancellable.
+// Query all installed packages. This path remains local-first and should still
+// work when repository metadata is unavailable; repo provenance is annotated
+// only as a best-effort extra when possible.
 std::vector<PackageRow> dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable);
-std::vector<PackageRow> dnf_backend_get_available_package_rows_interruptible(GCancellable *cancellable);
-std::vector<PackageRow> dnf_backend_search_available_package_rows_interruptible(const std::string &pattern,
-                                                                                GCancellable *cancellable);
+
+// Query the merged browse view shown by "List Packages".
+std::vector<PackageRow> dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable);
+
+// Search the merged browse view using the current search flags.
+std::vector<PackageRow> dnf_backend_search_package_rows_interruptible(const std::string &pattern,
+                                                                      GCancellable *cancellable);
+
+// Exact NEVRA helpers used by details views and pending-action navigation.
 std::vector<PackageRow> dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra);
 std::vector<PackageRow> dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra);
 std::string dnf_backend_get_package_info(const std::string &pkg_nevra);
@@ -109,6 +152,12 @@ bool dnf_backend_apply_transaction(const std::vector<std::string> &install_nevra
                                    const std::vector<std::string> &reinstall_nevras,
                                    std::string &error_out,
                                    const TransactionProgressCallback &progress_cb = {});
+
+#ifdef DNFUI_BUILD_TESTS
+// Test-only hook: force the best-effort repo annotation path to fail and return
+// whether all rows kept UNKNOWN provenance afterwards.
+bool dnf_backend_testonly_annotation_fallback_leaves_rows_unknown(std::vector<PackageRow> &rows);
+#endif
 
 // -----------------------------------------------------------------------------
 // EOF

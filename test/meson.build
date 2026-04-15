@@ -17,6 +17,7 @@ dnfui_tests = executable(
     gio_dep,
     catch2_dep,
   ],
+  cpp_args: ['-DDNFUI_BUILD_TESTS=1'],
 )
 
 test('dnfui-tests', dnfui_tests)

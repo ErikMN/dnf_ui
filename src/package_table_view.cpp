@@ -50,6 +50,10 @@ install_state_text(PackageInstallState state)
   switch (state) {
   case PackageInstallState::INSTALLED:
     return "Installed";
+  case PackageInstallState::LOCAL_ONLY:
+    return "Installed (local only)";
+  case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
+    return "Installed (newer than repo)";
   case PackageInstallState::UPGRADEABLE:
     return "Update available";
   case PackageInstallState::AVAILABLE:
@@ -64,8 +68,10 @@ install_state_rank(PackageInstallState state)
   switch (state) {
   case PackageInstallState::AVAILABLE:
     return 0;
+  case PackageInstallState::LOCAL_ONLY:
   case PackageInstallState::INSTALLED:
     return 1;
+  case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
   case PackageInstallState::UPGRADEABLE:
     return 2;
   default:
@@ -125,7 +131,9 @@ clear_status_css(GtkWidget *label)
 {
   gtk_widget_remove_css_class(label, "package-status-available");
   gtk_widget_remove_css_class(label, "package-status-installed");
+  gtk_widget_remove_css_class(label, "package-status-local-only");
   gtk_widget_remove_css_class(label, "package-status-upgradeable");
+  gtk_widget_remove_css_class(label, "package-status-installed-newer");
   gtk_widget_remove_css_class(label, "package-status-pending-install");
   gtk_widget_remove_css_class(label, "package-status-pending-reinstall");
   gtk_widget_remove_css_class(label, "package-status-pending-remove");
@@ -302,8 +310,12 @@ update_status_label(GtkWidget *label, SearchWidgets *widgets, const PackageRow &
     gtk_widget_add_css_class(label, pending_class);
   } else {
     PackageInstallState state = dnf_backend_get_package_install_state(row);
-    if (state == PackageInstallState::INSTALLED) {
+    if (state == PackageInstallState::LOCAL_ONLY) {
+      gtk_widget_add_css_class(label, "package-status-local-only");
+    } else if (state == PackageInstallState::INSTALLED) {
       gtk_widget_add_css_class(label, "package-status-installed");
+    } else if (state == PackageInstallState::INSTALLED_NEWER_THAN_REPO) {
+      gtk_widget_add_css_class(label, "package-status-installed-newer");
     } else if (state == PackageInstallState::UPGRADEABLE) {
       gtk_widget_add_css_class(label, "package-status-upgradeable");
     } else {
@@ -453,7 +465,8 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   gtk_popover_set_child(GTK_POPOVER(popover), box);
 
-  PackageInstallState install_state = dnf_backend_get_package_install_state(row);
+  bool installed_exact = dnf_backend_is_package_installed_exact(row);
+  bool can_reinstall = installed_exact && dnf_backend_can_reinstall_package(row);
 
   PendingAction::Type pending_type;
   bool has_pending = get_context_menu_pending_action(widgets, row.nevra, pending_type);
@@ -468,7 +481,7 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
 
   append_context_menu_action(GTK_BOX(box),
                              install_label,
-                             install_state != PackageInstallState::INSTALLED,
+                             !installed_exact,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
@@ -479,7 +492,7 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
 
   append_context_menu_action(GTK_BOX(box),
                              remove_label,
-                             install_state == PackageInstallState::INSTALLED,
+                             installed_exact,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
@@ -490,7 +503,7 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
 
   append_context_menu_action(GTK_BOX(box),
                              reinstall_label,
-                             install_state == PackageInstallState::INSTALLED,
+                             can_reinstall,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
@@ -831,11 +844,11 @@ package_table_fill_package_view(SearchWidgets *widgets, const std::vector<Packag
                        return;
                      }
 
-                     PackageInstallState install_state = dnf_backend_get_package_install_state(*row);
+                     bool installed_exact = dnf_backend_is_package_installed_exact(*row);
                      gtk_single_selection_set_selected(sel, position);
                      g_object_unref(obj);
 
-                     if (install_state == PackageInstallState::INSTALLED) {
+                     if (installed_exact) {
                        pending_transaction_on_remove_button_clicked(nullptr, widgets);
                      } else {
                        pending_transaction_on_install_button_clicked(nullptr, widgets);

@@ -244,7 +244,7 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(vbox_root), hbox_search);
 
   GtkWidget *entry = gtk_entry_new();
-  gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Search available packages...");
+  gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Search packages...");
   gtk_widget_set_hexpand(entry, TRUE);
   gtk_box_append(GTK_BOX(hbox_search), entry);
   ui->entry = entry;
@@ -277,7 +277,7 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_buttons), list_button);
   ui->list_button = list_button;
 
-  GtkWidget *list_available_button = gtk_button_new_with_label("List Available");
+  GtkWidget *list_available_button = gtk_button_new_with_label("List Packages");
   gtk_box_append(GTK_BOX(hbox_buttons), list_available_button);
   ui->list_available_button = list_available_button;
 
@@ -518,10 +518,20 @@ setup_css(SearchWidgets *widgets)
                                     "  border-color: #668f58; "
                                     "  color: #173915; "
                                     "} "
+                                    ".package-status-local-only { "
+                                    "  background-color: #d7ebea; "
+                                    "  border-color: #4f8c86; "
+                                    "  color: #0e3a39; "
+                                    "} "
                                     ".package-status-upgradeable { "
                                     "  background-color: #f0ddb0; "
                                     "  border-color: #9f7a24; "
                                     "  color: #4a3200; "
+                                    "} "
+                                    ".package-status-installed-newer { "
+                                    "  background-color: #f2d5cb; "
+                                    "  border-color: #b0674c; "
+                                    "  color: #4f1c0c; "
                                     "} "
                                     ".package-status-pending-install { "
                                     "  background-color: #2b64b5; "

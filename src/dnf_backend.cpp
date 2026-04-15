@@ -53,27 +53,12 @@ remember_installed_row(std::map<std::string, PackageRow> &rows_by_name_arch, con
   }
 }
 
-// Read the cached installed-package snapshot and classify one visible row.
-static PackageInstallState
-package_install_state_from_cache(const PackageRow &row)
-{
-  auto it = g_installed_rows_by_name_arch.find(row.name_arch_key());
-  if (it == g_installed_rows_by_name_arch.end()) {
-    return PackageInstallState::AVAILABLE;
-  }
-
-  if (libdnf5::rpm::evrcmp(row, it->second) > 0) {
-    return PackageInstallState::UPGRADEABLE;
-  }
-
-  return PackageInstallState::AVAILABLE;
-}
-
 // -----------------------------------------------------------------------------
 // Helper: Convert a libdnf5 package to the structured UI row model
 // -----------------------------------------------------------------------------
 static PackageRow
-make_package_row(const libdnf5::rpm::Package &pkg)
+make_package_row(const libdnf5::rpm::Package &pkg,
+                 PackageRepoCandidateRelation repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN)
 {
   PackageRow row;
   row.nevra = pkg.get_nevra();
@@ -84,6 +69,7 @@ make_package_row(const libdnf5::rpm::Package &pkg)
   row.arch = pkg.get_arch();
   row.repo = pkg.get_repo_id();
   row.summary = pkg.get_summary();
+  row.repo_candidate_relation = repo_candidate_relation;
 
   if (row.summary.empty()) {
     row.summary = "(no summary)";
@@ -109,65 +95,221 @@ package_query_cancelled(GCancellable *cancellable)
   return cancellable && g_cancellable_is_cancelled(cancellable);
 }
 
-// Search available packages and stop early when the task cancellable is set.
-std::vector<PackageRow>
-dnf_backend_search_available_package_rows_interruptible(const std::string &pattern, GCancellable *cancellable)
-{
-  std::vector<PackageRow> packages;
+struct InstalledQueryResult {
+  std::vector<PackageRow> rows;
+  std::set<std::string> nevras;
+  std::map<std::string, PackageRow> rows_by_name_arch;
+};
 
-  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+using AvailableRowsProvider = std::function<std::map<std::string, PackageRow>(GCancellable *)>;
+
+// Fold UTF-8 package search text before comparing it against libdnf5 metadata
+// fields. This keeps manual name/description matching aligned with GTK's
+// case-insensitive text handling for non-ASCII package summaries.
+static std::string
+utf8_casefold_copy(const std::string &text)
+{
+  char *folded = g_utf8_casefold(text.c_str(), -1);
+  std::string result = folded ? folded : "";
+  g_free(folded);
+  return result;
+}
+
+// Return true when one package matches the active search term using the same
+// name/description flag semantics as the main UI search controls.
+static bool
+package_matches_search(const libdnf5::rpm::Package &pkg, const std::string &pattern_lower)
+{
+  std::string name = utf8_casefold_copy(pkg.get_name());
+  if (g_exact_match.load()) {
+    return name == pattern_lower;
+  }
+
+  if (name.find(pattern_lower) != std::string::npos) {
+    return true;
+  }
+
+  if (!g_search_in_description.load()) {
+    return false;
+  }
+
+  std::string description = utf8_casefold_copy(pkg.get_description());
+  return description.find(pattern_lower) != std::string::npos;
+}
+
+// Collect the newest visible repo candidate for each name+arch tuple.
+// When a search term is provided, apply the same name/description filtering as
+// the main search flow before deduplicating the results.
+static std::map<std::string, PackageRow>
+collect_available_rows_by_name_arch(libdnf5::Base &base,
+                                    GCancellable *cancellable,
+                                    const std::string *pattern = nullptr)
+{
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
+  query.filter_latest_evr();
 
-  if (g_search_in_description.load()) {
-    // Keep only the newest available candidate for each package stream so
-    // search results match the terminal more closely and avoid older repo copies.
-    query.filter_latest_evr();
-
-    // Manually match pattern in description (case-insensitive)
-    std::string pattern_lower = pattern;
-    std::transform(pattern_lower.begin(), pattern_lower.end(), pattern_lower.begin(), ::tolower);
-
-    for (auto pkg : query) {
-      if (package_query_cancelled(cancellable)) {
-        return packages;
-      }
-
-      std::string desc = pkg.get_description();
-      std::string name = pkg.get_name();
-
-      std::transform(desc.begin(), desc.end(), desc.begin(), ::tolower);
-      std::transform(name.begin(), name.end(), name.begin(), ::tolower);
-
-      if (g_exact_match.load()) {
-        if (name == pattern_lower) {
-          packages.push_back(make_package_row(pkg));
-        }
-      } else {
-        if (desc.find(pattern_lower) != std::string::npos || name.find(pattern_lower) != std::string::npos) {
-          packages.push_back(make_package_row(pkg));
-        }
-      }
-    }
-  } else {
-    // Efficient name-based filtering using libdnf5 QueryCmp
+  if (pattern && !g_search_in_description.load()) {
     if (g_exact_match.load()) {
-      query.filter_name(pattern, libdnf5::sack::QueryCmp::EQ);
+      query.filter_name(*pattern, libdnf5::sack::QueryCmp::EQ);
     } else {
-      query.filter_name(pattern, libdnf5::sack::QueryCmp::CONTAINS);
-    }
-    query.filter_latest_evr();
-
-    for (auto pkg : query) {
-      if (package_query_cancelled(cancellable)) {
-        return packages;
-      }
-
-      packages.push_back(make_package_row(pkg));
+      query.filter_name(*pattern, libdnf5::sack::QueryCmp::CONTAINS);
     }
   }
 
-  return packages;
+  const std::string pattern_lower = pattern ? utf8_casefold_copy(*pattern) : "";
+  std::map<std::string, PackageRow> rows_by_name_arch;
+
+  for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      rows_by_name_arch.clear();
+      return rows_by_name_arch;
+    }
+
+    if (pattern && g_search_in_description.load() && !package_matches_search(pkg, pattern_lower)) {
+      continue;
+    }
+
+    PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::SAME);
+    rows_by_name_arch[row.name_arch_key()] = row;
+  }
+
+  return rows_by_name_arch;
+}
+
+// Collect installed package rows and the corresponding exact-NEVRA/name+arch
+// caches in one pass. When a search term is provided, filter the installed list
+// with the same search semantics used for repo-backed rows.
+static InstalledQueryResult
+collect_installed_rows(libdnf5::Base &base, GCancellable *cancellable, const std::string *pattern = nullptr)
+{
+  InstalledQueryResult result;
+  const std::string pattern_lower = pattern ? utf8_casefold_copy(*pattern) : "";
+
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_installed();
+
+  for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      result.rows.clear();
+      result.nevras.clear();
+      result.rows_by_name_arch.clear();
+      return result;
+    }
+
+    if (pattern && !package_matches_search(pkg, pattern_lower)) {
+      continue;
+    }
+
+    PackageRow row = make_package_row(pkg);
+    result.nevras.insert(row.nevra);
+    remember_installed_row(result.rows_by_name_arch, row);
+    result.rows.push_back(row);
+  }
+
+  return result;
+}
+
+// Compare one installed row against the newest visible repo candidate for the
+// same name+arch tuple and annotate the row with the resolved relationship.
+static void
+annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
+                                           const std::map<std::string, PackageRow> &available_rows)
+{
+  auto it = available_rows.find(installed_row.name_arch_key());
+  if (it == available_rows.end()) {
+    installed_row.repo_candidate_relation = PackageRepoCandidateRelation::NONE;
+    return;
+  }
+
+  int cmp = libdnf5::rpm::evrcmp(it->second, installed_row);
+  if (cmp > 0) {
+    installed_row.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  } else if (cmp < 0) {
+    installed_row.repo_candidate_relation = PackageRepoCandidateRelation::OLDER;
+  } else {
+    installed_row.repo_candidate_relation = PackageRepoCandidateRelation::SAME;
+  }
+}
+
+// Best-effort repo annotation for installed rows. Installed queries should keep
+// working from the local rpmdb even when repository metadata is unavailable, so
+// failures here only leave repo provenance as UNKNOWN.
+static void
+annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow> &installed_rows,
+                                                         GCancellable *cancellable,
+                                                         const AvailableRowsProvider &available_rows_provider)
+{
+  if (installed_rows.empty()) {
+    return;
+  }
+
+  try {
+    auto available_rows = available_rows_provider(cancellable);
+    if (package_query_cancelled(cancellable)) {
+      return;
+    }
+
+    for (auto &row : installed_rows) {
+      annotate_installed_row_with_repo_candidate(row, available_rows);
+    }
+  } catch (const std::exception &e) {
+    DNFUI_TRACE("Installed row repo annotation skipped: %s", e.what());
+  }
+}
+
+// Build the merged package view used by search and browse: start with the
+// visible repo-backed candidates, then add installed-only rows for name+arch
+// tuples that are missing from enabled repositories. If an installed package is
+// newer than the repo candidate, keep the installed row so the UI can surface
+// that state directly.
+static std::vector<PackageRow>
+visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
+                       std::map<std::string, PackageRow> installed_rows)
+{
+  for (auto &[key, installed_row] : installed_rows) {
+    annotate_installed_row_with_repo_candidate(installed_row, available_rows);
+
+    auto visible_it = available_rows.find(key);
+    if (visible_it == available_rows.end()) {
+      available_rows.emplace(key, installed_row);
+      continue;
+    }
+
+    if (libdnf5::rpm::evrcmp(installed_row, visible_it->second) > 0) {
+      visible_it->second = installed_row;
+    }
+  }
+
+  std::vector<PackageRow> rows;
+  rows.reserve(available_rows.size());
+  for (auto &[key, row] : available_rows) {
+    rows.push_back(row);
+  }
+  return rows;
+}
+
+// -----------------------------------------------------------------------------
+// Search merged repo and installed-only package rows and stop early when the
+// task cancellable is set.
+// Returns the same merged view model as browse/list-packages, but filtered
+// through the active search term and search flags.
+// -----------------------------------------------------------------------------
+std::vector<PackageRow>
+dnf_backend_search_package_rows_interruptible(const std::string &pattern, GCancellable *cancellable)
+{
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+  auto available_rows = collect_available_rows_by_name_arch(base, cancellable, &pattern);
+  if (package_query_cancelled(cancellable)) {
+    return {};
+  }
+
+  InstalledQueryResult installed = collect_installed_rows(base, cancellable, &pattern);
+  if (package_query_cancelled(cancellable)) {
+    return {};
+  }
+
+  return visible_rows_from_maps(std::move(available_rows), std::move(installed.rows_by_name_arch));
 }
 
 // -----------------------------------------------------------------------------
@@ -188,37 +330,83 @@ dnf_backend_search_available_package_rows_interruptible(const std::string &patte
 void
 dnf_backend_refresh_installed_nevras()
 {
-  std::set<std::string> installed_nevras;
-  std::map<std::string, PackageRow> installed_rows_by_name_arch;
-
+  InstalledQueryResult installed;
   {
     auto [base, guard, generation] = BaseManager::instance().acquire_read();
-    libdnf5::rpm::PackageQuery query(base);
-    query.filter_installed();
-
-    for (auto pkg : query) {
-      PackageRow row = make_package_row(pkg);
-      installed_nevras.insert(row.nevra);
-      remember_installed_row(installed_rows_by_name_arch, row);
-    }
+    installed = collect_installed_rows(base, nullptr);
   } // Base read lock released before acquiring g_installed_mutex
 
-  // Publish the refreshed installed-package cache now that the Base lock is free.
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  g_installed_nevras.swap(installed_nevras);
-  g_installed_rows_by_name_arch.swap(installed_rows_by_name_arch);
+  g_installed_nevras.swap(installed.nevras);
+  g_installed_rows_by_name_arch.swap(installed.rows_by_name_arch);
 }
 
-// Return whether one package row is available, upgradeable, or installed exactly.
+// -----------------------------------------------------------------------------
+// Return true only when the queried row exactly matches an installed NEVRA in
+// the cached installed snapshot.
+// -----------------------------------------------------------------------------
+bool
+dnf_backend_is_package_installed_exact(const PackageRow &row)
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  return g_installed_nevras.count(row.nevra) > 0;
+}
+
+// -----------------------------------------------------------------------------
+// Return whether one package row is available, upgradeable, installed exactly,
+// installed from a local-only RPM, or newer than the repo candidate.
+// Exact-installed rows prefer the explicit repo provenance stored on the row.
+// Non-exact rows fall back to the installed name+arch cache so available rows
+// can still show upgrade-state information without requiring duplicate rows.
+// -----------------------------------------------------------------------------
 PackageInstallState
 dnf_backend_get_package_install_state(const PackageRow &row)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   if (g_installed_nevras.count(row.nevra) > 0) {
-    return PackageInstallState::INSTALLED;
+    switch (row.repo_candidate_relation) {
+    case PackageRepoCandidateRelation::UNKNOWN:
+    case PackageRepoCandidateRelation::SAME:
+      return PackageInstallState::INSTALLED;
+    case PackageRepoCandidateRelation::NONE:
+      return PackageInstallState::LOCAL_ONLY;
+    case PackageRepoCandidateRelation::NEWER:
+      return PackageInstallState::UPGRADEABLE;
+    case PackageRepoCandidateRelation::OLDER:
+      return PackageInstallState::INSTALLED_NEWER_THAN_REPO;
+    default:
+      return PackageInstallState::INSTALLED;
+    }
   }
 
-  return package_install_state_from_cache(row);
+  auto it = g_installed_rows_by_name_arch.find(row.name_arch_key());
+  if (it == g_installed_rows_by_name_arch.end()) {
+    return PackageInstallState::AVAILABLE;
+  }
+
+  if (libdnf5::rpm::evrcmp(row, it->second) > 0) {
+    return PackageInstallState::UPGRADEABLE;
+  }
+
+  return PackageInstallState::INSTALLED_NEWER_THAN_REPO;
+}
+
+// -----------------------------------------------------------------------------
+// Return true only when the exact installed NEVRA is also available from the
+// current package sources and can therefore be reinstalled through libdnf5.
+// -----------------------------------------------------------------------------
+bool
+dnf_backend_can_reinstall_package(const PackageRow &row)
+{
+  if (!dnf_backend_is_package_installed_exact(row)) {
+    return false;
+  }
+
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_nevra(row.nevra);
+  query.filter_available();
+  return !query.empty();
 }
 
 // -----------------------------------------------------------------------------
@@ -234,65 +422,59 @@ dnf_backend_get_package_install_state(const PackageRow &row)
 std::vector<PackageRow>
 dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 {
-  std::vector<PackageRow> packages;
-  std::set<std::string> installed_nevras;
-  std::map<std::string, PackageRow> installed_rows_by_name_arch;
-
-  auto [base, guard, generation] = BaseManager::instance().acquire_read();
-  libdnf5::rpm::PackageQuery query(base);
-  query.filter_installed();
-
-  for (auto pkg : query) {
+  InstalledQueryResult installed;
+  {
+    auto [base, guard, generation] = BaseManager::instance().acquire_read();
+    installed = collect_installed_rows(base, cancellable);
     if (package_query_cancelled(cancellable)) {
-      return packages;
+      return {};
     }
 
-    PackageRow row = make_package_row(pkg);
-    installed_nevras.insert(row.nevra);
-    remember_installed_row(installed_rows_by_name_arch, row);
-    packages.push_back(row);
+    annotate_installed_rows_with_repo_candidates_best_effort(
+        installed.rows, cancellable, [&base](GCancellable *annotation_cancellable) {
+          return collect_available_rows_by_name_arch(base, annotation_cancellable);
+        });
   }
 
   // Publish the new installed-package cache only after a complete uncancelled scan.
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  g_installed_nevras.swap(installed_nevras);
-  g_installed_rows_by_name_arch.swap(installed_rows_by_name_arch);
+  g_installed_nevras.swap(installed.nevras);
+  g_installed_rows_by_name_arch.swap(installed.rows_by_name_arch);
 
-  return packages;
+  return installed.rows;
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Query latest available packages via libdnf5
-// Returns the newest available candidate for each package stream selected by
-// libdnf5::rpm::PackageQuery::filter_latest_evr(), which keeps the list closer
-// to a Synaptic-style "available packages" view than a raw NEVRA dump.
+// Helper: Query the combined browse view via libdnf5
+// Returns the newest available candidate for each package stream and merges in
+// installed-only local RPMs that are missing from enabled repositories.
 //
 // Thread-safety:
 //   This function reads package data directly from libdnf5 and does not modify
 //   shared installed-package caches. No locking is required here.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow>
-dnf_backend_get_available_package_rows_interruptible(GCancellable *cancellable)
+dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
 {
-  std::vector<PackageRow> packages;
-
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
-  libdnf5::rpm::PackageQuery query(base);
-  query.filter_available();
-  query.filter_latest_evr();
-
-  for (auto pkg : query) {
-    if (package_query_cancelled(cancellable)) {
-      return packages;
-    }
-
-    packages.push_back(make_package_row(pkg));
+  auto available_rows = collect_available_rows_by_name_arch(base, cancellable);
+  if (package_query_cancelled(cancellable)) {
+    return {};
   }
 
-  return packages;
+  InstalledQueryResult installed = collect_installed_rows(base, cancellable);
+  if (package_query_cancelled(cancellable)) {
+    return {};
+  }
+
+  return visible_rows_from_maps(std::move(available_rows), std::move(installed.rows_by_name_arch));
 }
 
+// -----------------------------------------------------------------------------
 // Return installed package rows that exactly match one NEVRA.
+// Repo provenance is annotated on a best-effort basis so pending-action
+// navigation can still show local-only or newer-than-repo status when possible.
+// -----------------------------------------------------------------------------
 std::vector<PackageRow>
 dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
 {
@@ -307,10 +489,38 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
     packages.push_back(make_package_row(pkg));
   }
 
+  annotate_installed_rows_with_repo_candidates_best_effort(
+      packages, nullptr, [&base](GCancellable *annotation_cancellable) {
+        return collect_available_rows_by_name_arch(base, annotation_cancellable);
+      });
+
   return packages;
 }
 
+#ifdef DNFUI_BUILD_TESTS
+bool
+dnf_backend_testonly_annotation_fallback_leaves_rows_unknown(std::vector<PackageRow> &rows)
+{
+  for (auto &row : rows) {
+    row.repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN;
+  }
+
+  annotate_installed_rows_with_repo_candidates_best_effort(
+      rows, nullptr, [](GCancellable *) -> std::map<std::string, PackageRow> {
+        throw std::runtime_error("forced annotation failure");
+      });
+
+  return std::all_of(rows.begin(), rows.end(), [](const PackageRow &row) {
+    return row.repo_candidate_relation == PackageRepoCandidateRelation::UNKNOWN;
+  });
+}
+#endif
+
+// -----------------------------------------------------------------------------
 // Return available package rows that exactly match one NEVRA.
+// This helper stays repo-only and is used for install-side pending-action
+// navigation and details loading.
+// -----------------------------------------------------------------------------
 std::vector<PackageRow>
 dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra)
 {

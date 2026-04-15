@@ -22,8 +22,8 @@ Interfaces, behavior, and features may change while the application is being sta
 
 ## Current features
 
-- Search available packages
-- List installed and available packages
+- Search repo packages together with installed-only local RPMs
+- List installed packages or browse the merged package view
 - View package details, files, dependencies, and changelog information
 - Mark packages for install, reinstall, and removal
 - Review a transaction summary before applying changes
@@ -31,6 +31,11 @@ Interfaces, behavior, and features may change while the application is being sta
 - Cancel long-running package queries
 - Show search history
 - Hide or show the history and information panes
+
+The main browse and search views keep one visible row per package name and
+architecture. Repo candidates stay visible as usual, and locally installed RPMs
+that are not present in enabled repositories are merged in as `Installed (local
+only)` entries instead of being hidden.
 
 ## Why?
 

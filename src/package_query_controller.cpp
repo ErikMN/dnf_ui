@@ -124,7 +124,7 @@ package_list_cancelled_status(PackageListRequestKind kind)
   case PackageListRequestKind::LIST_INSTALLED:
     return "Listing installed packages cancelled.";
   case PackageListRequestKind::LIST_AVAILABLE:
-    return "Listing available packages cancelled.";
+    return "Listing packages cancelled.";
   case PackageListRequestKind::NONE:
   default:
     return "Operation cancelled.";
@@ -150,7 +150,7 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
 
   gtk_button_set_label(widgets->query.search_button, "Search");
   gtk_button_set_label(widgets->query.list_button, "List Installed");
-  gtk_button_set_label(widgets->query.list_available_button, "List Available");
+  gtk_button_set_label(widgets->query.list_available_button, "List Packages");
   gtk_button_set_label(stop_button, "Stop");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), FALSE);
@@ -172,7 +172,7 @@ restore_package_list_controls(SearchWidgets *widgets)
 
   gtk_button_set_label(widgets->query.search_button, "Search");
   gtk_button_set_label(widgets->query.list_button, "List Installed");
-  gtk_button_set_label(widgets->query.list_available_button, "List Available");
+  gtk_button_set_label(widgets->query.list_available_button, "List Packages");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), TRUE);
@@ -310,16 +310,16 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Async: Latest available packages (non-blocking)
-// Executes a background query using libdnf5 to fetch the latest available
-// package candidate rows. Runs in a worker thread via GTask to avoid blocking
-// the GTK UI.
+// Async: Browse packages (non-blocking)
+// Executes a background query using libdnf5 to fetch the merged package view:
+// repo candidates plus installed-only local RPMs. Runs in a worker thread via
+// GTask to avoid blocking the GTK UI.
 // -----------------------------------------------------------------------------
 static void
 on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
   try {
-    auto *results = new std::vector<PackageRow>(dnf_backend_get_available_package_rows_interruptible(cancellable));
+    auto *results = new std::vector<PackageRow>(dnf_backend_get_browse_package_rows_interruptible(cancellable));
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
@@ -327,7 +327,7 @@ on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellabl
 }
 
 // -----------------------------------------------------------------------------
-// Async completion handler: Latest available package listing
+// Async completion handler: Merged package listing
 // Runs on the GTK main thread after on_list_available_task() finishes.
 // Retrieves the result vector from the GTask, refreshes installed highlighting,
 // and repopulates the package list UI.
@@ -370,13 +370,12 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
     widgets->results.selected_nevra.clear();
     package_table_fill_package_view(widgets, *packages);
     char msg[256];
-    snprintf(msg, sizeof(msg), "Found %zu available packages.", packages->size());
+    snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
     ui_helpers_set_status(widgets->query.status_label, msg, "green");
     package_info_reset_details_view(widgets);
     delete packages;
   } else {
-    ui_helpers_set_status(
-        widgets->query.status_label, error ? error->message : "Error listing available packages.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -384,10 +383,10 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
 }
 
 // -----------------------------------------------------------------------------
-// Async: Search available packages (non-blocking)
-// Executes a background libdnf5 query to find packages matching the search term.
-// Runs off the GTK main thread via GTask to keep the UI responsive.
-// Returns a std::vector<PackageRow> of matching package metadata.
+// Async: Search merged package view (non-blocking)
+// Executes a background libdnf5 query to find matching repo candidates and
+// installed-only local RPMs. Runs off the GTK main thread via GTask to keep the
+// UI responsive. Returns a std::vector<PackageRow> of matching package metadata.
 // -----------------------------------------------------------------------------
 static void
 on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancellable)
@@ -397,8 +396,7 @@ on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancella
   try {
     DNFUI_TRACE(
         "Search task start request=%llu pattern=%s", td ? static_cast<unsigned long long>(td->request_id) : 0, pattern);
-    auto *results =
-        new std::vector<PackageRow>(dnf_backend_search_available_package_rows_interruptible(pattern, cancellable));
+    auto *results = new std::vector<PackageRow>(dnf_backend_search_package_rows_interruptible(pattern, cancellable));
     DNFUI_TRACE("Search task done request=%llu results=%zu",
                 td ? static_cast<unsigned long long>(td->request_id) : 0,
                 results->size());
@@ -600,8 +598,8 @@ package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// UI callback: List Available button
-// Starts async listing of the latest available package candidates
+// UI callback: List Packages button
+// Starts async listing of the merged package view.
 // The same button changes to Stop while the worker task is running.
 // -----------------------------------------------------------------------------
 void
@@ -615,7 +613,7 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  ui_helpers_set_status(widgets->query.status_label, "Listing available packages...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, "Listing packages...", "blue");
 
   // Show spinner (ref-counted)
   widgets_spinner_acquire(widgets->query.spinner);
@@ -626,7 +624,7 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
   td->generation = BaseManager::instance().current_generation();
 
   // The shared request helper owns disabling the entry and flipping the
-  // initiating button from List Available to Stop.
+  // initiating button from List Packages to Stop.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
   GTask *task = g_task_new(nullptr, c, on_list_available_task_finished, widgets);
   g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
