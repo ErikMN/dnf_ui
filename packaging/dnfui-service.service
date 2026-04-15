@@ -4,7 +4,7 @@ Description=DNF UI transaction service
 [Service]
 Type=dbus
 BusName=com.fedora.Dnfui.Transaction1
-ExecStart=/usr/libexec/dnf_ui_transaction_service --system
+ExecStart=/usr/libexec/dnfui-service --system
 User=root
 Restart=on-failure
 RestartSec=1

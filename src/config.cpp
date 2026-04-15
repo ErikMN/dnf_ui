@@ -3,7 +3,7 @@
 // Config helpers for saving/restoring user settings
 // Handles persistent UI state (window size, pane divider positions, etc.)
 // The configuration is stored as key=value pairs in:
-//   ~/.config/dnf_ui.conf
+//   ~/.config/dnfui.conf
 //
 // TODO: Consider switching to GKeyFile or JSON for more structured data
 // -----------------------------------------------------------------------------
@@ -29,7 +29,7 @@ config_file_path()
     return {};
   }
 
-  return std::filesystem::path(config_dir) / "dnf_ui.conf";
+  return std::filesystem::path(config_dir) / "dnfui.conf";
 }
 
 bool

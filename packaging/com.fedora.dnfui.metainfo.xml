@@ -23,7 +23,7 @@
     </p>
   </description>
   <provides>
-    <binary>dnf_ui</binary>
+    <binary>dnfui</binary>
   </provides>
   <categories>
     <category>System</category>

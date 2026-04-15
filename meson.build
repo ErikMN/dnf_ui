@@ -1,5 +1,5 @@
 project(
-  'dnf_ui',
+  'dnf-ui',
   'cpp',
   version: '0.0.1',
   default_options: [
@@ -30,7 +30,7 @@ else
 endif
 
 if get_option('debug_trace')
-  add_project_arguments('-DDNF_UI_DEBUG_TRACE', language: 'cpp')
+  add_project_arguments('-DDNFUI_DEBUG_TRACE', language: 'cpp')
 endif
 
 src_inc = include_directories('src')

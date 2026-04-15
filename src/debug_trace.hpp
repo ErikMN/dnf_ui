@@ -2,8 +2,8 @@
 
 #include <cstdio>
 
-#ifdef DNF_UI_DEBUG_TRACE
-#define DNF_UI_TRACE(...)     \
+#ifdef DNFUI_DEBUG_TRACE
+#define DNFUI_TRACE(...)      \
   do {                        \
     std::printf("[trace] ");  \
     std::printf(__VA_ARGS__); \
@@ -11,7 +11,7 @@
     std::fflush(stdout);      \
   } while (0)
 #else
-#define DNF_UI_TRACE(...) \
-  do {                    \
+#define DNFUI_TRACE(...) \
+  do {                   \
   } while (0)
 #endif

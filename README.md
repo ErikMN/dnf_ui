@@ -60,13 +60,13 @@ The `Makefile` is a thin task runner for the common developer commands.
 Build and run:
 
 ```sh
-make && ./dnf_ui
+make && ./dnfui
 ```
 
 Build final and run:
 
 ```sh
-FINAL=y make && ./dnf_ui
+FINAL=y make && ./dnfui
 ```
 
 Run the Meson setup directly:
@@ -74,7 +74,7 @@ Run the Meson setup directly:
 ```sh
 meson setup build/debug --prefix /usr --libexecdir libexec
 meson compile -C build/debug
-./build/debug/src/dnf_ui
+./build/debug/src/dnfui
 ```
 
 ## Polkit integration
@@ -105,7 +105,7 @@ sudo make serviceinstall
 Then run the app as a regular desktop user:
 
 ```sh
-./dnf_ui
+./dnfui
 ```
 
 When you apply a transaction, the desktop Polkit prompt should appear.

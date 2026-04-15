@@ -554,15 +554,15 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
 
   // Check if service is shutting down before accessing the transaction map.
   if (context->service->shutting_down.load()) {
-    DNF_UI_TRACE("Transaction service authorization callback ignored during shutdown path=%s",
-                 context->object_path.c_str());
+    DNFUI_TRACE("Transaction service authorization callback ignored during shutdown path=%s",
+                context->object_path.c_str());
     return;
   }
 
   // Verify the session still exists (may have been released during authorization).
   auto it = context->service->transactions.find(context->object_path);
   if (it == context->service->transactions.end()) {
-    DNF_UI_TRACE("Transaction service authorization callback session not found path=%s", context->object_path.c_str());
+    DNFUI_TRACE("Transaction service authorization callback session not found path=%s", context->object_path.c_str());
     return;
   }
 
@@ -593,9 +593,9 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
 
   if (!result) {
     std::string error_msg = error ? error->message : "Authorization check failed.";
-    DNF_UI_TRACE("Transaction service apply authorization failed path=%s error=%s",
-                 session->object_path.c_str(),
-                 error_msg.c_str());
+    DNFUI_TRACE("Transaction service apply authorization failed path=%s error=%s",
+                session->object_path.c_str(),
+                error_msg.c_str());
     g_clear_error(&error);
     g_dbus_method_invocation_return_error(
         invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "%s", error_msg.c_str());
@@ -607,14 +607,14 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
   g_object_unref(result);
 
   if (!authorized) {
-    DNF_UI_TRACE("Transaction service apply authorization denied path=%s", session->object_path.c_str());
+    DNFUI_TRACE("Transaction service apply authorization denied path=%s", session->object_path.c_str());
     g_dbus_method_invocation_return_error(
         invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "Not authorized to apply package transactions.");
     g_object_unref(invocation);
     return;
   }
 
-  DNF_UI_TRACE("Transaction service apply authorization granted path=%s", session->object_path.c_str());
+  DNFUI_TRACE("Transaction service apply authorization granted path=%s", session->object_path.c_str());
   complete_apply_request(session, invocation);
   g_object_unref(invocation);
 }
@@ -637,7 +637,7 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
 
   // Session bus mode remains available for local development and Docker tests.
   if (session->service->bus_type != G_BUS_TYPE_SYSTEM) {
-    DNF_UI_TRACE("Transaction service apply authorization skipped (session bus) path=%s", session->object_path.c_str());
+    DNFUI_TRACE("Transaction service apply authorization skipped (session bus) path=%s", session->object_path.c_str());
     return true;
   }
 
@@ -676,7 +676,7 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
   callback_context->service = session->service;
   callback_context->object_path = session->object_path;
 
-  DNF_UI_TRACE("Transaction service apply authorization start (async) path=%s", session->object_path.c_str());
+  DNFUI_TRACE("Transaction service apply authorization start (async) path=%s", session->object_path.c_str());
   polkit_authority_check_authorization(authority,
                                        subject,
                                        kApplyActionId,
@@ -709,18 +709,18 @@ run_transaction_preview(TransactionSession *session)
   queue_transaction_progress(session, "Loading package base...");
   auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
-  DNF_UI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
+  DNFUI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
   bool ok = dnf_backend_preview_transaction(
       session->request.install, session->request.remove, session->request.reinstall, preview, error_out, progress_cb);
 
   if (session->cancelled.load()) {
-    DNF_UI_TRACE("Transaction service preview cancelled path=%s", session->object_path.c_str());
+    DNFUI_TRACE("Transaction service preview cancelled path=%s", session->object_path.c_str());
     queue_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
     return;
   }
 
   if (!ok) {
-    DNF_UI_TRACE("Transaction service preview failed path=%s", session->object_path.c_str());
+    DNFUI_TRACE("Transaction service preview failed path=%s", session->object_path.c_str());
     queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, error_out);
     return;
   }
@@ -729,10 +729,10 @@ run_transaction_preview(TransactionSession *session)
     std::lock_guard<std::mutex> lock(session->state_mutex);
     session->preview = preview;
   }
-  DNF_UI_TRACE("Transaction service preview done path=%s items=%zu",
-               session->object_path.c_str(),
-               preview.install.size() + preview.upgrade.size() + preview.downgrade.size() + preview.reinstall.size() +
-                   preview.remove.size());
+  DNFUI_TRACE("Transaction service preview done path=%s items=%zu",
+              session->object_path.c_str(),
+              preview.install.size() + preview.upgrade.size() + preview.downgrade.size() + preview.reinstall.size() +
+                  preview.remove.size());
   queue_transaction_finished(
       session, TransactionStage::PREVIEW_READY, true, format_transaction_preview_details(preview));
 }
@@ -780,7 +780,7 @@ run_transaction_apply(TransactionSession *session)
   queue_transaction_progress(session, "Loading package base...");
   auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
-  DNF_UI_TRACE("Transaction service apply start path=%s", session->object_path.c_str());
+  DNFUI_TRACE("Transaction service apply start path=%s", session->object_path.c_str());
   bool ok = dnf_backend_apply_transaction(
       session->request.install, session->request.remove, session->request.reinstall, error_out, progress_cb);
 
@@ -803,7 +803,7 @@ run_transaction_apply(TransactionSession *session)
     details = error_out;
   }
 
-  DNF_UI_TRACE("Transaction service apply done path=%s success=%d", session->object_path.c_str(), success ? 1 : 0);
+  DNFUI_TRACE("Transaction service apply done path=%s success=%d", session->object_path.c_str(), success ? 1 : 0);
   queue_transaction_finished(session, stage, success, details);
 }
 
@@ -856,7 +856,7 @@ on_transaction_method_call(GDBusConnection *,
   }
 
   if (g_strcmp0(method_name, "Cancel") == 0) {
-    DNF_UI_TRACE("Transaction service cancel path=%s", object_path);
+    DNFUI_TRACE("Transaction service cancel path=%s", object_path);
 
     bool has_pending_apply = false;
     TransactionStage stage = TransactionStage::PREVIEW_RUNNING;
@@ -921,7 +921,7 @@ on_transaction_method_call(GDBusConnection *,
 
     std::string error_out;
     if (!start_authorize_apply_request(session, invocation, error_out)) {
-      DNF_UI_TRACE(
+      DNFUI_TRACE(
           "Transaction service apply authorization start failed path=%s error=%s", object_path, error_out.c_str());
       g_dbus_method_invocation_return_error(
           invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "%s", error_out.c_str());
@@ -1056,7 +1056,7 @@ on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer
     return;
   }
 
-  DNF_UI_TRACE("Transaction service client disconnected name=%s", name);
+  DNFUI_TRACE("Transaction service client disconnected name=%s", name);
 
   // Find and release all sessions owned by this client.
   std::vector<std::string> orphaned_paths;
@@ -1067,7 +1067,7 @@ on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer
   }
 
   for (const auto &path : orphaned_paths) {
-    DNF_UI_TRACE("Transaction service auto-releasing orphaned session path=%s owner=%s", path.c_str(), name);
+    DNFUI_TRACE("Transaction service auto-releasing orphaned session path=%s owner=%s", path.c_str(), name);
     queue_transaction_release(service->transactions[path].get());
   }
 }
@@ -1162,10 +1162,10 @@ on_manager_method_call(GDBusConnection *,
     return;
   }
 
-  DNF_UI_TRACE("Transaction service start install=%zu remove=%zu reinstall=%zu",
-               request.install.size(),
-               request.remove.size(),
-               request.reinstall.size());
+  DNFUI_TRACE("Transaction service start install=%zu remove=%zu reinstall=%zu",
+              request.install.size(),
+              request.remove.size(),
+              request.reinstall.size());
 
   TransactionSession *session = create_transaction_session(service, request, invocation, error_out);
   if (!session) {
@@ -1227,7 +1227,7 @@ on_bus_acquired(GDBusConnection *connection, const gchar *, gpointer user_data)
     return;
   }
 
-  DNF_UI_TRACE("Transaction service bus ready");
+  DNFUI_TRACE("Transaction service bus ready");
 }
 
 // Stop the service if its owned D-Bus name is lost.
@@ -1235,7 +1235,7 @@ static void
 on_name_lost(GDBusConnection *, const gchar *, gpointer user_data)
 {
   TransactionService *service = static_cast<TransactionService *>(user_data);
-  DNF_UI_TRACE("Transaction service name lost");
+  DNFUI_TRACE("Transaction service name lost");
   if (service && service->loop) {
     g_main_loop_quit(service->loop);
   }
@@ -1265,7 +1265,7 @@ cleanup_service(TransactionService &service)
 
     if (pending_apply_invocation) {
       keep_alive_until_exit = true;
-      DNF_UI_TRACE("Transaction service cancelling pending authorization during shutdown path=%s", path.c_str());
+      DNFUI_TRACE("Transaction service cancelling pending authorization during shutdown path=%s", path.c_str());
       g_dbus_method_invocation_return_error(
           pending_apply_invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction service is shutting down.");
       g_object_unref(pending_apply_invocation);
@@ -1366,9 +1366,9 @@ transaction_service_run(const TransactionServiceOptions &options)
   g_unix_signal_add(SIGINT, on_quit_signal, service->loop);
   g_unix_signal_add(SIGTERM, on_quit_signal, service->loop);
 
-  DNF_UI_TRACE("Transaction service run loop start");
+  DNFUI_TRACE("Transaction service run loop start");
   g_main_loop_run(service->loop);
-  DNF_UI_TRACE("Transaction service run loop stop");
+  DNFUI_TRACE("Transaction service run loop stop");
 
   cleanup_service(*service);
   if (service->keep_alive_until_exit) {

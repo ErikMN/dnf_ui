@@ -47,7 +47,7 @@ static GBusType
 get_transaction_service_bus_type()
 {
   // Docker GUI testing uses the session bus path while native Polkit uses the system bus.
-  const char *bus_mode = g_getenv("DNF_UI_TRANSACTION_BUS");
+  const char *bus_mode = g_getenv("DNFUI_TRANSACTION_BUS");
   if (bus_mode && g_strcmp0(bus_mode, "session") == 0) {
     return G_BUS_TYPE_SESSION;
   }
@@ -108,8 +108,8 @@ connect_transaction_service(std::string &error_out)
   {
     std::lock_guard<std::mutex> lock(cache.mutex);
     if (cache.connection && cache.bus_type == bus_type && !g_dbus_connection_is_closed(cache.connection)) {
-      DNF_UI_TRACE("Transaction service client connect bus=%s cached",
-                   bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
+      DNFUI_TRACE("Transaction service client connect bus=%s cached",
+                  bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
       return G_DBUS_CONNECTION(g_object_ref(cache.connection));
     }
 
@@ -119,7 +119,7 @@ connect_transaction_service(std::string &error_out)
     }
   }
 
-  DNF_UI_TRACE("Transaction service client connect bus=%s", bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
+  DNFUI_TRACE("Transaction service client connect bus=%s", bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
 
   GError *error = nullptr;
   GDBusConnection *connection = g_bus_get_sync(bus_type, nullptr, &error);
@@ -192,7 +192,7 @@ start_transaction_request(GDBusConnection *connection,
     return false;
   }
 
-  DNF_UI_TRACE("Transaction service client start path=%s", transaction_path_out.c_str());
+  DNFUI_TRACE("Transaction service client start path=%s", transaction_path_out.c_str());
 
   return true;
 }
@@ -426,11 +426,11 @@ wait_for_transaction_stage(GDBusConnection *connection,
     result_out.details = wait_state.details;
   }
 
-  DNF_UI_TRACE("Transaction service client stage path=%s stage=%s finished=%d success=%d",
-               transaction_path.c_str(),
-               result_out.stage.c_str(),
-               result_out.finished ? 1 : 0,
-               result_out.success ? 1 : 0);
+  DNFUI_TRACE("Transaction service client stage path=%s stage=%s finished=%d success=%d",
+              transaction_path.c_str(),
+              result_out.stage.c_str(),
+              result_out.finished ? 1 : 0,
+              result_out.success ? 1 : 0);
 
   return true;
 }
@@ -458,7 +458,7 @@ on_transaction_progress_signal(GDBusConnection *,
     return;
   }
 
-  DNF_UI_TRACE("Transaction service client progress line=%s", line);
+  DNFUI_TRACE("Transaction service client progress line=%s", line);
   (*forwarder->progress_callback)(line);
 }
 
@@ -514,7 +514,7 @@ transaction_service_client_preview_request(const TransactionRequest &request,
 
   if (result.stage != "preview-ready" || !result.finished || !result.success) {
     error_out = result.details.empty() ? "Privileged transaction preview failed." : result.details;
-    DNF_UI_TRACE(
+    DNFUI_TRACE(
         "Transaction service client preview failed path=%s error=%s", transaction_path_out.c_str(), error_out.c_str());
     std::string release_error;
     release_transaction_request(connection, transaction_path_out, release_error);
@@ -523,9 +523,9 @@ transaction_service_client_preview_request(const TransactionRequest &request,
   }
 
   if (!get_transaction_preview(connection, transaction_path_out, preview_out, error_out)) {
-    DNF_UI_TRACE("Transaction service client get preview failed path=%s error=%s",
-                 transaction_path_out.c_str(),
-                 error_out.c_str());
+    DNFUI_TRACE("Transaction service client get preview failed path=%s error=%s",
+                transaction_path_out.c_str(),
+                error_out.c_str());
     std::string release_error;
     release_transaction_request(connection, transaction_path_out, release_error);
     g_object_unref(connection);
@@ -575,7 +575,7 @@ transaction_service_client_apply_started_request(const std::string &transaction_
   guint progress_subscription_id = 0;
 
   do {
-    DNF_UI_TRACE("Transaction service client start path=%s", transaction_path.c_str());
+    DNFUI_TRACE("Transaction service client start path=%s", transaction_path.c_str());
     progress_subscription_id = g_dbus_connection_signal_subscribe(connection,
                                                                   kTransactionServiceName,
                                                                   kTransactionServiceRequestInterface,
@@ -620,12 +620,12 @@ transaction_service_client_apply_started_request(const std::string &transaction_
     }
 
     append_progress(result.details.empty() ? "Transaction applied successfully." : result.details);
-    DNF_UI_TRACE("Transaction service client apply done path=%s", transaction_path.c_str());
+    DNFUI_TRACE("Transaction service client apply done path=%s", transaction_path.c_str());
     ok = true;
   } while (false);
 
   if (!ok) {
-    DNF_UI_TRACE(
+    DNFUI_TRACE(
         "Transaction service client apply failed path=%s error=%s", transaction_path.c_str(), error_out.c_str());
   }
 
@@ -652,18 +652,18 @@ transaction_service_client_release_request(const std::string &transaction_path)
   std::string connect_error;
   GDBusConnection *connection = connect_transaction_service(connect_error);
   if (!connection) {
-    DNF_UI_TRACE("Transaction service client release connect failed path=%s error=%s",
-                 transaction_path.c_str(),
-                 connect_error.c_str());
+    DNFUI_TRACE("Transaction service client release connect failed path=%s error=%s",
+                transaction_path.c_str(),
+                connect_error.c_str());
     return;
   }
 
   std::string error_out;
   if (!release_transaction_request(connection, transaction_path, error_out)) {
-    DNF_UI_TRACE(
+    DNFUI_TRACE(
         "Transaction service client release failed path=%s error=%s", transaction_path.c_str(), error_out.c_str());
   } else {
-    DNF_UI_TRACE("Transaction service client release done path=%s", transaction_path.c_str());
+    DNFUI_TRACE("Transaction service client release done path=%s", transaction_path.c_str());
   }
 
   g_object_unref(connection);

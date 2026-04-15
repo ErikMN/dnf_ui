@@ -45,26 +45,26 @@ appstreamcli validate --no-net packaging/com.fedora.dnfui.metainfo.xml
 %meson_test
 
 %post
-%systemd_post com.fedora.dnfui.transaction.service
+%systemd_post dnfui-service.service
 
 %preun
-%systemd_preun com.fedora.dnfui.transaction.service
+%systemd_preun dnfui-service.service
 
 %postun
-%systemd_postun_with_restart com.fedora.dnfui.transaction.service
+%systemd_postun_with_restart dnfui-service.service
 
 %files
 %license LICENSE
 %doc README.md
-%{_bindir}/dnf_ui
-%{_libexecdir}/dnf_ui_transaction_service
+%{_bindir}/dnfui
+%{_libexecdir}/dnfui-service
 %{_datadir}/applications/com.fedora.dnfui.desktop
 %{_datadir}/icons/hicolor/1024x1024/apps/com.fedora.dnfui.png
 %{_datadir}/metainfo/com.fedora.dnfui.metainfo.xml
 %{_datadir}/dbus-1/system-services/com.fedora.Dnfui.Transaction1.service
 %{_datadir}/polkit-1/actions/com.fedora.dnfui.policy
 %{_sysconfdir}/dbus-1/system.d/com.fedora.Dnfui.Transaction1.conf
-%{_unitdir}/com.fedora.dnfui.transaction.service
+%{_unitdir}/dnfui-service.service
 
 %changelog
 * Tue Apr 14 2026 ErikMN <erik@example.invalid> - 0.0.1-1

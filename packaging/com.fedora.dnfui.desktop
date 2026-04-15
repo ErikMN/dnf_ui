@@ -2,7 +2,7 @@
 Type=Application
 Name=DNF UI
 Comment=Browse packages and apply DNF transactions
-Exec=dnf_ui
+Exec=dnfui
 Icon=com.fedora.dnfui
 Terminal=false
 StartupNotify=true

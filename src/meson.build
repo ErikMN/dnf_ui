@@ -17,8 +17,8 @@ app_sources = files(
   'widgets.cpp',
 )
 
-dnf_ui_app = executable(
-  'dnf_ui',
+dnfui_app = executable(
+  'dnfui',
   backend_sources + app_sources,
   include_directories: src_inc,
   dependencies: [

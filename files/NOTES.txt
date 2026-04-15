@@ -60,9 +60,9 @@ sudo make serviceinstall
 SERVICE_TEST_INSTALL_SPEC=cowsay make servicesystemtest
 SERVICE_TEST_REINSTALL_NEVRA=<installed-non-critical-package> make servicesystemapplytest
 
-./dnf_ui
+./dnfui
 
-Run dnf_ui as a regular desktop user and apply a transaction to test the
+Run dnfui as a regular desktop user and apply a transaction to test the
 desktop Polkit prompt.
 
 serviceinstall is a native development make target, not the final packaging flow.

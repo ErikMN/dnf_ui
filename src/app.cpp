@@ -90,7 +90,7 @@ static void on_backend_warmup_task_finished(GObject *source_object, GAsyncResult
 // Run GTK application and return process exit status
 // -----------------------------------------------------------------------------
 int
-app_run_dnf_ui(int argc, char **argv)
+app_run_dnfui(int argc, char **argv)
 {
   GtkApplication *app = gtk_application_new("com.fedora.dnfui", G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
@@ -824,7 +824,7 @@ start_backend_warmup_task(SearchWidgets *widgets)
     return;
   }
 
-  DNF_UI_TRACE("Backend warm up task start");
+  DNFUI_TRACE("Backend warm up task start");
   gtk_widget_set_visible(GTK_WIDGET(widgets->window_state.backend_warmup_label), TRUE);
 
   widgets->window_state.backend_warmup_cancellable = g_cancellable_new();
@@ -873,15 +873,15 @@ on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gp
   g_task_propagate_boolean(G_TASK(result), &error);
 
   if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
-    DNF_UI_TRACE("Backend warm up task cancelled");
+    DNFUI_TRACE("Backend warm up task cancelled");
     g_clear_error(&error);
     return;
   }
 
   if (error) {
-    DNF_UI_TRACE("Backend warm up task failed: %s", error->message);
+    DNFUI_TRACE("Backend warm up task failed: %s", error->message);
   } else {
-    DNF_UI_TRACE("Backend warm up task done");
+    DNFUI_TRACE("Backend warm up task done");
   }
 
   g_clear_error(&error);

@@ -3,8 +3,8 @@
 catch2_dep = dependency('catch2-with-main')
 gio_dep = dependency('gio-2.0')
 
-dnf_ui_tests = executable(
-  'dnf_ui_tests',
+dnfui_tests = executable(
+  'dnfui-tests',
   files(
     'test_backend.cpp',
     'test_search.cpp',
@@ -19,4 +19,4 @@ dnf_ui_tests = executable(
   ],
 )
 
-test('dnf_ui_tests', dnf_ui_tests)
+test('dnfui-tests', dnfui_tests)

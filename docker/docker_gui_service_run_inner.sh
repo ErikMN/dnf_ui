@@ -9,10 +9,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$PROJECT_ROOT/utils/transaction_service_paths.conf"
 
-export DNF_UI_MESON_BUILD_ROOT="/tmp/dnf_ui-build"
+export DNFUI_MESON_BUILD_ROOT="/tmp/dnfui-build"
 BUILD_DIR="$("$PROJECT_ROOT/utils/meson_build.sh" build-dir)"
 SERVICE_BIN="$BUILD_DIR/src/service/$TRANSACTION_SERVICE_BIN_NAME"
-APP_BIN="$BUILD_DIR/src/dnf_ui"
+APP_BIN="$BUILD_DIR/src/dnfui"
 
 echo "*** Building app and transaction service ***"
 "$PROJECT_ROOT/utils/meson_build.sh" all
@@ -29,8 +29,8 @@ echo "*** System bus Polkit tests remain available through the dockerservicesyst
 
 dbus-run-session -- bash -lc '
   set -e
-  export DNF_UI_TRANSACTION_BUS=session
-  "'"$SERVICE_BIN"'" --session >/tmp/dnf_ui_transaction_service.log 2>&1 &
+  export DNFUI_TRANSACTION_BUS=session
+  "'"$SERVICE_BIN"'" --session >/tmp/dnfui-service.log 2>&1 &
   service_pid=$!
   trap "kill $service_pid >/dev/null 2>&1 || true; wait $service_pid >/dev/null 2>&1 || true" EXIT
   gdbus wait --session "'"$TRANSACTION_SERVICE_NAME"'" >/dev/null

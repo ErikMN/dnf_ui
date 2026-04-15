@@ -1,4 +1,4 @@
 [D-BUS Service]
 Name=com.fedora.Dnfui.Transaction1
-Exec=/usr/libexec/dnf_ui_transaction_service --system
-SystemdService=com.fedora.dnfui.transaction.service
+Exec=/usr/libexec/dnfui-service --system
+SystemdService=dnfui-service.service

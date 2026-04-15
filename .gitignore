@@ -1,6 +1,6 @@
-dnf_ui
-dnf_ui_transaction_service
-dnf_ui_tests
+dnfui
+dnfui-service
+dnfui-tests
 .history
 build/
 rpmbuild/

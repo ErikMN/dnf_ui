@@ -29,7 +29,7 @@ install_data(
 )
 
 install_data(
-  'com.fedora.dnfui.transaction.service',
+  'dnfui-service.service',
   install_dir: systemd_system_unit_dir,
   install_tag: 'transaction-service',
 )

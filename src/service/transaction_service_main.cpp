@@ -23,7 +23,7 @@ main(int argc, char **argv)
     } else if (std::strcmp(argv[i], "--session") == 0) {
       options.bus_type = G_BUS_TYPE_SESSION;
     } else if (std::strcmp(argv[i], "--help") == 0) {
-      std::printf("Usage: dnf_ui_transaction_service [--session] [--system]\n");
+      std::printf("Usage: dnfui-service [--session] [--system]\n");
       return 0;
     } else {
       std::fprintf(stderr, "Unknown option: %s\n", argv[i]);

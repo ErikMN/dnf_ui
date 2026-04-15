@@ -29,16 +29,16 @@ else
   DEBUG_TRACE_BUILD="false"
 fi
 
-BUILD_ROOT="${DNF_UI_MESON_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
+BUILD_ROOT="${DNFUI_MESON_BUILD_ROOT:-$DEFAULT_BUILD_ROOT}"
 BUILD_DIR="$BUILD_ROOT/$BUILD_NAME"
-APP_BIN="$PROJECT_ROOT/dnf_ui"
-SERVICE_BIN="$PROJECT_ROOT/dnf_ui_transaction_service"
-TEST_BIN="$PROJECT_ROOT/dnf_ui_tests"
+APP_BIN="$PROJECT_ROOT/dnfui"
+SERVICE_BIN="$PROJECT_ROOT/dnfui-service"
+TEST_BIN="$PROJECT_ROOT/dnfui-tests"
 
 # Keep repo-root convenience symlinks for the default native build tree, but
 # avoid rewriting the workspace when callers intentionally build elsewhere
 # (for example Docker builds under /tmp).
-LINK_ROOT_SYMLINKS="${DNF_UI_LINK_ROOT_SYMLINKS:-auto}"
+LINK_ROOT_SYMLINKS="${DNFUI_LINK_ROOT_SYMLINKS:-auto}"
 case "$LINK_ROOT_SYMLINKS" in
 auto)
   if [ "$BUILD_ROOT" = "$DEFAULT_BUILD_ROOT" ]; then
@@ -49,7 +49,7 @@ auto)
   ;;
 yes | no) ;;
 *)
-  echo "*** Set DNF_UI_LINK_ROOT_SYMLINKS to yes, no, or auto ***" >&2
+  echo "*** Set DNFUI_LINK_ROOT_SYMLINKS to yes, no, or auto ***" >&2
   exit 1
   ;;
 esac
@@ -67,20 +67,20 @@ for arg in "$@"; do
     exit 0
     ;;
   app)
-    target_names+=("dnf_ui")
+    target_names+=("dnfui")
     link_app="yes"
     ;;
   service)
-    target_names+=("dnf_ui_transaction_service")
+    target_names+=("dnfui-service")
     link_service="yes"
     ;;
   tests)
     build_tests="true"
-    target_names+=("dnf_ui_tests")
+    target_names+=("dnfui-tests")
     link_tests="yes"
     ;;
   all)
-    target_names+=("dnf_ui" "dnf_ui_transaction_service")
+    target_names+=("dnfui" "dnfui-service")
     link_app="yes"
     link_service="yes"
     ;;
@@ -122,13 +122,13 @@ fi
 meson compile -C "$BUILD_DIR" "${target_names[@]}"
 
 if [ "$LINK_ROOT_SYMLINKS" = "yes" ] && [ "$link_app" = "yes" ]; then
-  ln -sfn "$BUILD_DIR/src/dnf_ui" "$APP_BIN"
+  ln -sfn "$BUILD_DIR/src/dnfui" "$APP_BIN"
 fi
 
 if [ "$LINK_ROOT_SYMLINKS" = "yes" ] && [ "$link_service" = "yes" ]; then
-  ln -sfn "$BUILD_DIR/src/service/dnf_ui_transaction_service" "$SERVICE_BIN"
+  ln -sfn "$BUILD_DIR/src/service/dnfui-service" "$SERVICE_BIN"
 fi
 
 if [ "$LINK_ROOT_SYMLINKS" = "yes" ] && [ "$link_tests" = "yes" ]; then
-  ln -sfn "$BUILD_DIR/test/dnf_ui_tests" "$TEST_BIN"
+  ln -sfn "$BUILD_DIR/test/dnfui-tests" "$TEST_BIN"
 fi

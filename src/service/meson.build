@@ -3,8 +3,8 @@ service_sources = files(
   'transaction_service_main.cpp',
 )
 
-dnf_ui_transaction_service = executable(
-  'dnf_ui_transaction_service',
+dnfui_service = executable(
+  'dnfui-service',
   backend_sources + service_sources,
   include_directories: src_inc,
   dependencies: [

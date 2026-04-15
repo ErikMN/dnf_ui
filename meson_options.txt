@@ -9,7 +9,7 @@ option(
   'debug_trace',
   type: 'boolean',
   value: false,
-  description: 'Enable DNF_UI_DEBUG_TRACE logging',
+  description: 'Enable DNFUI_DEBUG_TRACE logging',
 )
 
 option(

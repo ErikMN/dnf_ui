@@ -4,7 +4,7 @@
 // src/app.hpp
 // Application entrypoint
 // -----------------------------------------------------------------------------
-int app_run_dnf_ui(int argc, char **argv);
+int app_run_dnfui(int argc, char **argv);
 
 // -----------------------------------------------------------------------------
 // EOF

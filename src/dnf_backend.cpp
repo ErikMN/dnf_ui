@@ -423,7 +423,7 @@ dnf_backend_get_package_info(const std::string &pkg_nevra)
 std::string
 dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max_files_for_display)
 {
-  DNF_UI_TRACE("Backend file list start nevra=%s max_display=%zu", pkg_nevra.c_str(), max_files_for_display);
+  DNFUI_TRACE("Backend file list start nevra=%s max_display=%zu", pkg_nevra.c_str(), max_files_for_display);
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
 
@@ -431,7 +431,7 @@ dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max
   query.filter_installed();
 
   if (query.empty()) {
-    DNF_UI_TRACE("Backend file list not installed nevra=%s", pkg_nevra.c_str());
+    DNFUI_TRACE("Backend file list not installed nevra=%s", pkg_nevra.c_str());
     return "File list available only for installed packages.";
   }
 
@@ -462,11 +462,11 @@ dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max
     result = files.str();
   }
 
-  DNF_UI_TRACE("Backend file list done nevra=%s total=%zu displayed=%zu bytes=%zu",
-               pkg_nevra.c_str(),
-               file_count,
-               displayed_count,
-               result.size());
+  DNFUI_TRACE("Backend file list done nevra=%s total=%zu displayed=%zu bytes=%zu",
+              pkg_nevra.c_str(),
+              file_count,
+              displayed_count,
+              result.size());
 
   return result;
 }
@@ -872,16 +872,16 @@ dnf_backend_preview_transaction(const std::vector<std::string> &install_nevras,
   preview = TransactionPreview();
 
   try {
-    DNF_UI_TRACE("Transaction preview start install=%zu remove=%zu reinstall=%zu",
-                 install_nevras.size(),
-                 remove_nevras.size(),
-                 reinstall_nevras.size());
+    DNFUI_TRACE("Transaction preview start install=%zu remove=%zu reinstall=%zu",
+                install_nevras.size(),
+                remove_nevras.size(),
+                reinstall_nevras.size());
     auto [base, guard] = BaseManager::instance().acquire_write();
     std::unique_ptr<libdnf5::base::Transaction> transaction;
 
     if (!resolve_transaction_plan(
             base, install_nevras, remove_nevras, reinstall_nevras, error_out, progress_cb, transaction)) {
-      DNF_UI_TRACE("Transaction preview resolve failed: %s", error_out.c_str());
+      DNFUI_TRACE("Transaction preview resolve failed: %s", error_out.c_str());
       return false;
     }
 
@@ -889,11 +889,11 @@ dnf_backend_preview_transaction(const std::vector<std::string> &install_nevras,
       append_preview_item(preview, item);
     }
 
-    DNF_UI_TRACE("Transaction preview done items=%zu", transaction->get_transaction_packages_count());
+    DNFUI_TRACE("Transaction preview done items=%zu", transaction->get_transaction_packages_count());
     return true;
   } catch (const std::exception &e) {
     error_out = e.what();
-    DNF_UI_TRACE("Transaction preview failed: %s", e.what());
+    DNFUI_TRACE("Transaction preview failed: %s", e.what());
     return false;
   }
 }
@@ -916,17 +916,17 @@ dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
   // the caller has already validated privileges or is running in a test environment.
 
   try {
-    DNF_UI_TRACE("Transaction apply start install=%zu remove=%zu reinstall=%zu",
-                 install_nevras.size(),
-                 remove_nevras.size(),
-                 reinstall_nevras.size());
+    DNFUI_TRACE("Transaction apply start install=%zu remove=%zu reinstall=%zu",
+                install_nevras.size(),
+                remove_nevras.size(),
+                reinstall_nevras.size());
     // Exclusive access to shared libdnf Base for transactional changes
     auto [base, guard] = BaseManager::instance().acquire_write();
     std::unique_ptr<libdnf5::base::Transaction> transaction;
 
     if (!resolve_transaction_plan(
             base, install_nevras, remove_nevras, reinstall_nevras, error_out, progress_cb, transaction)) {
-      DNF_UI_TRACE("Transaction apply resolve failed: %s", error_out.c_str());
+      DNFUI_TRACE("Transaction apply resolve failed: %s", error_out.c_str());
       return false;
     }
 
@@ -942,14 +942,14 @@ dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
     base.set_download_callbacks(std::make_unique<StreamingDownloadCallbacks>(progress_cb));
     DownloadCallbacksReset download_callbacks_reset(base);
     emit_progress_line(progress_cb, "Starting package downloads...");
-    DNF_UI_TRACE("Transaction download start");
+    DNFUI_TRACE("Transaction download start");
     transaction->download();
-    DNF_UI_TRACE("Transaction download done");
+    DNFUI_TRACE("Transaction download done");
     emit_progress_line(progress_cb, "Package downloads finished.");
 
-    DNF_UI_TRACE("Transaction run start");
+    DNFUI_TRACE("Transaction run start");
     auto run_result = transaction->run();
-    DNF_UI_TRACE("Transaction run done result=%d", static_cast<int>(run_result));
+    DNFUI_TRACE("Transaction run done result=%d", static_cast<int>(run_result));
     if (run_result != libdnf5::base::Transaction::TransactionRunResult::SUCCESS) {
       std::ostringstream oss;
       oss << "Transaction failed: " << libdnf5::base::Transaction::transaction_result_to_string(run_result) << " (code "

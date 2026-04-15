@@ -6,9 +6,9 @@ MESON ?= meson
 
 include utils/transaction_service_paths.conf
 
-APP_BIN_NAME = dnf_ui
-APP_BIN_DEST = /usr/bin/dnf_ui
-TEST_BIN_NAME = dnf_ui_tests
+APP_BIN_NAME = dnfui
+APP_BIN_DEST = /usr/bin/dnfui
+TEST_BIN_NAME = dnfui-tests
 
 ifeq ($(FINAL),y)
   MESON_BUILD_NAME = final
@@ -115,7 +115,7 @@ endef
 
 # Build both native runtime binaries in the active Meson directory:
 .PHONY: all
-all: dnf_ui dnf_ui_transaction_service
+all: dnfui dnfui-service
 
 # Configure the active Meson build directory:
 .PHONY: meson-setup
@@ -128,31 +128,31 @@ meson-setup:
 	fi
 
 # Build the desktop app binary and update the local convenience symlink:
-.PHONY: dnf_ui
-dnf_ui: meson-setup
-	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui
+.PHONY: dnfui
+dnfui: meson-setup
+	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnfui
 	ln -sfn "$(APP_BUILD_PATH)" "$(APP_BIN_NAME)"
 
 # Build the native transaction service binary and update the local symlink:
-.PHONY: dnf_ui_transaction_service
-dnf_ui_transaction_service: meson-setup
-	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_transaction_service
+.PHONY: dnfui-service
+dnfui-service: meson-setup
+	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnfui-service
 	ln -sfn "$(SERVICE_BUILD_PATH)" "$(TRANSACTION_SERVICE_BIN_NAME)"
 
 # Build the backend test binary and update the local symlink:
-.PHONY: dnf_ui_tests
-dnf_ui_tests: meson-setup
-	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnf_ui_tests
+.PHONY: dnfui-tests
+dnfui-tests: meson-setup
+	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnfui-tests
 	ln -sfn "$(TEST_BUILD_PATH)" "$(TEST_BIN_NAME)"
 
 # Run the app from the current build:
 .PHONY: run
-run: dnf_ui
+run: dnfui
 	@./$(APP_BIN_NAME)
 
 # Run the backend test suite:
 .PHONY: test
-test: dnf_ui_tests
+test: dnfui-tests
 	@echo "*** Running backend test suite ***"
 	@./$(TEST_BIN_NAME)
 
@@ -202,8 +202,8 @@ serviceinstall:
 	$(call stop_transaction_service)
 	$(MESON) install -C "$(MESON_BUILD_DIR)" --no-rebuild --only-changed --tags transaction-service
 	$(call refresh_transaction_service_state)
-	@echo "*** Installed $(TRANSACTION_SERVICE_NAME) service files for native testing. ***"
-	@echo "*** Run dnf_ui as a regular desktop user and apply a transaction to trigger the Polkit prompt. ***"
+	@echo "*** Installed $(TRANSACTION_SERVICE_BIN_NAME) service files for native testing. ***"
+	@echo "*** Run dnfui as a regular desktop user and apply a transaction to trigger the Polkit prompt. ***"
 
 # Service uninstall:
 # - Native service-only uninstall
@@ -222,17 +222,17 @@ serviceuninstall:
 
 # Session bus smoke test: preview flow from the locally built service binary
 .PHONY: servicetest
-servicetest: dnf_ui_transaction_service
+servicetest: dnfui-service
 	@./utils/test_transaction_service_preview.sh
 
 # Session bus smoke test: cancel flow from the locally built service binary
 .PHONY: servicecanceltest
-servicecanceltest: dnf_ui_transaction_service
+servicecanceltest: dnfui-service
 	@./utils/test_transaction_service_cancel.sh
 
 # Session bus smoke test: apply flow from the locally built service binary
 .PHONY: serviceapplytest
-serviceapplytest: dnf_ui_transaction_service
+serviceapplytest: dnfui-service
 	@./utils/test_transaction_service_apply.sh
 
 # System bus smoke test against the natively installed service
@@ -319,7 +319,7 @@ rpm:
 
 # FIXME: Run valgrind on the app binary:
 .PHONY: valgrind
-valgrind: dnf_ui
+valgrind: dnfui
 	@valgrind \
 		--tool=memcheck \
 		--leak-check=yes \
