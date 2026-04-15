@@ -43,6 +43,11 @@ std::atomic<bool> g_search_in_description { false }; // Global flag: include des
 std::atomic<bool> g_exact_match { false };           // Global flag: match package name or description exactly
 static std::map<std::string, PackageRow> g_installed_rows_by_name_arch; // Cached installed rows keyed by name and arch
 
+struct SearchOptions {
+  bool search_in_description = false;
+  bool exact_match = false;
+};
+
 // Keep the newest installed row for one package name and architecture tuple.
 static void
 remember_installed_row(std::map<std::string, PackageRow> &rows_by_name_arch, const PackageRow &row)
@@ -118,10 +123,12 @@ utf8_casefold_copy(const std::string &text)
 // Return true when one package matches the active search term using the same
 // name/description flag semantics as the main UI search controls.
 static bool
-package_matches_search(const libdnf5::rpm::Package &pkg, const std::string &pattern_lower)
+package_matches_search(const libdnf5::rpm::Package &pkg,
+                       const std::string &pattern_lower,
+                       const SearchOptions &search_options)
 {
   std::string name = utf8_casefold_copy(pkg.get_name());
-  if (g_exact_match.load()) {
+  if (search_options.exact_match) {
     return name == pattern_lower;
   }
 
@@ -129,7 +136,7 @@ package_matches_search(const libdnf5::rpm::Package &pkg, const std::string &patt
     return true;
   }
 
-  if (!g_search_in_description.load()) {
+  if (!search_options.search_in_description) {
     return false;
   }
 
@@ -143,14 +150,15 @@ package_matches_search(const libdnf5::rpm::Package &pkg, const std::string &patt
 static std::map<std::string, PackageRow>
 collect_available_rows_by_name_arch(libdnf5::Base &base,
                                     GCancellable *cancellable,
+                                    const SearchOptions &search_options,
                                     const std::string *pattern = nullptr)
 {
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
   query.filter_latest_evr();
 
-  if (pattern && !g_search_in_description.load()) {
-    if (g_exact_match.load()) {
+  if (pattern && !search_options.search_in_description) {
+    if (search_options.exact_match) {
       query.filter_name(*pattern, libdnf5::sack::QueryCmp::EQ);
     } else {
       query.filter_name(*pattern, libdnf5::sack::QueryCmp::CONTAINS);
@@ -166,7 +174,8 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
       return rows_by_name_arch;
     }
 
-    if (pattern && g_search_in_description.load() && !package_matches_search(pkg, pattern_lower)) {
+    if (pattern && search_options.search_in_description &&
+        !package_matches_search(pkg, pattern_lower, search_options)) {
       continue;
     }
 
@@ -181,7 +190,10 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
 // caches in one pass. When a search term is provided, filter the installed list
 // with the same search semantics used for repo-backed rows.
 static InstalledQueryResult
-collect_installed_rows(libdnf5::Base &base, GCancellable *cancellable, const std::string *pattern = nullptr)
+collect_installed_rows(libdnf5::Base &base,
+                       GCancellable *cancellable,
+                       const SearchOptions &search_options,
+                       const std::string *pattern = nullptr)
 {
   InstalledQueryResult result;
   const std::string pattern_lower = pattern ? utf8_casefold_copy(*pattern) : "";
@@ -197,7 +209,7 @@ collect_installed_rows(libdnf5::Base &base, GCancellable *cancellable, const std
       return result;
     }
 
-    if (pattern && !package_matches_search(pkg, pattern_lower)) {
+    if (pattern && !package_matches_search(pkg, pattern_lower, search_options)) {
       continue;
     }
 
@@ -298,13 +310,18 @@ visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
 std::vector<PackageRow>
 dnf_backend_search_package_rows_interruptible(const std::string &pattern, GCancellable *cancellable)
 {
+  const SearchOptions search_options {
+    .search_in_description = g_search_in_description.load(),
+    .exact_match = g_exact_match.load(),
+  };
+
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
-  auto available_rows = collect_available_rows_by_name_arch(base, cancellable, &pattern);
+  auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options, &pattern);
   if (package_query_cancelled(cancellable)) {
     return {};
   }
 
-  InstalledQueryResult installed = collect_installed_rows(base, cancellable, &pattern);
+  InstalledQueryResult installed = collect_installed_rows(base, cancellable, search_options, &pattern);
   if (package_query_cancelled(cancellable)) {
     return {};
   }
@@ -333,7 +350,8 @@ dnf_backend_refresh_installed_nevras()
   InstalledQueryResult installed;
   {
     auto [base, guard, generation] = BaseManager::instance().acquire_read();
-    installed = collect_installed_rows(base, nullptr);
+    const SearchOptions search_options {};
+    installed = collect_installed_rows(base, nullptr, search_options);
   } // Base read lock released before acquiring g_installed_mutex
 
   std::lock_guard<std::mutex> lock(g_installed_mutex);
@@ -425,14 +443,16 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
   InstalledQueryResult installed;
   {
     auto [base, guard, generation] = BaseManager::instance().acquire_read();
-    installed = collect_installed_rows(base, cancellable);
+    const SearchOptions search_options {};
+    installed = collect_installed_rows(base, cancellable, search_options);
     if (package_query_cancelled(cancellable)) {
       return {};
     }
 
     annotate_installed_rows_with_repo_candidates_best_effort(
         installed.rows, cancellable, [&base](GCancellable *annotation_cancellable) {
-          return collect_available_rows_by_name_arch(base, annotation_cancellable);
+          const SearchOptions annotation_search_options {};
+          return collect_available_rows_by_name_arch(base, annotation_cancellable, annotation_search_options);
         });
   }
 
@@ -456,13 +476,15 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 std::vector<PackageRow>
 dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
 {
+  const SearchOptions search_options {};
+
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
-  auto available_rows = collect_available_rows_by_name_arch(base, cancellable);
+  auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options);
   if (package_query_cancelled(cancellable)) {
     return {};
   }
 
-  InstalledQueryResult installed = collect_installed_rows(base, cancellable);
+  InstalledQueryResult installed = collect_installed_rows(base, cancellable, search_options);
   if (package_query_cancelled(cancellable)) {
     return {};
   }
@@ -491,7 +513,8 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
 
   annotate_installed_rows_with_repo_candidates_best_effort(
       packages, nullptr, [&base](GCancellable *annotation_cancellable) {
-        return collect_available_rows_by_name_arch(base, annotation_cancellable);
+        const SearchOptions search_options {};
+        return collect_available_rows_by_name_arch(base, annotation_cancellable, search_options);
       });
 
   return packages;
