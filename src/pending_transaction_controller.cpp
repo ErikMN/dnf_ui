@@ -103,7 +103,7 @@ show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
 static void
 update_apply_button(SearchWidgets *widgets)
 {
-  if (!widgets || !widgets->transaction.apply_button) {
+  if (!widgets || !widgets->transaction.apply_button || !widgets->transaction.clear_pending_button) {
     return;
   }
 
