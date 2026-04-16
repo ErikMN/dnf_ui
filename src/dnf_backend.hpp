@@ -163,7 +163,7 @@ bool dnf_backend_apply_transaction(const std::vector<std::string> &install_nevra
 
 #ifdef DNFUI_BUILD_TESTS
 // Test-only hook: force the best-effort repo annotation path to fail and return
-// whether all rows kept UNKNOWN provenance afterwards.
+// whether all rows kept UNKNOWN repo-candidate relation afterwards.
 bool dnf_backend_testonly_annotation_fallback_leaves_rows_unknown(std::vector<PackageRow> &rows);
 #endif
 

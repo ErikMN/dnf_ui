@@ -1114,7 +1114,8 @@ add_remove_request(libdnf5::Base &base, libdnf5::Goal &goal, const std::string &
   goal.add_rpm_remove(spec);
 }
 
-// Resolve the requested transaction once so preview and apply stay in sync.
+// Resolve the transaction through one shared code path so preview and apply
+// use identical resolution logic.
 static bool
 resolve_transaction_plan(libdnf5::Base &base,
                          const std::vector<std::string> &install_nevras,
