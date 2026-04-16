@@ -56,6 +56,14 @@ invalidate_service_preview(SearchWidgets *widgets)
   widgets->transaction.preview_transaction_path.clear();
 }
 
+// Explain why the running application package can be viewed but not modified
+// from inside the same process.
+static std::string
+self_protected_transaction_message(const PackageRow &pkg)
+{
+  return "Cannot modify " + pkg.name + " while DNF UI is running. Close the application and use another tool.";
+}
+
 // Show the selected pending action in the main package list so it can be reviewed or changed.
 static void
 show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
@@ -232,6 +240,34 @@ static void
 build_pending_transaction_request(const SearchWidgets *widgets, TransactionRequest &request)
 {
   build_pending_transaction_specs(widgets, request.install, request.remove, request.reinstall);
+}
+
+// Reject any transaction that would remove or reinstall the package owning the running GUI.
+// The UI disables those actions already, but this keeps apply safe
+// even if a protected item somehow reaches the pending queue.
+static bool
+validate_pending_transaction_request(const TransactionRequest &request, std::string &error_out)
+{
+  for (const auto &spec : request.remove) {
+    // Re-check remove specs at apply time so self-protection still holds even
+    // if stale UI state or future code paths bypass button sensitivity.
+    if (dnf_backend_is_self_protected_transaction_spec(spec)) {
+      error_out = "DNF UI cannot remove the package that owns the running application. Close DNF UI and remove it from "
+                  "another tool.";
+      return false;
+    }
+  }
+
+  for (const auto &spec : request.reinstall) {
+    // Re-check reinstall specs for the same reason: the running app must never
+    // ask the backend to modify the RPM that owns the current executable.
+    if (dnf_backend_is_self_protected_transaction_spec(spec)) {
+      error_out = "DNF UI cannot reinstall the package that owns the running application while it is running.";
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -423,6 +459,13 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
+  // Only block self-removal for the exact installed row browse/search may also
+  // contain related non-installed candidates for the same package name.
+  if (dnf_backend_is_package_installed_exact(pkg) && dnf_backend_is_package_self_protected(pkg)) {
+    ui_helpers_set_status(widgets->query.status_label, self_protected_transaction_message(pkg).c_str(), "red");
+    return;
+  }
+
   // Toggle pending remove
   PendingAction::Type existing_type;
   bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
@@ -455,6 +498,13 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
   PackageRow pkg;
   if (!package_table_get_selected_package_row(widgets, pkg)) {
     ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
+    return;
+  }
+
+  // Mirror the remove path and block reinstall only when this selected row is
+  // the exact installed package that owns the running GUI executable.
+  if (dnf_backend_is_package_installed_exact(pkg) && dnf_backend_is_package_self_protected(pkg)) {
+    ui_helpers_set_status(widgets->query.status_label, self_protected_transaction_message(pkg).c_str(), "red");
     return;
   }
 
@@ -520,6 +570,13 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
   std::string transaction_path;
   std::string error;
   build_pending_transaction_request(widgets, request);
+
+  // Refuse self-protected transactions before asking the service to preview them.
+  if (!validate_pending_transaction_request(request, error)) {
+    ui_helpers_set_status(widgets->query.status_label, error.c_str(), "red");
+    return;
+  }
+
   invalidate_service_preview(widgets);
 
   if (!transaction_service_client_preview_request(request, preview, transaction_path, error)) {

@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <atomic>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <map>
 #include <mutex>
@@ -40,6 +41,7 @@ std::mutex g_installed_mutex;                        // Mutex for thread-safe ac
 std::atomic<bool> g_search_in_description { false }; // Global flag: include description field in search
 std::atomic<bool> g_exact_match { false };           // Global flag: match package name or description exactly
 static std::map<std::string, PackageRow> g_installed_rows_by_name_arch; // Cached installed rows keyed by name and arch
+static std::set<std::string> g_self_protected_package_names; // Installed package names that own the running GUI binary
 
 struct SearchOptions {
   bool search_in_description = false;
@@ -96,6 +98,40 @@ static bool
 package_query_cancelled(GCancellable *cancellable)
 {
   return cancellable && g_cancellable_is_cancelled(cancellable);
+}
+
+// Resolve the current GUI executable path so the app can block self-removal
+// without hard-coding the RPM package name.
+static std::vector<std::string>
+self_protected_file_paths()
+{
+  std::set<std::string> paths;
+
+  try {
+    paths.insert(std::filesystem::canonical("/proc/self/exe").string());
+  } catch (const std::exception &) {
+  }
+
+  return { paths.begin(), paths.end() };
+}
+
+// Collect installed package names that own the currently running GUI binary.
+static std::set<std::string>
+collect_self_protected_package_names(libdnf5::Base &base)
+{
+  std::set<std::string> protected_names;
+
+  for (const auto &path : self_protected_file_paths()) {
+    libdnf5::rpm::PackageQuery query(base);
+    query.filter_installed();
+    query.filter_file(path);
+
+    for (const auto &pkg : query) {
+      protected_names.insert(pkg.get_name());
+    }
+  }
+
+  return protected_names;
 }
 
 struct InstalledQueryResult {
@@ -358,15 +394,18 @@ void
 dnf_backend_refresh_installed_nevras()
 {
   InstalledQueryResult installed;
+  std::set<std::string> protected_names;
   {
     auto [base, guard, generation] = BaseManager::instance().acquire_read();
     const SearchOptions search_options {};
     installed = collect_installed_rows(base, nullptr, search_options);
+    protected_names = collect_self_protected_package_names(base);
   } // Base read lock released before acquiring g_installed_mutex
 
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   g_installed_nevras.swap(installed.nevras);
   g_installed_rows_by_name_arch.swap(installed.rows_by_name_arch);
+  g_self_protected_package_names.swap(protected_names);
 }
 
 // -----------------------------------------------------------------------------
@@ -430,6 +469,8 @@ dnf_backend_get_package_install_state(const PackageRow &row)
 bool
 dnf_backend_can_reinstall_package(const PackageRow &row)
 {
+  // Reinstall is valid only for the exact installed NEVRA that the user is
+  // looking at, not for an older/newer visible candidate with the same name.
   if (!dnf_backend_is_package_installed_exact(row)) {
     return false;
   }
@@ -439,6 +480,44 @@ dnf_backend_can_reinstall_package(const PackageRow &row)
   query.filter_nevra(row.nevra);
   query.filter_available();
   return !query.empty();
+}
+
+// Check the cached self-protection snapshot that was collected from the owner
+// of the running GUI executable during the latest installed-package refresh.
+bool
+dnf_backend_is_package_self_protected(const PackageRow &row)
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  return g_self_protected_package_names.count(row.name) > 0;
+}
+
+// Resolve one queued transaction spec back to the installed rpmdb so apply-time
+// validation can reject self-removal even if the UI state is stale or bypassed.
+bool
+dnf_backend_is_self_protected_transaction_spec(const std::string &spec)
+{
+  std::set<std::string> protected_names;
+  {
+    std::lock_guard<std::mutex> lock(g_installed_mutex);
+    protected_names = g_self_protected_package_names;
+  }
+
+  if (protected_names.empty()) {
+    return false;
+  }
+
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_installed();
+  query.filter_nevra(spec);
+
+  for (const auto &pkg : query) {
+    if (protected_names.count(pkg.get_name()) > 0) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // -----------------------------------------------------------------------------
@@ -455,6 +534,7 @@ std::vector<PackageRow>
 dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 {
   InstalledQueryResult installed;
+  std::set<std::string> protected_names;
   {
     auto [base, guard, generation] = BaseManager::instance().acquire_read();
     const SearchOptions search_options {};
@@ -468,12 +548,14 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
           const SearchOptions annotation_search_options {};
           return collect_available_rows_by_name_arch(base, annotation_cancellable, annotation_search_options);
         });
+    protected_names = collect_self_protected_package_names(base);
   }
 
   // Publish the new installed-package cache only after a complete uncancelled scan.
   std::lock_guard<std::mutex> lock(g_installed_mutex);
   g_installed_nevras.swap(installed.nevras);
   g_installed_rows_by_name_arch.swap(installed.rows_by_name_arch);
+  g_self_protected_package_names.swap(protected_names);
 
   return installed.rows;
 }

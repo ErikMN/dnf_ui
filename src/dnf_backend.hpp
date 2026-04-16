@@ -116,6 +116,14 @@ bool dnf_backend_is_package_installed_exact(const PackageRow &row);
 // available package sources. Local-only packages therefore return false.
 bool dnf_backend_can_reinstall_package(const PackageRow &row);
 
+// Return true when this installed package owns the running GUI executable and
+// therefore must not be removed or reinstalled from within the app itself.
+bool dnf_backend_is_package_self_protected(const PackageRow &row);
+
+// Return true when one installed remove/reinstall spec targets the running GUI
+// package and must be rejected before the transaction is previewed or applied.
+bool dnf_backend_is_self_protected_transaction_spec(const std::string &spec);
+
 // Structured package row queries used by the main package list presentation.
 // Browse and search results use a merged package view: the newest repo candidate
 // for each name+arch pair plus any installed-only local RPMs that are missing

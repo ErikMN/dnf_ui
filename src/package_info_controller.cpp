@@ -110,12 +110,17 @@ update_selected_package_actions(SearchWidgets *widgets, const PackageRow &select
   // Install stays available for repo candidates. Remove remains tied to the
   // exact installed row, and reinstall is only enabled when the same NEVRA is
   // still available from a repository.
+  // Gate destructive actions on the exact installed row so merged browse/search
+  // results do not enable remove/reinstall for a merely related candidate.
   bool installed_exact = dnf_backend_is_package_installed_exact(selected);
+  // Self-protected packages stay viewable, but the running app must not remove
+  // or reinstall the RPM that owns its current executable.
+  bool self_protected = installed_exact && dnf_backend_is_package_self_protected(selected);
 
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), !installed_exact);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button), installed_exact);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button), installed_exact && !self_protected);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
-                           installed_exact && dnf_backend_can_reinstall_package(selected));
+                           installed_exact && !self_protected && dnf_backend_can_reinstall_package(selected));
   ui_helpers_update_action_button_labels(widgets, selected.nevra);
 }
 

@@ -465,8 +465,13 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   gtk_popover_set_child(GTK_POPOVER(popover), box);
 
+  // Match the main action buttons: remove/reinstall are only valid for the
+  // exact installed NEVRA represented by this row.
   bool installed_exact = dnf_backend_is_package_installed_exact(row);
-  bool can_reinstall = installed_exact && dnf_backend_can_reinstall_package(row);
+  // Keep the running app visible in the table, but block context-menu actions
+  // that would modify the package currently owning this executable.
+  bool self_protected = installed_exact && dnf_backend_is_package_self_protected(row);
+  bool can_reinstall = installed_exact && !self_protected && dnf_backend_can_reinstall_package(row);
 
   PendingAction::Type pending_type;
   bool has_pending = get_context_menu_pending_action(widgets, row.nevra, pending_type);
@@ -492,7 +497,7 @@ show_package_context_menu(GtkWidget *anchor, SearchWidgets *widgets, const Packa
 
   append_context_menu_action(GTK_BOX(box),
                              remove_label,
-                             installed_exact,
+                             installed_exact && !self_protected,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
@@ -844,6 +849,8 @@ package_table_fill_package_view(SearchWidgets *widgets, const std::vector<Packag
                        return;
                      }
 
+                     // Double-click toggles install vs remove based on whether
+                     // this exact row already exists in the installed snapshot.
                      bool installed_exact = dnf_backend_is_package_installed_exact(*row);
                      gtk_single_selection_set_selected(sel, position);
                      g_object_unref(obj);
