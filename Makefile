@@ -156,6 +156,11 @@ test: dnfui-tests
 	@echo "*** Running backend test suite ***"
 	@./$(TEST_BIN_NAME)
 
+# Run the full native test matrix, including service smoke tests:
+.PHONY: nativetests
+nativetests:
+	@bash ./utils/run_native_tests.sh
+
 # -----------------------------------------------------------------------------
 # Native install targets
 # -----------------------------------------------------------------------------
@@ -268,6 +273,11 @@ dockerrun:
 .PHONY: dockertest
 dockertest:
 	@./docker/docker_test.sh
+
+# Run the full Docker-backed test matrix:
+.PHONY: dockertests
+dockertests:
+	@bash ./docker/run_docker_tests.sh
 
 # Run the session bus preview smoke test in Docker:
 .PHONY: dockerservicetest

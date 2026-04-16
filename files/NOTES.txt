@@ -25,6 +25,9 @@ export DEBUG_TRACE=y
 
 make test
 
+Run the full native test matrix:
+SERVICE_TEST_INSTALL_SPEC=cowsay make nativetests
+
 Native transaction service tests:
 SERVICE_TEST_INSTALL_SPEC=cowsay make servicetest
 SERVICE_TEST_INSTALL_SPEC=cowsay make servicecanceltest
@@ -39,6 +42,9 @@ sudo make serviceuninstall
 
 Docker C++ tests:
 make dockertest
+
+Run the full Docker-backed test matrix:
+make dockertests
 
 Docker RPM builds:
 make dockersrpm

@@ -140,6 +140,12 @@ Run the test suite:
 make test
 ```
 
+Run the full native test matrix, including transaction service smoke tests:
+
+```sh
+SERVICE_TEST_INSTALL_SPEC=cowsay make nativetests
+```
+
 ### Docker
 
 Build the development image:
@@ -165,6 +171,12 @@ Run the test suite in Docker:
 
 ```sh
 make dockertest
+```
+
+Run the full Docker-backed test matrix:
+
+```sh
+make dockertests
 ```
 
 Docker notes:
