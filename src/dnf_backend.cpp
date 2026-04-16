@@ -48,9 +48,9 @@ struct SearchOptions {
   bool exact_match = false;
 };
 
-// Keep the newest installed row for one package name and architecture tuple.
+// Keep the newest row for one package name and architecture tuple.
 static void
-remember_installed_row(std::map<std::string, PackageRow> &rows_by_name_arch, const PackageRow &row)
+remember_newest_row(std::map<std::string, PackageRow> &rows_by_name_arch, const PackageRow &row)
 {
   auto [it, inserted] = rows_by_name_arch.emplace(row.name_arch_key(), row);
   if (!inserted && libdnf5::rpm::evrcmp(row, it->second) > 0) {
@@ -217,7 +217,7 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
     // visible_rows_from_maps or annotate_installed_row_with_repo_candidate
     // will resolve it when the installed map is available.
     PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
-    rows_by_name_arch[row.name_arch_key()] = row;
+    remember_newest_row(rows_by_name_arch, row);
   }
 
   return rows_by_name_arch;
@@ -252,7 +252,7 @@ collect_installed_rows(libdnf5::Base &base,
 
     PackageRow row = make_package_row(pkg);
     result.nevras.insert(row.nevra);
-    remember_installed_row(result.rows_by_name_arch, row);
+    remember_newest_row(result.rows_by_name_arch, row);
     result.rows.push_back(row);
   }
 
