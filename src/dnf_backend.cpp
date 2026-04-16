@@ -16,13 +16,11 @@
 #include <atomic>
 #include <ctime>
 #include <iomanip>
-#include <iostream>
 #include <map>
 #include <mutex>
 #include <memory>
 #include <set>
 #include <sstream>
-#include <unistd.h>
 
 #include <gio/gio.h>
 
@@ -278,6 +276,15 @@ annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow>
 // tuples that are missing from enabled repositories. If an installed package is
 // newer than the repo candidate, keep the installed row so the UI can surface
 // that state directly.
+//
+// Note on repo_candidate_relation in the returned rows:
+// Installed rows that are promoted into the map (LOCAL_ONLY, OLDER, or the installed>repo case)
+// carry a fully resolved relation.
+// Available rows that stay in the map without a matching installed entry keep repo_candidate_relation = UNKNOWN
+// because no installed counterpart was found during this pass.
+// get_package_install_state handles this correctly through its EVR-comparison fallback path.
+// Code that reads repo_candidate_relation directly should treat UNKNOWN on a non-installed row as "no installed
+// counterpart known".
 static std::vector<PackageRow>
 visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
                        std::map<std::string, PackageRow> installed_rows)
@@ -518,10 +525,14 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
     packages.push_back(make_package_row(pkg));
   }
 
+  // Scope the annotation query to the package name so we load only the one
+  // relevant name+arch entry instead of the entire available package set.
+  const std::string annotation_pattern = packages.empty() ? "" : packages[0].name;
   annotate_installed_rows_with_repo_candidates_best_effort(
-      packages, nullptr, [&base](GCancellable *annotation_cancellable) {
+      packages, nullptr, [&base, &annotation_pattern](GCancellable *annotation_cancellable) {
         const SearchOptions search_options {};
-        return collect_available_rows_by_name_arch(base, annotation_cancellable, search_options);
+        return collect_available_rows_by_name_arch(
+            base, annotation_cancellable, search_options, annotation_pattern.empty() ? nullptr : &annotation_pattern);
       });
 
   return packages;
