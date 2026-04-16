@@ -2,7 +2,6 @@
 #pragma once
 
 #include <atomic>
-#include <chrono>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
