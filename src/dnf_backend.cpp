@@ -179,7 +179,10 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
       continue;
     }
 
-    PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::SAME);
+    // Provenance is UNKNOWN until compared against the installed set
+    // visible_rows_from_maps or annotate_installed_row_with_repo_candidate
+    // will resolve it when the installed map is available.
+    PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
     rows_by_name_arch[row.name_arch_key()] = row;
   }
 
@@ -384,6 +387,10 @@ dnf_backend_get_package_install_state(const PackageRow &row)
   if (g_installed_nevras.count(row.nevra) > 0) {
     switch (row.repo_candidate_relation) {
     case PackageRepoCandidateRelation::UNKNOWN:
+      // Annotation was not run or failed (best-effort path). The package is
+      // known-installed but we cannot distinguish LOCAL_ONLY from INSTALLED
+      // without a successful repo query. Fall back to INSTALLED so the UI
+      // does not misrepresent the package state.
     case PackageRepoCandidateRelation::SAME:
       return PackageInstallState::INSTALLED;
     case PackageRepoCandidateRelation::NONE:
@@ -720,7 +727,12 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra)
     return "No dependency information found for this package.";
   }
 
-  auto pkg = *query.begin();
+  // Prefer the installed copy: its rpmdb metadata is always present and
+  // authoritative. Fall back to any available repo match if not installed.
+  libdnf5::rpm::PackageQuery installed(query);
+  installed.filter_installed();
+  libdnf5::rpm::PackageQuery &best = installed.empty() ? query : installed;
+  auto pkg = *best.begin();
 
   std::ostringstream out;
 
@@ -760,7 +772,13 @@ dnf_backend_get_package_changelog(const std::string &pkg_nevra)
     return "No changelog available.";
   }
 
-  auto pkg = *query.begin();
+  // Prefer the installed copy: repo metadata often omits older changelog
+  // entries while the rpmdb retains the full history. Fall back to any
+  // available repo match if the package is not installed.
+  libdnf5::rpm::PackageQuery installed(query);
+  installed.filter_installed();
+  libdnf5::rpm::PackageQuery &best = installed.empty() ? query : installed;
+  auto pkg = *best.begin();
 
   std::ostringstream out;
 
