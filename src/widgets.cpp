@@ -113,7 +113,9 @@ widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
     // Search caches are bound to the old Base generation and must be dropped
     // before the user can query against freshly refreshed repositories.
     package_query_clear_search_cache();
+    dnf_backend_refresh_installed_nevras();
     ui_helpers_set_status(widgets->query.status_label, "Repositories refreshed.", "green");
+    package_query_reload_current_view(widgets);
   } else {
     ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Repo refresh failed.", "red");
     if (error) {

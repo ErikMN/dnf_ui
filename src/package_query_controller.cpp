@@ -62,6 +62,8 @@ struct SearchTaskData {
   // Snapshot of BaseManager generation at dispatch time.
   // Used to drop stale results if the backend Base is rebuilt while this task runs.
   uint64_t generation;
+  bool search_in_description;
+  bool exact_match;
 };
 
 static void
@@ -74,6 +76,60 @@ search_task_data_free(gpointer p)
   g_free(d->term);
   g_free(d->cache_key);
   g_free(d);
+}
+
+// Record which main query flow produced the currently displayed table.
+// Transaction/repository rebuilds use this to rerun the same query and replace
+// stale rows with fresh backend data.
+static void
+set_displayed_query_kind(SearchWidgets *widgets, DisplayedPackageQueryKind kind)
+{
+  if (!widgets) {
+    return;
+  }
+
+  widgets->query_state.displayed_query = DisplayedPackageQueryState();
+  widgets->query_state.displayed_query.kind = kind;
+}
+
+// Preserve the active search term and flags so a post-transaction refresh can
+// rebuild the visible search results even if the user changes the checkboxes
+// while the background work is still running.
+static void
+set_displayed_search_query(SearchWidgets *widgets, const SearchTaskData &task_data)
+{
+  if (!widgets) {
+    return;
+  }
+
+  widgets->query_state.displayed_query = DisplayedPackageQueryState();
+  widgets->query_state.displayed_query.kind = DisplayedPackageQueryKind::SEARCH;
+  widgets->query_state.displayed_query.search_term = task_data.term ? task_data.term : "";
+  widgets->query_state.displayed_query.search_in_description = task_data.search_in_description;
+  widgets->query_state.displayed_query.exact_match = task_data.exact_match;
+}
+
+// Complete one rebuild-triggered refresh. When the old selection survived the
+// refreshed query result, leave the details pane intact; otherwise clear it so
+// stale package info is not shown for rows that disappeared.
+static void
+finish_results_refresh(SearchWidgets *widgets)
+{
+  if (!widgets) {
+    return;
+  }
+
+  if (widgets->query_state.preserve_selection_on_reload) {
+    PackageRow selected;
+    if (!package_table_get_selected_package_row(widgets, selected)) {
+      package_info_reset_details_view(widgets);
+    }
+  } else {
+    package_info_reset_details_view(widgets);
+  }
+
+  widgets->query_state.preserve_selection_on_reload = false;
+  widgets->query_state.reload_selected_nevra.clear();
 }
 
 // Task data for package-list operations started from the main action buttons.
@@ -293,15 +349,23 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (packages) {
+    set_displayed_query_kind(widgets, DisplayedPackageQueryKind::LIST_INSTALLED);
+
     // Populate the package table and update status
-    widgets->results.selected_nevra.clear();
+    if (widgets->query_state.preserve_selection_on_reload) {
+      widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
+    } else {
+      widgets->results.selected_nevra.clear();
+    }
     package_table_fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages->size());
     ui_helpers_set_status(widgets->query.status_label, msg, "green");
-    package_info_reset_details_view(widgets);
+    finish_results_refresh(widgets);
     delete packages;
   } else {
+    widgets->query_state.preserve_selection_on_reload = false;
+    widgets->query_state.reload_selected_nevra.clear();
     ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
     if (error) {
       g_error_free(error);
@@ -365,16 +429,24 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   }
 
   if (packages) {
+    set_displayed_query_kind(widgets, DisplayedPackageQueryKind::LIST_AVAILABLE);
+
     dnf_backend_refresh_installed_nevras();
 
-    widgets->results.selected_nevra.clear();
+    if (widgets->query_state.preserve_selection_on_reload) {
+      widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
+    } else {
+      widgets->results.selected_nevra.clear();
+    }
     package_table_fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
     ui_helpers_set_status(widgets->query.status_label, msg, "green");
-    package_info_reset_details_view(widgets);
+    finish_results_refresh(widgets);
     delete packages;
   } else {
+    widgets->query_state.preserve_selection_on_reload = false;
+    widgets->query_state.reload_selected_nevra.clear();
     ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
     if (error) {
       g_error_free(error);
@@ -453,17 +525,27 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
       g_search_cache[td->cache_key] = CachedSearchResults { td->generation, *packages };
     }
 
+    if (td) {
+      set_displayed_search_query(widgets, *td);
+    }
+
     dnf_backend_refresh_installed_nevras();
 
     // Fill the package table and display result count
-    widgets->results.selected_nevra.clear();
+    if (widgets->query_state.preserve_selection_on_reload) {
+      widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
+    } else {
+      widgets->results.selected_nevra.clear();
+    }
     package_table_fill_package_view(widgets, *packages);
     char msg[256];
     snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
     ui_helpers_set_status(widgets->query.status_label, msg, "green");
-    package_info_reset_details_view(widgets);
+    finish_results_refresh(widgets);
     delete packages;
   } else {
+    widgets->query_state.preserve_selection_on_reload = false;
+    widgets->query_state.reload_selected_nevra.clear();
     ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error or no results.", "red");
     if (error) {
       g_error_free(error);
@@ -511,7 +593,9 @@ perform_search(SearchWidgets *widgets, const std::string &term)
 
   gtk_editable_set_text(GTK_EDITABLE(widgets->query.entry), term.c_str());
   ui_helpers_set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
-  widgets->results.selected_nevra.clear();
+  if (!widgets->query_state.preserve_selection_on_reload) {
+    widgets->results.selected_nevra.clear();
+  }
 
   // Check cache first.
   // Reuse only results produced from the current Base generation so refreshes
@@ -525,12 +609,18 @@ perform_search(SearchWidgets *widgets, const std::string &term)
         g_search_cache.erase(it);
       } else {
         // Use cached results and skip background thread.
+        SearchTaskData cached_td {};
+        cached_td.term = const_cast<char *>(term.c_str());
+        cached_td.search_in_description = g_search_in_description.load();
+        cached_td.exact_match = g_exact_match.load();
+        set_displayed_search_query(widgets, cached_td);
+
         package_table_fill_package_view(widgets, it->second.packages);
 
         char msg[256];
         snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.packages.size());
         ui_helpers_set_status(widgets->query.status_label, msg, "gray");
-        package_info_reset_details_view(widgets);
+        finish_results_refresh(widgets);
 
         return;
       }
@@ -546,6 +636,8 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   td->cache_key = g_strdup(key.c_str());
   td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
+  td->search_in_description = g_search_in_description.load();
+  td->exact_match = g_exact_match.load();
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   // The shared request helper owns disabling the search controls and flipping
@@ -692,6 +784,9 @@ package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
 
   cancel_active_package_list_request(widgets);
 
+  widgets->query_state.displayed_query = DisplayedPackageQueryState();
+  widgets->query_state.preserve_selection_on_reload = false;
+  widgets->query_state.reload_selected_nevra.clear();
   widgets->results.current_packages.clear();
   widgets->results.selected_nevra.clear();
   package_table_fill_package_view(widgets, {});
@@ -700,6 +795,66 @@ package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
   ui_helpers_set_status(widgets->query.status_label, "Ready.", "gray");
   package_info_reset_details_view(widgets);
   ui_helpers_update_action_button_labels(widgets, "");
+}
+
+// Rebuild the currently displayed package table after a transaction or repo
+// refresh. Query-backed views are replayed through their normal async entry
+// points, exact one-package views are refreshed from the selected NEVRA.
+void
+package_query_reload_current_view(SearchWidgets *widgets)
+{
+  if (!widgets || has_active_package_list_request(widgets)) {
+    return;
+  }
+
+  widgets->query_state.preserve_selection_on_reload = !widgets->results.selected_nevra.empty();
+  widgets->query_state.reload_selected_nevra = widgets->results.selected_nevra;
+
+  const DisplayedPackageQueryState view_state = widgets->query_state.displayed_query;
+
+  switch (view_state.kind) {
+  case DisplayedPackageQueryKind::SEARCH:
+    if (view_state.search_term.empty()) {
+      widgets->query_state.preserve_selection_on_reload = false;
+      widgets->query_state.reload_selected_nevra.clear();
+      return;
+    }
+
+    gtk_check_button_set_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox), view_state.search_in_description);
+    gtk_check_button_set_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox), view_state.exact_match);
+    g_search_in_description = view_state.search_in_description;
+    g_exact_match = view_state.exact_match;
+    perform_search(widgets, view_state.search_term);
+    return;
+  case DisplayedPackageQueryKind::LIST_INSTALLED:
+    package_query_on_list_button_clicked(nullptr, widgets);
+    return;
+  case DisplayedPackageQueryKind::LIST_AVAILABLE:
+    package_query_on_list_available_button_clicked(nullptr, widgets);
+    return;
+  case DisplayedPackageQueryKind::NONE:
+  default:
+    break;
+  }
+
+  // Exact one-package views are not part of the main query state. When the
+  // user is reviewing one package from the pending-actions sidebar, refresh the
+  // selected NEVRA directly so removed rows disappear without carrying extra
+  // global view bookkeeping.
+  if (widgets->results.selected_nevra.empty()) {
+    widgets->query_state.preserve_selection_on_reload = false;
+    widgets->query_state.reload_selected_nevra.clear();
+    return;
+  }
+
+  std::vector<PackageRow> rows = dnf_backend_get_installed_package_rows_by_nevra(widgets->results.selected_nevra);
+  if (rows.empty()) {
+    rows = dnf_backend_get_available_package_rows_by_nevra(widgets->results.selected_nevra);
+  }
+
+  widgets->results.selected_nevra = rows.empty() ? "" : widgets->query_state.reload_selected_nevra;
+  package_table_fill_package_view(widgets, rows);
+  finish_results_refresh(widgets);
 }
 
 // -----------------------------------------------------------------------------

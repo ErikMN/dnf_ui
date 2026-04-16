@@ -1014,6 +1014,24 @@ class DownloadCallbacksReset {
   libdnf5::Base &base;
 };
 
+// Prefer removing exact installed packages by rpmdb object when the UI passes
+// a full NEVRA. This keeps local-only RPM removals working even when libdnf5
+// does not re-resolve the same string spec back to the installed package.
+static void
+add_remove_request(libdnf5::Base &base, libdnf5::Goal &goal, const std::string &spec)
+{
+  libdnf5::rpm::PackageQuery installed_query(base);
+  installed_query.filter_installed();
+  installed_query.filter_nevra(spec);
+
+  if (!installed_query.empty()) {
+    goal.add_rpm_remove(installed_query);
+    return;
+  }
+
+  goal.add_rpm_remove(spec);
+}
+
 // Resolve the requested transaction once so preview and apply stay in sync.
 static bool
 resolve_transaction_plan(libdnf5::Base &base,
@@ -1046,7 +1064,7 @@ resolve_transaction_plan(libdnf5::Base &base,
   }
 
   for (const auto &spec : remove_nevras) {
-    goal.add_rpm_remove(spec);
+    add_remove_request(base, goal, spec);
   }
 
   for (const auto &spec : reinstall_nevras) {

@@ -84,28 +84,27 @@ BaseManager::rebuild()
   // Lock to ensure only one rebuild runs at a time
   std::unique_lock lock(base_mutex);
 
-  // Bump generation epoch so running async UI tasks can detect the rebuild
-  // and drop stale results produced against the previous Base instance.
-  generation.fetch_add(1, std::memory_order_relaxed);
-
-  // Clear global cached Base instance to force fresh creation
-  base_ptr.reset();
-
-  // Build a new Base and reload all repository data
-  ensure_base_initialized();
-
-  if (!base_ptr) {
-    // Keep BaseManager in a consistent state.
+  // Build the replacement first so a repo-refresh failure does not discard the
+  // last known-good Base. This keeps local rpmdb-backed operations available
+  // even when repository metadata refresh fails.
+  auto rebuilt_base = build_initialized_base();
+  if (!rebuilt_base) {
     throw std::runtime_error("Repository rebuild failed (Base is null).");
   }
+
+  base_ptr = rebuilt_base;
+
+  // Publish the generation change only after the new Base is ready so readers
+  // never drop their cached results without a replacement snapshot to use.
+  generation.fetch_add(1, std::memory_order_relaxed);
 }
 
 // -----------------------------------------------------------------------------
-// Internal helper: ensure_base_initialized()
-// Called under unique_lock to (re)create base if missing or expired
+// Internal helper: build one fully initialized Base instance without touching
+// the shared cache until initialization succeeds.
 // -----------------------------------------------------------------------------
-void
-BaseManager::ensure_base_initialized()
+std::shared_ptr<libdnf5::Base>
+BaseManager::build_initialized_base()
 {
   DNFUI_TRACE("BaseManager initialize start");
 
@@ -138,9 +137,20 @@ BaseManager::ensure_base_initialized()
     throw;
   }
 
-  // Make this new Base the shared instance used by the rest of the application
-  base_ptr = base;
   DNFUI_TRACE("BaseManager initialize done");
+  return base;
+}
+
+// -----------------------------------------------------------------------------
+// Internal helper: ensure_base_initialized()
+// Called under unique_lock to create the shared Base when it does not exist.
+// -----------------------------------------------------------------------------
+void
+BaseManager::ensure_base_initialized()
+{
+  if (!base_ptr) {
+    base_ptr = build_initialized_base();
+  }
 }
 
 // -----------------------------------------------------------------------------

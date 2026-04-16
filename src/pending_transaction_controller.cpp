@@ -81,6 +81,10 @@ show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
     return;
   }
 
+  // This temporary one-package review replaces the main query-backed table, so
+  // post-transaction refreshes should rebuild it from the selected NEVRA
+  // instead of replaying an older search or list view.
+  widgets->query_state.displayed_query = DisplayedPackageQueryState();
   widgets->results.selected_nevra = action.nevra;
   package_table_fill_package_view(widgets, rows);
 }
@@ -256,18 +260,10 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
   // cached search result rows must be discarded before the next search.
   package_query_clear_search_cache();
 
-  // Refresh installed state and visible package status badges.
+  // Refresh installed state, then repopulate the currently visible package
+  // view so rows removed by the transaction disappear without a manual reload.
   dnf_backend_refresh_installed_nevras();
-
-  if (!widgets->results.current_packages.empty()) {
-    package_table_refresh_statuses(widgets);
-  }
-
-  PackageRow selected;
-  if (package_table_get_selected_package_row(widgets, selected)) {
-    // Reload details because installed files may have changed after the transaction.
-    package_info_load_selected_package_info(widgets, selected);
-  }
+  package_query_reload_current_view(widgets);
 }
 
 static void

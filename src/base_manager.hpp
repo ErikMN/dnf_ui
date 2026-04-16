@@ -72,6 +72,7 @@ class BaseManager {
   BaseManager(const BaseManager &) = delete;
   BaseManager &operator=(const BaseManager &) = delete;
 
+  std::shared_ptr<libdnf5::Base> build_initialized_base();
   void ensure_base_initialized();
 
   std::shared_ptr<libdnf5::Base> base_ptr;

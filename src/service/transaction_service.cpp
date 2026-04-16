@@ -710,6 +710,19 @@ run_transaction_preview(TransactionSession *session)
   auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
   DNFUI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
+  try {
+    // The transaction service is a long-lived process, so packages installed or
+    // removed outside the GUI can leave its cached Base out of date. Rebuild it
+    // before each preview so resolve/apply requests always use the current
+    // rpmdb and repository metadata snapshot.
+    queue_transaction_progress(session, "Refreshing backend state...");
+    BaseManager::instance().rebuild();
+  } catch (const std::exception &e) {
+    DNFUI_TRACE("Transaction service preview refresh failed path=%s error=%s", session->object_path.c_str(), e.what());
+    queue_transaction_progress(session,
+                               "Backend refresh failed; retrying preview with the last known-good package state.");
+  }
+
   bool ok = dnf_backend_preview_transaction(
       session->request.install, session->request.remove, session->request.reinstall, preview, error_out, progress_cb);
 

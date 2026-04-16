@@ -23,6 +23,22 @@ struct PendingAction {
 enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
 
 // -----------------------------------------------------------------------------
+// Last query-backed package view shown in the main table.
+// This intentionally tracks only views that can be reproduced through the main
+// query controls. Exact one-package views from the pending-actions sidebar are
+// refreshed via the currently selected NEVRA instead of adding more global UI
+// state.
+// -----------------------------------------------------------------------------
+enum class DisplayedPackageQueryKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
+
+struct DisplayedPackageQueryState {
+  DisplayedPackageQueryKind kind = DisplayedPackageQueryKind::NONE;
+  std::string search_term;
+  bool search_in_description = false;
+  bool exact_match = false;
+};
+
+// -----------------------------------------------------------------------------
 // Query controls and status widgets shared by search and package-list actions
 // -----------------------------------------------------------------------------
 struct PackageQueryWidgets {
@@ -81,6 +97,14 @@ struct PackageQueryState {
   // Identifies whether the active Stop button belongs to search, installed listing,
   // or available-package listing.
   PackageListRequestKind current_package_list_request_kind = PackageListRequestKind::NONE;
+  // Remembers the last query-backed result view so rebuilds can repopulate the
+  // visible table instead of leaving stale rows on screen after a transaction.
+  DisplayedPackageQueryState displayed_query;
+  // Temporary selection snapshot used only while a rebuild-triggered query is
+  // reloading. This lets the refreshed view keep the previously selected row
+  // and details panel when the package is still present.
+  bool preserve_selection_on_reload = false;
+  std::string reload_selected_nevra;
   std::vector<std::string> history;
 };
 
@@ -115,6 +139,7 @@ void package_query_on_search_button_clicked(GtkButton *, gpointer user_data);
 void package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data);
 void package_query_on_clear_button_clicked(GtkButton *, gpointer user_data);
 void package_query_clear_search_cache();
+void package_query_reload_current_view(SearchWidgets *widgets);
 void pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data);
 void pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data);
 void pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data);
