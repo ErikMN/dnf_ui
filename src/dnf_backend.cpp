@@ -32,6 +32,7 @@
 #include <libdnf5/repo/download_callbacks.hpp>
 #include <libdnf5/rpm/package_query.hpp>
 #include <libdnf5/transaction/transaction_item_action.hpp>
+#include <libdnf5/transaction/transaction_item_reason.hpp>
 
 // -----------------------------------------------------------------------------
 // Global state used by UI highlighting and query filters
@@ -58,6 +59,52 @@ remember_newest_row(std::map<std::string, PackageRow> &rows_by_name_arch, const 
   }
 }
 
+// Translate libdnf5 install reasons into the backend-owned row model.
+static PackageInstallReason
+package_install_reason_from_libdnf(libdnf5::transaction::TransactionItemReason reason)
+{
+  switch (reason) {
+  case libdnf5::transaction::TransactionItemReason::DEPENDENCY:
+    return PackageInstallReason::DEPENDENCY;
+  case libdnf5::transaction::TransactionItemReason::USER:
+    return PackageInstallReason::USER;
+  case libdnf5::transaction::TransactionItemReason::CLEAN:
+    return PackageInstallReason::CLEAN;
+  case libdnf5::transaction::TransactionItemReason::WEAK_DEPENDENCY:
+    return PackageInstallReason::WEAK_DEPENDENCY;
+  case libdnf5::transaction::TransactionItemReason::GROUP:
+    return PackageInstallReason::GROUP;
+  case libdnf5::transaction::TransactionItemReason::EXTERNAL_USER:
+    return PackageInstallReason::EXTERNAL;
+  case libdnf5::transaction::TransactionItemReason::NONE:
+  default:
+    return PackageInstallReason::UNKNOWN;
+  }
+}
+
+// Convert one backend-owned install reason to stable UI text.
+std::string
+dnf_backend_install_reason_to_string(PackageInstallReason reason)
+{
+  switch (reason) {
+  case PackageInstallReason::DEPENDENCY:
+    return "Dependency";
+  case PackageInstallReason::USER:
+    return "User";
+  case PackageInstallReason::CLEAN:
+    return "Clean";
+  case PackageInstallReason::WEAK_DEPENDENCY:
+    return "Weak dependency";
+  case PackageInstallReason::GROUP:
+    return "Group";
+  case PackageInstallReason::EXTERNAL:
+    return "External";
+  case PackageInstallReason::UNKNOWN:
+  default:
+    return "Unknown";
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Helper: Convert a libdnf5 package to the structured UI row model
 // -----------------------------------------------------------------------------
@@ -74,6 +121,9 @@ make_package_row(const libdnf5::rpm::Package &pkg,
   row.arch = pkg.get_arch();
   row.repo = pkg.get_repo_id();
   row.summary = pkg.get_summary();
+  if (pkg.is_installed()) {
+    row.install_reason = package_install_reason_from_libdnf(pkg.get_reason());
+  }
   row.repo_candidate_relation = repo_candidate_relation;
 
   if (row.summary.empty()) {
@@ -726,6 +776,10 @@ dnf_backend_get_package_info(const std::string &pkg_nevra)
       << "Arch: " << pkg.get_arch() << "\n"
       << "Repo: " << pkg.get_repo_id() << "\n"
       << "Install Size: " << format_package_size(static_cast<unsigned long long>(pkg.get_install_size())) << "\n";
+
+  if (pkg.is_installed()) {
+    oss << "Install Reason: " << dnf_backend_install_reason_to_string(selected_row.install_reason) << "\n";
+  }
 
   unsigned long long download_size = static_cast<unsigned long long>(pkg.get_download_size());
   if (download_size > 0) {

@@ -153,7 +153,7 @@ TEST_CASE("Package info formatting contains expected fields")
 {
   reset_backend_globals();
 
-  auto results = dnf_backend_search_package_rows_interruptible("bash", nullptr);
+  auto results = dnf_backend_get_installed_package_rows_interruptible(nullptr);
   REQUIRE(!results.empty());
 
   auto info = dnf_backend_get_package_info(results.front().nevra);
@@ -164,6 +164,7 @@ TEST_CASE("Package info formatting contains expected fields")
   REQUIRE(info.find("Release: ") != std::string::npos);
   REQUIRE(info.find("Arch: ") != std::string::npos);
   REQUIRE(info.find("Install Size: ") != std::string::npos);
+  REQUIRE(info.find("Install Reason: ") != std::string::npos);
   REQUIRE(info.find("Summary:") != std::string::npos);
   REQUIRE(info.find("Description:") != std::string::npos);
 }
@@ -186,6 +187,18 @@ TEST_CASE("Structured package rows expose searchable metadata")
   REQUIRE(!row.arch.empty());
   REQUIRE(!row.repo.empty());
   REQUIRE(!row.display_version().empty());
+}
+
+TEST_CASE("Installed package rows expose install reason")
+{
+  reset_backend_globals();
+
+  auto rows = dnf_backend_get_installed_package_rows_interruptible(nullptr);
+  REQUIRE(!rows.empty());
+
+  REQUIRE(std::any_of(rows.begin(), rows.end(), [](const PackageRow &row) {
+    return row.install_reason != PackageInstallReason::UNKNOWN;
+  }));
 }
 
 TEST_CASE("Search results keep one visible EVR per package name and architecture")

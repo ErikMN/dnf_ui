@@ -33,6 +33,20 @@ enum class PackageRepoCandidateRelation {
   OLDER,
 };
 
+// Backend-owned install reason for installed packages.
+// This keeps package provenance visible to the UI without exposing libdnf5
+// enums directly through the presentation model. Available-only rows keep
+// UNKNOWN because the install reason is meaningful only for installed packages.
+enum class PackageInstallReason {
+  UNKNOWN,
+  DEPENDENCY,
+  USER,
+  CLEAN,
+  WEAK_DEPENDENCY,
+  GROUP,
+  EXTERNAL,
+};
+
 struct PackageRow {
   std::string nevra;
   std::string name;
@@ -42,6 +56,7 @@ struct PackageRow {
   std::string arch;
   std::string repo;
   std::string summary;
+  PackageInstallReason install_reason = PackageInstallReason::UNKNOWN;
   PackageRepoCandidateRelation repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN;
 
   const std::string &get_epoch() const
@@ -108,6 +123,9 @@ void dnf_backend_refresh_installed_nevras();
 
 // Classify one visible package row for UI status badges and action gating.
 PackageInstallState dnf_backend_get_package_install_state(const PackageRow &row);
+
+// Convert one backend-owned install reason to user-facing text.
+std::string dnf_backend_install_reason_to_string(PackageInstallReason reason);
 
 // Return true only when this exact NEVRA is installed on the current system.
 bool dnf_backend_is_package_installed_exact(const PackageRow &row);
