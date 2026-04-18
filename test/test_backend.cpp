@@ -290,6 +290,16 @@ TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
   REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED_NEWER_THAN_REPO);
 }
 
+TEST_CASE("Default install state sort keeps installed rows first")
+{
+  REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::INSTALLED) <
+          dnf_backend_get_install_state_sort_rank(PackageInstallState::LOCAL_ONLY));
+  REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::LOCAL_ONLY) <
+          dnf_backend_get_install_state_sort_rank(PackageInstallState::UPGRADEABLE));
+  REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::UPGRADEABLE) <
+          dnf_backend_get_install_state_sort_rank(PackageInstallState::AVAILABLE));
+}
+
 TEST_CASE("Exact installed checks use the cached installed NEVRA snapshot")
 {
   reset_backend_globals();

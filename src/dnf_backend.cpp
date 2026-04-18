@@ -512,6 +512,27 @@ dnf_backend_get_package_install_state(const PackageRow &row)
   return PackageInstallState::INSTALLED_NEWER_THAN_REPO;
 }
 
+// Keep the default package table view close to Synaptic-style expectations:
+// exact installed rows first, then special installed rows, then upgradeable
+// rows, and finally repo-only available rows.
+int
+dnf_backend_get_install_state_sort_rank(PackageInstallState state)
+{
+  switch (state) {
+  case PackageInstallState::INSTALLED:
+    return 0;
+  case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
+    return 1;
+  case PackageInstallState::LOCAL_ONLY:
+    return 2;
+  case PackageInstallState::UPGRADEABLE:
+    return 3;
+  case PackageInstallState::AVAILABLE:
+  default:
+    return 4;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Return true only when the exact installed NEVRA is also available from the
 // current package sources and can therefore be reinstalled through libdnf5.

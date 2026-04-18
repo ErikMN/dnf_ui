@@ -65,18 +65,7 @@ install_state_text(PackageInstallState state)
 static int
 install_state_rank(PackageInstallState state)
 {
-  switch (state) {
-  case PackageInstallState::AVAILABLE:
-    return 0;
-  case PackageInstallState::LOCAL_ONLY:
-  case PackageInstallState::INSTALLED:
-    return 1;
-  case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
-  case PackageInstallState::UPGRADEABLE:
-    return 2;
-  default:
-    return 0;
-  }
+  return dnf_backend_get_install_state_sort_rank(state);
 }
 
 // Snapshot the visible status text and its sort order for one package row.

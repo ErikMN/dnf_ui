@@ -124,6 +124,10 @@ void dnf_backend_refresh_installed_nevras();
 // Classify one visible package row for UI status badges and action gating.
 PackageInstallState dnf_backend_get_package_install_state(const PackageRow &row);
 
+// Return the default package-table sort priority for one package state.
+// Lower values sort first and keep installed rows ahead of repo-only rows.
+int dnf_backend_get_install_state_sort_rank(PackageInstallState state);
+
 // Convert one backend-owned install reason to user-facing text.
 std::string dnf_backend_install_reason_to_string(PackageInstallReason reason);
 
