@@ -68,6 +68,23 @@ install_state_rank(PackageInstallState state)
   return dnf_backend_get_install_state_sort_rank(state);
 }
 
+static std::string
+install_state_tooltip_text(const PackageRow &row)
+{
+  PackageInstallState state = dnf_backend_get_package_install_state(row);
+  if (state == PackageInstallState::AVAILABLE) {
+    return {};
+  }
+
+  std::string tooltip = install_state_text(state);
+  if (row.install_reason != PackageInstallReason::UNKNOWN) {
+    tooltip += "\nInstall reason: ";
+    tooltip += dnf_backend_install_reason_to_string(row.install_reason);
+  }
+
+  return tooltip;
+}
+
 // Snapshot the visible status text and its sort order for one package row.
 static void
 fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
@@ -311,6 +328,9 @@ update_status_label(GtkWidget *label, SearchWidgets *widgets, const PackageRow &
       gtk_widget_add_css_class(label, "package-status-available");
     }
   }
+
+  std::string tooltip = install_state_tooltip_text(row);
+  gtk_widget_set_tooltip_text(label, tooltip.empty() ? nullptr : tooltip.c_str());
 }
 
 // Refresh stored package status values without changing the GTK model.
@@ -589,6 +609,7 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
 
                      if (!package_item) {
                        gtk_label_set_text(GTK_LABEL(label), "");
+                       gtk_widget_set_tooltip_text(label, nullptr);
                        clear_status_css(label);
                        g_object_set_data_full(G_OBJECT(label), "package-context-row", nullptr, nullptr);
                        return;
