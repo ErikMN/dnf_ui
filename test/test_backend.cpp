@@ -236,6 +236,7 @@ TEST_CASE("Dependency info contains expected section headers")
   auto deps = dnf_backend_get_package_deps(results.front().nevra);
 
   REQUIRE(deps.find("Requires:") != std::string::npos);
+  REQUIRE(deps.find("Required By:") != std::string::npos);
   REQUIRE(deps.find("Provides:") != std::string::npos);
   REQUIRE(deps.find("Conflicts:") != std::string::npos);
   REQUIRE(deps.find("Obsoletes:") != std::string::npos);

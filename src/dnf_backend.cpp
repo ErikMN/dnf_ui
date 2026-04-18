@@ -150,6 +150,32 @@ package_query_cancelled(GCancellable *cancellable)
   return cancellable && g_cancellable_is_cancelled(cancellable);
 }
 
+// Collect installed packages whose requires match capabilities provided by the
+// selected installed package. This keeps reverse dependency reporting narrow
+// and focused on the current system state.
+static std::set<std::string>
+collect_installed_reverse_dependency_nevras(libdnf5::Base &base, const libdnf5::rpm::Package &pkg)
+{
+  std::set<std::string> required_by_nevras;
+  if (!pkg.is_installed()) {
+    return required_by_nevras;
+  }
+
+  libdnf5::rpm::PackageQuery required_by(base);
+  required_by.filter_installed();
+  required_by.filter_requires(pkg.get_provides());
+
+  for (const auto &dependent_pkg : required_by) {
+    if (dependent_pkg.get_nevra() == pkg.get_nevra()) {
+      continue;
+    }
+
+    required_by_nevras.insert(dependent_pkg.get_nevra());
+  }
+
+  return required_by_nevras;
+}
+
 // Resolve the current GUI executable path so the app can block self-removal
 // without hard-coding the RPM package name.
 static std::vector<std::string>
@@ -901,6 +927,7 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra)
   installed.filter_installed();
   libdnf5::rpm::PackageQuery &best = installed.empty() ? query : installed;
   auto pkg = *best.begin();
+  std::set<std::string> required_by_nevras = collect_installed_reverse_dependency_nevras(base, pkg);
 
   std::ostringstream out;
 
@@ -917,6 +944,17 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra)
   };
 
   list_field("Requires", pkg.get_requires());
+  out << "Required By:\n";
+  if (!pkg.is_installed()) {
+    out << "  (installed packages only)\n\n";
+  } else if (required_by_nevras.empty()) {
+    out << "  (none)\n\n";
+  } else {
+    for (const auto &nevra : required_by_nevras) {
+      out << "  " << nevra << "\n";
+    }
+    out << "\n";
+  }
   list_field("Provides", pkg.get_provides());
   list_field("Conflicts", pkg.get_conflicts());
   list_field("Obsoletes", pkg.get_obsoletes());
