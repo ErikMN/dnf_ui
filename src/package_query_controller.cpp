@@ -9,7 +9,7 @@
 
 #include "base_manager.hpp"
 #include "debug_trace.hpp"
-#include "dnf_backend.hpp"
+#include "dnf_backend/dnf_backend.hpp"
 #include "package_info_controller.hpp"
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"

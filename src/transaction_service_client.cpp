@@ -8,7 +8,7 @@
 #include "transaction_service_client.hpp"
 
 #include "debug_trace.hpp"
-#include "dnf_backend.hpp"
+#include "dnf_backend/dnf_backend.hpp"
 #include "service/transaction_service_dbus.hpp"
 #include "transaction_request.hpp"
 

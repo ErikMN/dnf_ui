@@ -1,4 +1,16 @@
-// src/dnf_backend.hpp
+// src/dnf_backend/dnf_backend.hpp
+// Public libdnf5 backend facade
+//
+// This header is the app-facing contract for the libdnf5 integration. It keeps
+// libdnf5 types out of the GTK/controller layer by exposing small value models
+// and string-based transaction specs, while the implementation owns Base access,
+// rpmdb/repository queries, EVR comparison, cache publication, and transaction
+// resolution.
+//
+// Callers should depend only on the types and functions declared here. Helpers
+// under src/dnf_backend/dnf_internal.hpp are private implementation details for
+// the backend translation units and may change whenever the backend internals
+// are reorganized.
 #pragma once
 
 #include <functional>

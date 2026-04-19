@@ -7,7 +7,7 @@
 // -----------------------------------------------------------------------------
 #include "widgets.hpp"
 
-#include "dnf_backend.hpp"
+#include "dnf_backend/dnf_backend.hpp"
 #include "package_info_controller.hpp"
 #include "transaction_request.hpp"
 #include "transaction_progress.hpp"

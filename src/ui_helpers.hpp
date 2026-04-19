@@ -1,7 +1,7 @@
 // src/ui_helpers.hpp
 #pragma once
 
-#include "dnf_backend.hpp"
+#include "dnf_backend/dnf_backend.hpp"
 
 #include <string>
 #include <vector>

@@ -7,7 +7,7 @@
 
 #include <gtk/gtk.h>
 
-#include "dnf_backend.hpp"
+#include "dnf_backend/dnf_backend.hpp"
 
 // -----------------------------------------------------------------------------
 // Pending actions for mark --> review --> apply workflow

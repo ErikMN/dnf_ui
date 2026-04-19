@@ -6,7 +6,7 @@
 // -----------------------------------------------------------------------------
 #include <catch2/catch_test_macros.hpp>
 
-#include "dnf_backend.hpp"
+#include "dnf_backend/dnf_backend.hpp"
 #include "test_utils.hpp"
 
 #include <algorithm>
