@@ -7,6 +7,7 @@
 #include "ui_helpers.hpp"
 
 #include "package_info_controller.hpp"
+#include "package_table_status.hpp"
 #include "package_table_view.hpp"
 #include "pending_transaction_controller.hpp"
 #include "widgets.hpp"
@@ -43,50 +44,6 @@ struct PackageItem {
   int status_rank;
 };
 
-// -----------------------------------------------------------------------------
-// Package status helpers
-// -----------------------------------------------------------------------------
-static const char *
-install_state_text(PackageInstallState state)
-{
-  switch (state) {
-  case PackageInstallState::INSTALLED:
-    return "Installed";
-  case PackageInstallState::LOCAL_ONLY:
-    return "Installed (local only)";
-  case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
-    return "Installed (newer than repo)";
-  case PackageInstallState::UPGRADEABLE:
-    return "Update available";
-  case PackageInstallState::AVAILABLE:
-  default:
-    return "Available";
-  }
-}
-
-static int
-install_state_rank(PackageInstallState state)
-{
-  return dnf_backend_get_install_state_sort_rank(state);
-}
-
-static std::string
-install_state_tooltip_text(const PackageRow &row)
-{
-  PackageInstallState state = dnf_backend_get_package_install_state(row);
-  if (state == PackageInstallState::AVAILABLE) {
-    return {};
-  }
-
-  std::string tooltip = install_state_text(state);
-  if (row.install_reason != PackageInstallReason::UNKNOWN) {
-    tooltip += "\nInstall reason: ";
-    tooltip += dnf_backend_install_reason_to_string(row.install_reason);
-  }
-
-  return tooltip;
-}
-
 // Snapshot the visible status text and its sort order for one package row.
 static void
 fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
@@ -94,7 +51,7 @@ fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
   // Keep Status sorting tied to the stable package state so marking a pending
   // action does not move the row away from the user in the current view.
   PackageInstallState install_state = dnf_backend_get_package_install_state(item.row);
-  item.status_rank = install_state_rank(install_state);
+  item.status_rank = package_table_status_rank(install_state);
 
   for (const auto &a : widgets->transaction.actions) {
     if (a.nevra == item.row.nevra) {
@@ -113,38 +70,7 @@ fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
     }
   }
 
-  item.status_text = install_state_text(install_state);
-}
-
-static const char *
-pending_css_class(SearchWidgets *widgets, const std::string &nevra)
-{
-  for (const auto &a : widgets->transaction.actions) {
-    if (a.nevra == nevra) {
-      switch (a.type) {
-      case PendingAction::INSTALL:
-        return "package-status-pending-install";
-      case PendingAction::REINSTALL:
-        return "package-status-pending-reinstall";
-      case PendingAction::REMOVE:
-        return "package-status-pending-remove";
-      }
-    }
-  }
-  return nullptr;
-}
-
-static void
-clear_status_css(GtkWidget *label)
-{
-  gtk_widget_remove_css_class(label, "package-status-available");
-  gtk_widget_remove_css_class(label, "package-status-installed");
-  gtk_widget_remove_css_class(label, "package-status-local-only");
-  gtk_widget_remove_css_class(label, "package-status-upgradeable");
-  gtk_widget_remove_css_class(label, "package-status-installed-newer");
-  gtk_widget_remove_css_class(label, "package-status-pending-install");
-  gtk_widget_remove_css_class(label, "package-status-pending-reinstall");
-  gtk_widget_remove_css_class(label, "package-status-pending-remove");
+  item.status_text = package_table_status_text(install_state);
 }
 
 // -----------------------------------------------------------------------------
@@ -301,40 +227,6 @@ column_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_da
   return compare_package_items(*lhs, *rhs, data->kind);
 }
 
-// -----------------------------------------------------------------------------
-// Package status refresh helpers
-// -----------------------------------------------------------------------------
-
-// Apply the current status text and color to one status label.
-static void
-update_status_label(GtkWidget *label, SearchWidgets *widgets, const PackageRow &row)
-{
-  PackageItem item { row, {}, 0 };
-  fill_package_item_status(widgets, item);
-  gtk_label_set_text(GTK_LABEL(label), item.status_text.c_str());
-
-  clear_status_css(label);
-  if (const char *pending_class = pending_css_class(widgets, row.nevra)) {
-    gtk_widget_add_css_class(label, pending_class);
-  } else {
-    PackageInstallState state = dnf_backend_get_package_install_state(row);
-    if (state == PackageInstallState::LOCAL_ONLY) {
-      gtk_widget_add_css_class(label, "package-status-local-only");
-    } else if (state == PackageInstallState::INSTALLED) {
-      gtk_widget_add_css_class(label, "package-status-installed");
-    } else if (state == PackageInstallState::INSTALLED_NEWER_THAN_REPO) {
-      gtk_widget_add_css_class(label, "package-status-installed-newer");
-    } else if (state == PackageInstallState::UPGRADEABLE) {
-      gtk_widget_add_css_class(label, "package-status-upgradeable");
-    } else {
-      gtk_widget_add_css_class(label, "package-status-available");
-    }
-  }
-
-  std::string tooltip = install_state_tooltip_text(row);
-  gtk_widget_set_tooltip_text(label, tooltip.empty() ? nullptr : tooltip.c_str());
-}
-
 // Refresh stored package status values without changing the GTK model.
 static void
 refresh_model_status_values(GtkColumnView *view, SearchWidgets *widgets)
@@ -372,7 +264,7 @@ refresh_visible_status_labels(GtkWidget *widget, SearchWidgets *widgets)
   if (GTK_IS_LABEL(widget) && g_object_get_data(G_OBJECT(widget), "package-status-cell")) {
     PackageRow *row = static_cast<PackageRow *>(g_object_get_data(G_OBJECT(widget), "package-context-row"));
     if (row) {
-      update_status_label(widget, widgets, *row);
+      package_table_update_status_label(widget, widgets, *row);
     }
   }
 
@@ -612,7 +504,7 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                      if (!package_item) {
                        gtk_label_set_text(GTK_LABEL(label), "");
                        gtk_widget_set_tooltip_text(label, nullptr);
-                       clear_status_css(label);
+                       package_table_clear_status_css(label);
                        g_object_set_data_full(G_OBJECT(label), "package-context-row", nullptr, nullptr);
                        return;
                      }
@@ -624,7 +516,7 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                          });
 
                      if (kind == PackageColumnKind::STATUS) {
-                       update_status_label(label, widgets, package_item->row);
+                       package_table_update_status_label(label, widgets, package_item->row);
                      } else {
                        std::string text = column_text(*package_item, kind);
                        gtk_label_set_text(GTK_LABEL(label), text.c_str());
