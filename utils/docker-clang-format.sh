@@ -96,7 +96,7 @@ format_tree() {
       else
         set -- "$@" -o
       fi
-      set -- "$@" \( -path "*/$dir" -o -path "*/$dir/*" \)
+      set -- "$@" \( -path "$dir" -o -path "$dir/*" \)
     done
     set -- "$@" \) -prune -o
   fi
