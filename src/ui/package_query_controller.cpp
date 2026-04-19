@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// src/package_query_controller.cpp
+// src/ui/package_query_controller.cpp
 // Signal callbacks and async package query controller
 // Handles search, list, clear, and history actions plus the shared Stop-button
 // state for background package queries.

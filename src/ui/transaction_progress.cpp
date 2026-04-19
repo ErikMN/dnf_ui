@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// src/transaction_progress.cpp
+// src/ui/transaction_progress.cpp
 // Transaction progress popup and confirmation dialog helpers
 // Keeps the apply-flow modal UI separate from the broader widget controller.
 // -----------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// src/package_table_view.cpp
+// src/ui/package_table_view.cpp
 // Synaptic-style package table view
 // Builds the GTK4 ColumnView, maintains sortable package-row wrappers, and
 // keeps package selection wired into the details notebook controller.

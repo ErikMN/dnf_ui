@@ -3,11 +3,11 @@
 // GTK Application setup and activation
 // -----------------------------------------------------------------------------
 #include "app.hpp"
-#include "widgets.hpp"
+#include "ui/widgets.hpp"
 #include "config.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
-#include "ui_helpers.hpp"
+#include "ui/ui_helpers.hpp"
 #include "base_manager.hpp"
 
 #include <cstdio>

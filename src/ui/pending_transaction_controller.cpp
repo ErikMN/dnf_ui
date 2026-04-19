@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// src/pending_transaction_controller.cpp
+// src/ui/pending_transaction_controller.cpp
 // Pending transaction and apply controller
 // Handles mark/review/apply actions and the async follow-up refresh after
 // transactions complete.

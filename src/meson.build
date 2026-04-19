@@ -11,14 +11,14 @@ app_sources = files(
   'app.cpp',
   'config.cpp',
   'main.cpp',
-  'package_info_controller.cpp',
-  'package_query_controller.cpp',
-  'package_table_view.cpp',
-  'pending_transaction_controller.cpp',
-  'transaction_progress.cpp',
+  'ui/package_info_controller.cpp',
+  'ui/package_query_controller.cpp',
+  'ui/package_table_view.cpp',
+  'ui/pending_transaction_controller.cpp',
+  'ui/transaction_progress.cpp',
   'transaction_service_client.cpp',
-  'ui_helpers.cpp',
-  'widgets.cpp',
+  'ui/ui_helpers.cpp',
+  'ui/widgets.cpp',
 )
 
 dnfui_app = executable(

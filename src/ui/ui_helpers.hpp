@@ -1,4 +1,4 @@
-// src/ui_helpers.hpp
+// src/ui/ui_helpers.hpp
 #pragma once
 
 #include "dnf_backend/dnf_backend.hpp"

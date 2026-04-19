@@ -1,4 +1,4 @@
-// src/transaction_progress.hpp
+// src/ui/transaction_progress.hpp
 #pragma once
 
 #include <cstddef>

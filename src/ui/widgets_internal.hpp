@@ -1,4 +1,4 @@
-// src/widgets_internal.hpp
+// src/ui/widgets_internal.hpp
 #pragma once
 
 #include <gtk/gtk.h>

@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// src/package_info_controller.cpp
+// src/ui/package_info_controller.cpp
 // Package selection and details notebook controller
 // Handles package selection state, action-button sensitivity, and the async
 // package info load that updates the details notebook.

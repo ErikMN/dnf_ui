@@ -1,4 +1,4 @@
-// src/widgets.hpp
+// src/ui/widgets.hpp
 #pragma once
 
 #include <cstdint>

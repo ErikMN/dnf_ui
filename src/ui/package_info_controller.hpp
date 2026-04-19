@@ -1,4 +1,4 @@
-// src/package_info_controller.hpp
+// src/ui/package_info_controller.hpp
 #pragma once
 
 #include "dnf_backend/dnf_backend.hpp"
