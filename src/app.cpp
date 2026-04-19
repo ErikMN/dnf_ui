@@ -7,6 +7,7 @@
 #include "config.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
+#include "ui/main_menu.hpp"
 #include "ui/package_query_controller.hpp"
 #include "ui/package_table_view.hpp"
 #include "ui/pending_transaction_controller.hpp"
@@ -38,10 +39,6 @@ struct AppWidgets {
 
   GtkWidget *list_button = NULL;
   GtkWidget *list_available_button = NULL;
-  GtkWidget *clear_button = NULL;
-  GtkWidget *clear_cache_button = NULL;
-  GtkWidget *toggle_history_button = NULL;
-  GtkWidget *toggle_info_button = NULL;
   GtkWidget *refresh_button = NULL;
 
   GtkWidget *install_button = NULL;
@@ -213,6 +210,9 @@ build_main_ui(AppWidgets *ui)
   gtk_window_set_child(GTK_WINDOW(window), vbox_root);
   ui->vbox_root = vbox_root;
 
+  GtkWidget *menu_bar = main_menu_create();
+  gtk_box_append(GTK_BOX(vbox_root), menu_bar);
+
   GtkWidget *outer_paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
   gtk_paned_set_position(GTK_PANED(outer_paned), 200);
 
@@ -283,22 +283,6 @@ build_main_ui(AppWidgets *ui)
   GtkWidget *list_available_button = gtk_button_new_with_label("List Packages");
   gtk_box_append(GTK_BOX(hbox_buttons), list_available_button);
   ui->list_available_button = list_available_button;
-
-  GtkWidget *clear_button = gtk_button_new_with_label("Clear List");
-  gtk_box_append(GTK_BOX(hbox_buttons), clear_button);
-  ui->clear_button = clear_button;
-
-  GtkWidget *clear_cache_button = gtk_button_new_with_label("Clear Cache");
-  gtk_box_append(GTK_BOX(hbox_buttons), clear_cache_button);
-  ui->clear_cache_button = clear_cache_button;
-
-  GtkWidget *toggle_history_button = gtk_button_new_with_label("Hide History");
-  gtk_box_append(GTK_BOX(hbox_buttons), toggle_history_button);
-  ui->toggle_history_button = toggle_history_button;
-
-  GtkWidget *toggle_info_button = gtk_button_new_with_label("Hide Info");
-  gtk_box_append(GTK_BOX(hbox_buttons), toggle_info_button);
-  ui->toggle_info_button = toggle_info_button;
 
   // --- Refresh Repositories button ---
   // Triggers an asynchronous repository rebuild using BaseManager::rebuild()
@@ -589,14 +573,11 @@ initialize_ui_state(SearchWidgets *widgets)
 static void
 connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
 {
-  g_signal_connect(ui->clear_cache_button,
-                   "clicked",
-                   G_CALLBACK(+[](GtkButton *, gpointer user_data) {
-                     SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-                     package_query_clear_search_cache();
-                     ui_helpers_set_status(widgets->query.status_label, "Search cache cleared.", "green");
-                   }),
-                   widgets);
+  MainMenuWidgets menu_widgets;
+  menu_widgets.window = ui->window;
+  menu_widgets.history_panel = ui->vbox_history;
+  menu_widgets.info_panel = ui->notebook;
+  main_menu_connect_actions(menu_widgets, widgets);
 
   g_signal_connect(ui->list_button, "clicked", G_CALLBACK(package_query_on_list_button_clicked), widgets);
 
@@ -610,32 +591,10 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
 
   g_signal_connect(ui->remove_button, "clicked", G_CALLBACK(pending_transaction_on_remove_button_clicked), widgets);
 
-  g_signal_connect(ui->clear_button, "clicked", G_CALLBACK(package_query_on_clear_button_clicked), widgets);
-
   g_signal_connect(ui->search_button, "clicked", G_CALLBACK(package_query_on_search_button_clicked), widgets);
 
   g_signal_connect(ui->entry, "activate", G_CALLBACK(package_query_on_search_button_clicked), widgets);
   g_signal_connect(ui->history_list, "row-selected", G_CALLBACK(package_query_on_history_row_selected), widgets);
-
-  g_signal_connect(ui->toggle_history_button,
-                   "clicked",
-                   G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
-                     GtkWidget *pane = GTK_WIDGET(user_data);
-                     gboolean visible = gtk_widget_get_visible(pane);
-                     gtk_widget_set_visible(pane, !visible);
-                     gtk_button_set_label(button, visible ? "Show History" : "Hide History");
-                   }),
-                   ui->vbox_history);
-
-  g_signal_connect(ui->toggle_info_button,
-                   "clicked",
-                   G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
-                     GtkWidget *pane = GTK_WIDGET(user_data);
-                     gboolean visible = gtk_widget_get_visible(pane);
-                     gtk_widget_set_visible(pane, !visible);
-                     gtk_button_set_label(button, visible ? "Show Info" : "Hide Info");
-                   }),
-                   ui->notebook);
 
   g_signal_connect(ui->apply_button, "clicked", G_CALLBACK(pending_transaction_on_apply_button_clicked), widgets);
   g_signal_connect(

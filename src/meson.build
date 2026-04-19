@@ -10,6 +10,7 @@ backend_sources = files(
 app_sources = files(
   'app.cpp',
   'config.cpp',
+  'ui/main_menu.cpp',
   'main.cpp',
   'ui/package_info_controller.cpp',
   'ui/package_query_cache.cpp',
