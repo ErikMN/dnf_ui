@@ -12,7 +12,7 @@
 #include "package_query_controller.hpp"
 #include "package_table_view.hpp"
 #include "pending_transaction_controller.hpp"
-#include "transaction_request.hpp"
+#include "pending_transaction_request.hpp"
 #include "transaction_progress.hpp"
 #include "transaction_service_client.hpp"
 #include "ui_helpers.hpp"
@@ -207,70 +207,6 @@ get_pending_action_type(SearchWidgets *widgets, const std::string &nevra, Pendin
     }
   }
   return false;
-}
-
-// Split the pending queue into install, remove, and reinstall transaction specs.
-static void
-build_pending_transaction_specs(const SearchWidgets *widgets,
-                                std::vector<std::string> &install,
-                                std::vector<std::string> &remove,
-                                std::vector<std::string> &reinstall)
-{
-  install.clear();
-  remove.clear();
-  reinstall.clear();
-
-  if (!widgets) {
-    return;
-  }
-
-  install.reserve(widgets->transaction.actions.size());
-  remove.reserve(widgets->transaction.actions.size());
-  reinstall.reserve(widgets->transaction.actions.size());
-
-  for (const auto &action : widgets->transaction.actions) {
-    if (action.type == PendingAction::INSTALL) {
-      install.push_back(action.nevra);
-    } else if (action.type == PendingAction::REINSTALL) {
-      reinstall.push_back(action.nevra);
-    } else {
-      remove.push_back(action.nevra);
-    }
-  }
-}
-
-static void
-build_pending_transaction_request(const SearchWidgets *widgets, TransactionRequest &request)
-{
-  build_pending_transaction_specs(widgets, request.install, request.remove, request.reinstall);
-}
-
-// Reject any transaction that would remove or reinstall the package owning the running GUI.
-// The UI disables those actions already, but this keeps apply safe
-// even if a protected item somehow reaches the pending queue.
-static bool
-validate_pending_transaction_request(const TransactionRequest &request, std::string &error_out)
-{
-  for (const auto &spec : request.remove) {
-    // Re-check remove specs at apply time so self-protection still holds even
-    // if stale UI state or future code paths bypass button sensitivity.
-    if (dnf_backend_is_self_protected_transaction_spec(spec)) {
-      error_out = "DNF UI cannot remove the package that owns the running application. Close DNF UI and remove it from "
-                  "another tool.";
-      return false;
-    }
-  }
-
-  for (const auto &spec : request.reinstall) {
-    // Re-check reinstall specs for the same reason: the running app must never
-    // ask the backend to modify the RPM that owns the current executable.
-    if (dnf_backend_is_self_protected_transaction_spec(spec)) {
-      error_out = "DNF UI cannot reinstall the package that owns the running application while it is running.";
-      return false;
-    }
-  }
-
-  return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -572,10 +508,10 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
   TransactionPreview preview;
   std::string transaction_path;
   std::string error;
-  build_pending_transaction_request(widgets, request);
+  pending_transaction_build_request(widgets->transaction.actions, request);
 
   // Refuse self-protected transactions before asking the service to preview them.
-  if (!validate_pending_transaction_request(request, error)) {
+  if (!pending_transaction_validate_request(request, error)) {
     ui_helpers_set_status(widgets->query.status_label, error.c_str(), "red");
     return;
   }
