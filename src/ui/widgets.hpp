@@ -1,42 +1,14 @@
 // src/ui/widgets.hpp
 #pragma once
 
-#include <cstdint>
 #include <string>
 #include <vector>
 
 #include <gtk/gtk.h>
 
 #include "dnf_backend/dnf_backend.hpp"
-
-// -----------------------------------------------------------------------------
-// Pending actions for mark --> review --> apply workflow
-// -----------------------------------------------------------------------------
-struct PendingAction {
-  enum Type { INSTALL, REMOVE, REINSTALL } type;
-  std::string nevra;
-};
-
-// -----------------------------------------------------------------------------
-// Active background request using the package-list action buttons
-// -----------------------------------------------------------------------------
-enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
-
-// -----------------------------------------------------------------------------
-// Last query-backed package view shown in the main table.
-// This intentionally tracks only views that can be reproduced through the main
-// query controls. Exact one-package views from the pending-actions sidebar are
-// refreshed via the currently selected NEVRA instead of adding more global UI
-// state.
-// -----------------------------------------------------------------------------
-enum class DisplayedPackageQueryKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
-
-struct DisplayedPackageQueryState {
-  DisplayedPackageQueryKind kind = DisplayedPackageQueryKind::NONE;
-  std::string search_term;
-  bool search_in_description = false;
-  bool exact_match = false;
-};
+#include "ui/package_query_state.hpp"
+#include "ui/pending_transaction_state.hpp"
 
 // -----------------------------------------------------------------------------
 // Query controls and status widgets shared by search and package-list actions
@@ -68,44 +40,6 @@ struct PackageResultsWidgets {
   GtkLabel *count_label = nullptr;
   std::vector<PackageRow> current_packages;
   std::string selected_nevra;
-};
-
-// -----------------------------------------------------------------------------
-// Pending transaction widgets and marked package actions
-// -----------------------------------------------------------------------------
-struct PendingTransactionWidgets {
-  GtkButton *install_button = nullptr;
-  GtkButton *remove_button = nullptr;
-  GtkButton *reinstall_button = nullptr;
-  GtkButton *apply_button = nullptr;
-  GtkButton *clear_pending_button = nullptr;
-  GtkListBox *pending_list = nullptr;
-  std::vector<PendingAction> actions;
-  std::string preview_transaction_path;
-};
-
-// -----------------------------------------------------------------------------
-// Runtime state for the active background package query flow
-// -----------------------------------------------------------------------------
-struct PackageQueryState {
-  // Active cancellable for the current background package-list request, if any.
-  GCancellable *package_list_cancellable = nullptr;
-  // Next package-list request id used to distinguish overlapping background tasks.
-  uint64_t next_package_list_request_id = 1;
-  // Current package-list request id owned by the active package-list button UI state.
-  uint64_t current_package_list_request_id = 0;
-  // Identifies whether the active Stop button belongs to search, installed listing,
-  // or available-package listing.
-  PackageListRequestKind current_package_list_request_kind = PackageListRequestKind::NONE;
-  // Remembers the last query-backed result view so rebuilds can repopulate the
-  // visible table instead of leaving stale rows on screen after a transaction.
-  DisplayedPackageQueryState displayed_query;
-  // Temporary selection snapshot used only while a rebuild-triggered query is
-  // reloading. This lets the refreshed view keep the previously selected row
-  // and details panel when the package is still present.
-  bool preserve_selection_on_reload = false;
-  std::string reload_selected_nevra;
-  std::vector<std::string> history;
 };
 
 // -----------------------------------------------------------------------------

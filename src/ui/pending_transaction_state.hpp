@@ -1,0 +1,37 @@
+// src/ui/pending_transaction_state.hpp
+// Pending transaction state model
+//
+// Keeps the marked package action list and pending transaction widget pointers
+// separate from the top-level widget state bag.
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include <gtk/gtk.h>
+
+// -----------------------------------------------------------------------------
+// Pending actions for mark --> review --> apply workflow
+// -----------------------------------------------------------------------------
+struct PendingAction {
+  enum Type { INSTALL, REMOVE, REINSTALL } type;
+  std::string nevra;
+};
+
+// -----------------------------------------------------------------------------
+// Pending transaction widgets and marked package actions
+// -----------------------------------------------------------------------------
+struct PendingTransactionWidgets {
+  GtkButton *install_button = nullptr;
+  GtkButton *remove_button = nullptr;
+  GtkButton *reinstall_button = nullptr;
+  GtkButton *apply_button = nullptr;
+  GtkButton *clear_pending_button = nullptr;
+  GtkListBox *pending_list = nullptr;
+  std::vector<PendingAction> actions;
+  std::string preview_transaction_path;
+};
+
+// -----------------------------------------------------------------------------
+// EOF
+// -----------------------------------------------------------------------------
