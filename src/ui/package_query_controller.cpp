@@ -11,24 +11,11 @@
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
 #include "package_info_controller.hpp"
+#include "package_query_cache.hpp"
 #include "package_query_controller.hpp"
 #include "package_table_view.hpp"
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
-
-#include <map>
-#include <mutex>
-
-// Cache one visible result set per search term and flag combination.
-// Entries are tied to the BaseManager generation that produced them so a Base
-// rebuild cannot serve stale package metadata back into the UI.
-struct CachedSearchResults {
-  uint64_t generation;
-  std::vector<PackageRow> packages;
-};
-
-static std::map<std::string, CachedSearchResults> g_search_cache;
-static std::mutex g_cache_mutex; // Protects g_search_cache
 
 // -----------------------------------------------------------------------------
 // Clear cached search results.
@@ -37,22 +24,7 @@ static std::mutex g_cache_mutex; // Protects g_search_cache
 void
 package_query_clear_search_cache()
 {
-  std::lock_guard<std::mutex> lock(g_cache_mutex);
-  g_search_cache.clear();
-}
-
-// -----------------------------------------------------------------------------
-// Helper: Build a unique cache key based on search flags and term
-// -----------------------------------------------------------------------------
-static std::string
-cache_key_for(const std::string &term)
-{
-  const DnfBackendSearchOptions options = dnf_backend_get_search_options();
-  std::string key = (options.search_in_description ? "desc:" : "name:");
-  key += (options.exact_match ? "exact:" : "contains:");
-  key += term;
-
-  return key;
+  package_query_cache_clear();
 }
 
 // -----------------------------------------------------------------------------
@@ -524,8 +496,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     // Search results are only reusable while the backend Base generation stays
     // the same, otherwise repo state may have changed underneath the cache.
     if (td && td->cache_key) {
-      std::lock_guard<std::mutex> lock(g_cache_mutex);
-      g_search_cache[td->cache_key] = CachedSearchResults { td->generation, *packages };
+      package_query_cache_store(td->cache_key, td->generation, *packages);
     }
 
     if (td) {
@@ -607,42 +578,35 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   // Check cache first.
   // Reuse only results produced from the current Base generation so refreshes
   // and transaction rebuilds cannot surface outdated package metadata.
-  {
-    std::lock_guard<std::mutex> lock(g_cache_mutex);
-    uint64_t generation = BaseManager::instance().current_generation();
-    auto it = g_search_cache.find(cache_key_for(term));
-    if (it != g_search_cache.end()) {
-      if (it->second.generation != generation) {
-        g_search_cache.erase(it);
-      } else {
-        // Use cached results and skip background thread.
-        SearchTaskData cached_td {};
-        cached_td.term = const_cast<char *>(term.c_str());
-        cached_td.search_in_description = search_options.search_in_description;
-        cached_td.exact_match = search_options.exact_match;
-        set_displayed_search_query(widgets, cached_td);
+  const std::string key = package_query_cache_key_for(term);
+  const uint64_t generation = BaseManager::instance().current_generation();
+  std::vector<PackageRow> cached_packages;
+  if (package_query_cache_lookup(key, generation, cached_packages)) {
+    // Use cached results and skip background thread.
+    SearchTaskData cached_td {};
+    cached_td.term = const_cast<char *>(term.c_str());
+    cached_td.search_in_description = search_options.search_in_description;
+    cached_td.exact_match = search_options.exact_match;
+    set_displayed_search_query(widgets, cached_td);
 
-        package_table_fill_package_view(widgets, it->second.packages);
+    package_table_fill_package_view(widgets, cached_packages);
 
-        char msg[256];
-        snprintf(msg, sizeof(msg), "Loaded %zu cached results.", it->second.packages.size());
-        ui_helpers_set_status(widgets->query.status_label, msg, "gray");
-        finish_results_refresh(widgets);
+    char msg[256];
+    snprintf(msg, sizeof(msg), "Loaded %zu cached results.", cached_packages.size());
+    ui_helpers_set_status(widgets->query.status_label, msg, "gray");
+    finish_results_refresh(widgets);
 
-        return;
-      }
-    }
+    return;
   }
 
   // Otherwise perform real background search
   widgets_spinner_acquire(widgets->query.spinner);
 
-  const std::string key = cache_key_for(term);
   SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
   td->term = g_strdup(term.c_str());
   td->cache_key = g_strdup(key.c_str());
   td->request_id = widgets->query_state.next_package_list_request_id++;
-  td->generation = BaseManager::instance().current_generation();
+  td->generation = generation;
   td->search_in_description = search_options.search_in_description;
   td->exact_match = search_options.exact_match;
 
