@@ -24,14 +24,6 @@
 
 namespace dnf_backend_internal {
 
-// Search flags copied from the UI-facing atomics at the start of a query. A
-// single snapshot keeps one package scan internally consistent even if the UI
-// toggles search options while the worker is running.
-struct SearchOptions {
-  bool search_in_description = false;
-  bool exact_match = false;
-};
-
 // Installed package scan result published into the shared UI cache only after a
 // full uncancelled scan. Keeping rows, exact NEVRAs, and name+arch lookup
 // together avoids partial cache updates.
@@ -56,11 +48,11 @@ bool package_query_cancelled(GCancellable *cancellable);
 // lifetime across related libdnf5 queries.
 std::map<std::string, PackageRow> collect_available_rows_by_name_arch(libdnf5::Base &base,
                                                                       GCancellable *cancellable,
-                                                                      const SearchOptions &search_options,
+                                                                      const DnfBackendSearchOptions &search_options,
                                                                       const std::string *pattern = nullptr);
 InstalledQueryResult collect_installed_rows(libdnf5::Base &base,
                                             GCancellable *cancellable,
-                                            const SearchOptions &search_options,
+                                            const DnfBackendSearchOptions &search_options,
                                             const std::string *pattern = nullptr);
 
 // Repo-candidate annotation and browse/search merge helpers shared by query and

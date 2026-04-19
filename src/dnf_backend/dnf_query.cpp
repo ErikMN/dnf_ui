@@ -52,7 +52,7 @@ utf8_casefold_copy(const std::string &text)
 static bool
 package_matches_search(const libdnf5::rpm::Package &pkg,
                        const std::string &pattern_lower,
-                       const SearchOptions &search_options)
+                       const DnfBackendSearchOptions &search_options)
 {
   std::string name = utf8_casefold_copy(pkg.get_name());
   if (search_options.exact_match) {
@@ -77,7 +77,7 @@ package_matches_search(const libdnf5::rpm::Package &pkg,
 std::map<std::string, PackageRow>
 collect_available_rows_by_name_arch(libdnf5::Base &base,
                                     GCancellable *cancellable,
-                                    const SearchOptions &search_options,
+                                    const DnfBackendSearchOptions &search_options,
                                     const std::string *pattern)
 {
   libdnf5::rpm::PackageQuery query(base);
@@ -121,7 +121,7 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
 InstalledQueryResult
 collect_installed_rows(libdnf5::Base &base,
                        GCancellable *cancellable,
-                       const SearchOptions &search_options,
+                       const DnfBackendSearchOptions &search_options,
                        const std::string *pattern)
 {
   InstalledQueryResult result;
@@ -252,10 +252,7 @@ using namespace dnf_backend_internal;
 std::vector<PackageRow>
 dnf_backend_search_package_rows_interruptible(const std::string &pattern, GCancellable *cancellable)
 {
-  const SearchOptions search_options {
-    .search_in_description = g_search_in_description.load(),
-    .exact_match = g_exact_match.load(),
-  };
+  const DnfBackendSearchOptions search_options = dnf_backend_get_search_options();
 
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options, &pattern);
@@ -286,7 +283,7 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
   std::set<std::string> protected_names;
   {
     auto [base, guard, generation] = BaseManager::instance().acquire_read();
-    const SearchOptions search_options {};
+    const DnfBackendSearchOptions search_options {};
     installed = collect_installed_rows(base, cancellable, search_options);
     if (package_query_cancelled(cancellable)) {
       return {};
@@ -294,7 +291,7 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 
     annotate_installed_rows_with_repo_candidates_best_effort(
         installed.rows, cancellable, [&base](GCancellable *annotation_cancellable) {
-          const SearchOptions annotation_search_options {};
+          const DnfBackendSearchOptions annotation_search_options {};
           return collect_available_rows_by_name_arch(base, annotation_cancellable, annotation_search_options);
         });
     protected_names = collect_self_protected_package_names(base);
@@ -311,7 +308,7 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 std::vector<PackageRow>
 dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
 {
-  const SearchOptions search_options {};
+  const DnfBackendSearchOptions search_options {};
 
   auto [base, guard, generation] = BaseManager::instance().acquire_read();
   auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options);
@@ -349,7 +346,7 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
   const std::string annotation_pattern = packages.empty() ? "" : packages[0].name;
   annotate_installed_rows_with_repo_candidates_best_effort(
       packages, nullptr, [&base, &annotation_pattern](GCancellable *annotation_cancellable) {
-        const SearchOptions search_options {};
+        const DnfBackendSearchOptions search_options {};
         return collect_available_rows_by_name_arch(
             base, annotation_cancellable, search_options, annotation_pattern.empty() ? nullptr : &annotation_pattern);
       });

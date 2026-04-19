@@ -13,10 +13,8 @@
 // are reorganized.
 #pragma once
 
+#include <cstddef>
 #include <functional>
-#include <memory>
-#include <atomic>
-#include <mutex>
 #include <set>
 #include <string>
 #include <vector>
@@ -124,10 +122,22 @@ struct TransactionPreview {
 
 using TransactionProgressCallback = std::function<void(const std::string &)>;
 
-extern std::atomic<bool> g_search_in_description;
-extern std::atomic<bool> g_exact_match;
-extern std::mutex g_installed_mutex;
-extern std::set<std::string> g_installed_nevras;
+// Search flags used by backend search queries. The UI can update them from the
+// search controls, and each backend worker copies a snapshot before scanning so
+// one query remains internally consistent.
+struct DnfBackendSearchOptions {
+  bool search_in_description = false;
+  bool exact_match = false;
+};
+
+// Publish and read the backend-owned search option snapshot.
+void dnf_backend_set_search_options(const DnfBackendSearchOptions &options);
+DnfBackendSearchOptions dnf_backend_get_search_options();
+
+// Inspect the installed-package snapshot without exposing the backend mutex or
+// mutable NEVRA set to callers.
+bool dnf_backend_installed_snapshot_contains(const std::string &nevra);
+size_t dnf_backend_installed_snapshot_size();
 
 // Refresh the installed-package snapshot used by the UI for exact-installed
 // checks and upgrade-state classification.
@@ -196,6 +206,10 @@ bool dnf_backend_apply_transaction(const std::vector<std::string> &install_nevra
                                    const TransactionProgressCallback &progress_cb = {});
 
 #ifdef DNFUI_BUILD_TESTS
+// Test-only hooks for cache-state setup. Production callers should refresh the
+// installed snapshot from libdnf instead of mutating it directly.
+void dnf_backend_testonly_clear_installed_snapshot();
+void dnf_backend_testonly_replace_installed_snapshot(const std::set<std::string> &nevras);
 // Test-only hook: force the best-effort repo annotation path to fail and return
 // whether all rows kept UNKNOWN repo-candidate relation afterwards.
 bool dnf_backend_testonly_annotation_fallback_leaves_rows_unknown(std::vector<PackageRow> &rows);

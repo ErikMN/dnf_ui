@@ -20,16 +20,18 @@
 
 #include <libdnf5/rpm/package_query.hpp>
 
+namespace {
+
 // Cached NEVRAs of installed packages for UI highlighting.
 std::set<std::string> g_installed_nevras;
 // Mutex for thread-safe access to the installed-package cache and derived state.
 std::mutex g_installed_mutex;
-// Global search flags read by query workers when they start a search.
-std::atomic<bool> g_search_in_description { false };
-std::atomic<bool> g_exact_match { false };
-
-namespace {
-
+// Packed search flags read by query workers when they start a search. Keeping
+// both options in one atomic makes dnf_backend_get_search_options a single
+// coherent snapshot.
+constexpr unsigned kSearchInDescriptionBit = 1U << 0;
+constexpr unsigned kExactMatchBit = 1U << 1;
+std::atomic<unsigned> g_search_option_bits { 0 };
 // Cached installed rows keyed by name and arch for upgrade-state classification.
 std::map<std::string, PackageRow> g_installed_rows_by_name_arch;
 // Installed package names that own the running GUI binary.
@@ -91,6 +93,47 @@ publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string>
 
 using namespace dnf_backend_internal;
 
+// Publish the search options used by future backend search workers.
+void
+dnf_backend_set_search_options(const DnfBackendSearchOptions &options)
+{
+  unsigned bits = 0;
+  if (options.search_in_description) {
+    bits |= kSearchInDescriptionBit;
+  }
+  if (options.exact_match) {
+    bits |= kExactMatchBit;
+  }
+  g_search_option_bits.store(bits, std::memory_order_relaxed);
+}
+
+// Return one consistent snapshot of the backend search options.
+DnfBackendSearchOptions
+dnf_backend_get_search_options()
+{
+  const unsigned bits = g_search_option_bits.load(std::memory_order_relaxed);
+  return {
+    .search_in_description = (bits & kSearchInDescriptionBit) != 0,
+    .exact_match = (bits & kExactMatchBit) != 0,
+  };
+}
+
+// Return true when the installed-package snapshot contains one exact NEVRA.
+bool
+dnf_backend_installed_snapshot_contains(const std::string &nevra)
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  return g_installed_nevras.count(nevra) > 0;
+}
+
+// Return the number of exact NEVRAs in the installed-package snapshot.
+size_t
+dnf_backend_installed_snapshot_size()
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  return g_installed_nevras.size();
+}
+
 // Refresh the exact-installed and self-protection snapshots used by UI state
 // classification. This path is intentionally local-first: it does not require
 // repository metadata and should keep working from the rpmdb alone.
@@ -106,7 +149,7 @@ dnf_backend_refresh_installed_nevras()
   std::set<std::string> protected_names;
   {
     auto [base, guard, generation] = BaseManager::instance().acquire_read();
-    const SearchOptions search_options {};
+    const DnfBackendSearchOptions search_options {};
     installed = collect_installed_rows(base, nullptr, search_options);
     protected_names = collect_self_protected_package_names(base);
   } // Base read lock released before acquiring g_installed_mutex
@@ -119,8 +162,7 @@ dnf_backend_refresh_installed_nevras()
 bool
 dnf_backend_is_package_installed_exact(const PackageRow &row)
 {
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-  return g_installed_nevras.count(row.nevra) > 0;
+  return dnf_backend_installed_snapshot_contains(row.nevra);
 }
 
 // Classify a package row as available, upgradeable, exact-installed,
@@ -238,6 +280,30 @@ dnf_backend_is_self_protected_transaction_spec(const std::string &spec)
 
   return false;
 }
+
+#ifdef DNFUI_BUILD_TESTS
+// Clear the installed-package snapshot for tests that seed exact NEVRA state
+// without querying the host rpmdb.
+void
+dnf_backend_testonly_clear_installed_snapshot()
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  g_installed_nevras.clear();
+  g_installed_rows_by_name_arch.clear();
+  g_self_protected_package_names.clear();
+}
+
+// Replace the installed-package snapshot for tests that need deterministic
+// install-state classification without depending on host package state.
+void
+dnf_backend_testonly_replace_installed_snapshot(const std::set<std::string> &nevras)
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  g_installed_nevras = nevras;
+  g_installed_rows_by_name_arch.clear();
+  g_self_protected_package_names.clear();
+}
+#endif
 
 // -----------------------------------------------------------------------------
 // EOF

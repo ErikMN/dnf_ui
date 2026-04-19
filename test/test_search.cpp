@@ -13,8 +13,7 @@ TEST_CASE("Search contains mode returns results for common package")
 {
   reset_backend_globals();
 
-  g_search_in_description = false;
-  g_exact_match = false;
+  set_backend_search_options(false, false);
 
   auto results = dnf_backend_search_package_rows_interruptible("bash", nullptr);
 
@@ -29,8 +28,7 @@ TEST_CASE("Search exact mode does not match partial substring")
 {
   reset_backend_globals();
 
-  g_search_in_description = false;
-  g_exact_match = true;
+  set_backend_search_options(false, true);
 
   auto exact = dnf_backend_search_package_rows_interruptible("ba", nullptr);
 
@@ -45,12 +43,10 @@ TEST_CASE("Search description mode expands or equals name-only results")
 {
   reset_backend_globals();
 
-  g_exact_match = false;
-
-  g_search_in_description = false;
+  set_backend_search_options(false, false);
   auto name_only = dnf_backend_search_package_rows_interruptible("shell", nullptr);
 
-  g_search_in_description = true;
+  set_backend_search_options(true, false);
   auto desc_search = dnf_backend_search_package_rows_interruptible("shell", nullptr);
 
   if (desc_search.size() < name_only.size()) {
@@ -66,8 +62,7 @@ TEST_CASE("Search returns empty for impossible package name")
 {
   reset_backend_globals();
 
-  g_search_in_description = false;
-  g_exact_match = false;
+  set_backend_search_options(false, false);
 
   auto results = dnf_backend_search_package_rows_interruptible("___definitely_not_a_real_package_987654___", nullptr);
 

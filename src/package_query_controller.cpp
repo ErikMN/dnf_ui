@@ -45,8 +45,9 @@ package_query_clear_search_cache()
 static std::string
 cache_key_for(const std::string &term)
 {
-  std::string key = (g_search_in_description.load() ? "desc:" : "name:");
-  key += (g_exact_match.load() ? "exact:" : "contains:");
+  const DnfBackendSearchOptions options = dnf_backend_get_search_options();
+  std::string key = (options.search_in_description ? "desc:" : "name:");
+  key += (options.exact_match ? "exact:" : "contains:");
   key += term;
 
   return key;
@@ -588,8 +589,12 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   }
 
   // Ensure cache key reflects current checkboxes even when triggered from history
-  g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox));
-  g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox));
+  dnf_backend_set_search_options({
+      .search_in_description =
+          static_cast<bool>(gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox))),
+      .exact_match = static_cast<bool>(gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox))),
+  });
+  const DnfBackendSearchOptions search_options = dnf_backend_get_search_options();
 
   gtk_editable_set_text(GTK_EDITABLE(widgets->query.entry), term.c_str());
   ui_helpers_set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
@@ -611,8 +616,8 @@ perform_search(SearchWidgets *widgets, const std::string &term)
         // Use cached results and skip background thread.
         SearchTaskData cached_td {};
         cached_td.term = const_cast<char *>(term.c_str());
-        cached_td.search_in_description = g_search_in_description.load();
-        cached_td.exact_match = g_exact_match.load();
+        cached_td.search_in_description = search_options.search_in_description;
+        cached_td.exact_match = search_options.exact_match;
         set_displayed_search_query(widgets, cached_td);
 
         package_table_fill_package_view(widgets, it->second.packages);
@@ -636,8 +641,8 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   td->cache_key = g_strdup(key.c_str());
   td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
-  td->search_in_description = g_search_in_description.load();
-  td->exact_match = g_exact_match.load();
+  td->search_in_description = search_options.search_in_description;
+  td->exact_match = search_options.exact_match;
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   // The shared request helper owns disabling the search controls and flipping
@@ -742,9 +747,6 @@ package_query_on_search_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  g_search_in_description = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox));
-  g_exact_match = gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox));
-
   const char *txt = gtk_editable_get_text(GTK_EDITABLE(widgets->query.entry));
   std::string pattern = txt ? txt : "";
 
@@ -822,8 +824,6 @@ package_query_reload_current_view(SearchWidgets *widgets)
 
     gtk_check_button_set_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox), view_state.search_in_description);
     gtk_check_button_set_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox), view_state.exact_match);
-    g_search_in_description = view_state.search_in_description;
-    g_exact_match = view_state.exact_match;
     perform_search(widgets, view_state.search_term);
     return;
   case DisplayedPackageQueryKind::LIST_INSTALLED:

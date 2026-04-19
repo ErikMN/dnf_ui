@@ -5,7 +5,6 @@
 #include "test_utils.hpp"
 
 #include <map>
-#include <mutex>
 #include <set>
 #include <string>
 
@@ -46,12 +45,10 @@ TEST_CASE("Installed package cache matches returned list")
 
   auto list = dnf_backend_get_installed_package_rows_interruptible(nullptr);
 
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-
-  REQUIRE(list.size() == g_installed_nevras.size());
+  REQUIRE(list.size() == dnf_backend_installed_snapshot_size());
 
   for (const auto &row : list) {
-    REQUIRE(g_installed_nevras.count(row.nevra) == 1);
+    REQUIRE(dnf_backend_installed_snapshot_contains(row.nevra));
   }
 }
 
@@ -61,9 +58,7 @@ TEST_CASE("dnf_backend_refresh_installed_nevras populates installed NEVRA cache"
 
   dnf_backend_refresh_installed_nevras();
 
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-
-  REQUIRE(!g_installed_nevras.empty());
+  REQUIRE(dnf_backend_installed_snapshot_size() > 0);
 }
 
 // -----------------------------------------------------------------------------
@@ -74,8 +69,7 @@ TEST_CASE("Searching for impossible package name returns empty result")
 {
   reset_backend_globals();
 
-  g_search_in_description = false;
-  g_exact_match = false;
+  set_backend_search_options(false, false);
 
   auto results = dnf_backend_search_package_rows_interruptible("___definitely_not_a_real_package_123456___", nullptr);
 
@@ -86,12 +80,10 @@ TEST_CASE("Exact match results are subset of contains results")
 {
   reset_backend_globals();
 
-  g_search_in_description = false;
-
-  g_exact_match = false;
+  set_backend_search_options(false, false);
   auto contains = dnf_backend_search_package_rows_interruptible("bash", nullptr);
 
-  g_exact_match = true;
+  set_backend_search_options(false, true);
   auto exact = dnf_backend_search_package_rows_interruptible("bash", nullptr);
 
   auto contains_nevras = package_row_nevras(contains);
@@ -106,12 +98,10 @@ TEST_CASE("Description search returns superset of name-only search")
 {
   reset_backend_globals();
 
-  g_exact_match = false;
-
-  g_search_in_description = false;
+  set_backend_search_options(false, false);
   auto name_only = dnf_backend_search_package_rows_interruptible("shell", nullptr);
 
-  g_search_in_description = true;
+  set_backend_search_options(true, false);
   auto desc_search = dnf_backend_search_package_rows_interruptible("shell", nullptr);
 
   auto desc_search_nevras = package_row_nevras(desc_search);
@@ -126,8 +116,7 @@ TEST_CASE("Cancelled search returns no results")
 {
   reset_backend_globals();
 
-  g_search_in_description = false;
-  g_exact_match = false;
+  set_backend_search_options(false, false);
 
   GCancellable *cancellable = g_cancellable_new();
   g_cancellable_cancel(cancellable);
@@ -205,8 +194,7 @@ TEST_CASE("Search results keep one visible EVR per package name and architecture
 {
   reset_backend_globals();
 
-  g_search_in_description = false;
-  g_exact_match = false;
+  set_backend_search_options(false, false);
 
   auto results = dnf_backend_search_package_rows_interruptible("bash", nullptr);
   REQUIRE(!results.empty());
@@ -270,10 +258,7 @@ TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
   row.name = "demo";
   row.arch = "x86_64";
 
-  {
-    std::lock_guard<std::mutex> lock(g_installed_mutex);
-    g_installed_nevras.insert(row.nevra);
-  }
+  dnf_backend_testonly_replace_installed_snapshot({ row.nevra });
 
   row.repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN;
   REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED);
@@ -313,11 +298,7 @@ TEST_CASE("Exact installed checks use the cached installed NEVRA snapshot")
   PackageRow different_row = exact_row;
   different_row.nevra = "demo-2.0-1.x86_64";
 
-  {
-    std::lock_guard<std::mutex> lock(g_installed_mutex);
-    g_installed_nevras.clear();
-    g_installed_nevras.insert(exact_row.nevra);
-  }
+  dnf_backend_testonly_replace_installed_snapshot({ exact_row.nevra });
 
   REQUIRE(dnf_backend_is_package_installed_exact(exact_row));
   REQUIRE_FALSE(dnf_backend_is_package_installed_exact(different_row));
@@ -332,11 +313,7 @@ TEST_CASE("Annotation fallback keeps installed rows usable when repo lookup fail
   row.name = "demo";
   row.arch = "x86_64";
 
-  {
-    std::lock_guard<std::mutex> lock(g_installed_mutex);
-    g_installed_nevras.clear();
-    g_installed_nevras.insert(row.nevra);
-  }
+  dnf_backend_testonly_replace_installed_snapshot({ row.nevra });
 
   std::vector<PackageRow> rows { row };
   REQUIRE(dnf_backend_testonly_annotation_fallback_leaves_rows_unknown(rows));
