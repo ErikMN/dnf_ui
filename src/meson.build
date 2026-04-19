@@ -11,6 +11,7 @@ app_sources = files(
   'app.cpp',
   'config.cpp',
   'ui/main_menu.cpp',
+  'ui/main_window.cpp',
   'main.cpp',
   'ui/package_info_controller.cpp',
   'ui/package_query_cache.cpp',
