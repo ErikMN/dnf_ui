@@ -13,6 +13,7 @@ app_sources = files(
   'main.cpp',
   'ui/package_info_controller.cpp',
   'ui/package_query_controller.cpp',
+  'ui/package_table_context_menu.cpp',
   'ui/package_table_status.cpp',
   'ui/package_table_view.cpp',
   'ui/pending_transaction_controller.cpp',
