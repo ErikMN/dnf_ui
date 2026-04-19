@@ -7,6 +7,7 @@
 // -----------------------------------------------------------------------------
 #include "widgets.hpp"
 #include "base_manager.hpp"
+#include "package_query_controller.hpp"
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
 

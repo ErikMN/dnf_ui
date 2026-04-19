@@ -7,6 +7,8 @@
 #include "ui_helpers.hpp"
 
 #include "package_info_controller.hpp"
+#include "package_table_view.hpp"
+#include "pending_transaction_controller.hpp"
 #include "widgets.hpp"
 
 #include <string>

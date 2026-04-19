@@ -9,6 +9,9 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 #include "package_info_controller.hpp"
+#include "package_query_controller.hpp"
+#include "package_table_view.hpp"
+#include "pending_transaction_controller.hpp"
 #include "transaction_request.hpp"
 #include "transaction_progress.hpp"
 #include "transaction_service_client.hpp"

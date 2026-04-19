@@ -7,6 +7,9 @@
 #include "config.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
+#include "ui/package_query_controller.hpp"
+#include "ui/package_table_view.hpp"
+#include "ui/pending_transaction_controller.hpp"
 #include "ui/ui_helpers.hpp"
 #include "base_manager.hpp"
 

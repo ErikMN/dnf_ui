@@ -11,6 +11,8 @@
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
 #include "package_info_controller.hpp"
+#include "package_query_controller.hpp"
+#include "package_table_view.hpp"
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
 
