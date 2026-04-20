@@ -10,6 +10,7 @@ project(
 )
 
 add_project_arguments('-fdiagnostics-color=always', language: 'cpp')
+add_project_arguments('-DDNFUI_VERSION="@0@"'.format(meson.project_version()), language: 'cpp')
 
 if get_option('final_build')
   add_project_arguments(

@@ -10,6 +10,10 @@
 #include "ui_helpers.hpp"
 #include "widgets.hpp"
 
+#ifndef DNFUI_VERSION
+#define DNFUI_VERSION "unknown"
+#endif
+
 struct MainMenuActionData {
   SearchWidgets *widgets = nullptr;
   GtkWidget *window = nullptr;
@@ -52,6 +56,39 @@ on_menu_quit(GSimpleAction *, GVariant *, gpointer user_data)
   }
 
   gtk_window_close(GTK_WINDOW(data->window));
+}
+
+static void
+on_menu_about(GSimpleAction *, GVariant *, gpointer user_data)
+{
+  MainMenuActionData *data = static_cast<MainMenuActionData *>(user_data);
+  if (!data || !data->window) {
+    return;
+  }
+
+  const char *authors[] = {
+    "ErikMN",
+    nullptr,
+  };
+
+  gtk_show_about_dialog(GTK_WINDOW(data->window),
+                        "program-name",
+                        "DNF UI",
+                        "version",
+                        DNFUI_VERSION,
+                        "comments",
+                        "Graphical package manager frontend for Fedora.",
+                        "website",
+                        "https://github.com/ErikMN/dnf_ui",
+                        "website-label",
+                        "GitHub repository",
+                        "authors",
+                        authors,
+                        "logo-icon-name",
+                        "com.fedora.dnfui",
+                        "license-type",
+                        GTK_LICENSE_MIT_X11,
+                        nullptr);
 }
 
 static void
@@ -105,6 +142,11 @@ main_menu_create()
   g_menu_append_submenu(menu_bar, "Package", G_MENU_MODEL(package_menu));
   g_object_unref(package_menu);
 
+  GMenu *help_menu = g_menu_new();
+  g_menu_append(help_menu, "About DNF UI", "win.about");
+  g_menu_append_submenu(menu_bar, "Help", G_MENU_MODEL(help_menu));
+  g_object_unref(help_menu);
+
   GtkWidget *menu = gtk_popover_menu_bar_new_from_model(G_MENU_MODEL(menu_bar));
   g_object_unref(menu_bar);
 
@@ -127,7 +169,7 @@ main_menu_connect_actions(const MainMenuWidgets &menu_widgets, SearchWidgets *wi
         delete static_cast<MainMenuActionData *>(p);
       });
 
-  GActionEntry entries[5] = {};
+  GActionEntry entries[6] = {};
   entries[0].name = "quit";
   entries[0].activate = on_menu_quit;
   entries[1].name = "clear-list";
@@ -140,6 +182,8 @@ main_menu_connect_actions(const MainMenuWidgets &menu_widgets, SearchWidgets *wi
   entries[4].name = "show-info";
   entries[4].state = "true";
   entries[4].change_state = on_menu_show_info_changed;
+  entries[5].name = "about";
+  entries[5].activate = on_menu_about;
 
   GSimpleActionGroup *actions = g_simple_action_group_new();
   g_action_map_add_action_entries(G_ACTION_MAP(actions), entries, G_N_ELEMENTS(entries), data);
