@@ -59,6 +59,11 @@ appstreamcli validate --no-net packaging/com.fedora.dnfui.metainfo.xml
 %{_bindir}/dnfui
 %{_libexecdir}/dnfui-service
 %{_datadir}/applications/com.fedora.dnfui.desktop
+%{_datadir}/icons/hicolor/48x48/apps/com.fedora.dnfui.png
+%{_datadir}/icons/hicolor/64x64/apps/com.fedora.dnfui.png
+%{_datadir}/icons/hicolor/128x128/apps/com.fedora.dnfui.png
+%{_datadir}/icons/hicolor/256x256/apps/com.fedora.dnfui.png
+%{_datadir}/icons/hicolor/512x512/apps/com.fedora.dnfui.png
 %{_datadir}/icons/hicolor/1024x1024/apps/com.fedora.dnfui.png
 %{_datadir}/metainfo/com.fedora.dnfui.metainfo.xml
 %{_datadir}/dbus-1/system-services/com.fedora.Dnfui.Transaction1.service

@@ -34,9 +34,14 @@ install_data(
   install_tag: 'transaction-service',
 )
 
-install_data(
-  '../img/logo.png',
-  install_dir: app_icon_dir,
-  rename: 'com.fedora.dnfui.png',
-  install_tag: 'runtime',
-)
+app_icon_sizes = ['48', '64', '128', '256', '512', '1024']
+
+foreach app_icon_size : app_icon_sizes
+  app_icon_size_dir = app_icon_size + 'x' + app_icon_size
+
+  install_data(
+    join_paths('icons', 'hicolor', app_icon_size_dir, 'apps', 'com.fedora.dnfui.png'),
+    install_dir: join_paths(app_icon_root_dir, app_icon_size_dir, 'apps'),
+    install_tag: 'runtime',
+  )
+endforeach

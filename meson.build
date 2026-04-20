@@ -46,7 +46,7 @@ dbus_system_policy_dir = join_paths(get_option('sysconfdir'), 'dbus-1', 'system.
 systemd_system_unit_dir = join_paths(get_option('prefix'), 'lib', 'systemd', 'system')
 desktop_file_dir = join_paths(get_option('datadir'), 'applications')
 metainfo_dir = join_paths(get_option('datadir'), 'metainfo')
-app_icon_dir = join_paths(get_option('datadir'), 'icons', 'hicolor', '1024x1024', 'apps')
+app_icon_root_dir = join_paths(get_option('datadir'), 'icons', 'hicolor')
 
 if systemd_dep.found()
   systemd_system_unit_dir = systemd_dep.get_variable(pkgconfig: 'systemdsystemunitdir')
