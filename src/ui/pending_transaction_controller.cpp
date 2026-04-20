@@ -117,7 +117,7 @@ update_apply_button(SearchWidgets *widgets)
     apply_label += " (" + std::to_string(pending_count) + ")";
   }
 
-  gtk_button_set_label(widgets->transaction.apply_button, apply_label.c_str());
+  ui_helpers_set_icon_button(widgets->transaction.apply_button, "emblem-ok-symbolic", apply_label.c_str());
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), has_pending);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), has_pending);
 }

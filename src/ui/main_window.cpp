@@ -232,7 +232,7 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_search), entry);
   ui->entry = entry;
 
-  GtkWidget *search_button = gtk_button_new_with_label("Search");
+  GtkWidget *search_button = ui_helpers_create_icon_button("system-search-symbolic", "Search");
   gtk_box_append(GTK_BOX(hbox_search), search_button);
   ui->search_button = search_button;
 
@@ -256,18 +256,18 @@ build_main_ui(AppWidgets *ui)
   GtkWidget *hbox_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_root), hbox_buttons);
 
-  GtkWidget *list_button = gtk_button_new_with_label("List Installed");
+  GtkWidget *list_button = ui_helpers_create_icon_button("view-list-symbolic", "List Installed");
   gtk_box_append(GTK_BOX(hbox_buttons), list_button);
   ui->list_button = list_button;
 
-  GtkWidget *list_available_button = gtk_button_new_with_label("List Packages");
+  GtkWidget *list_available_button = ui_helpers_create_icon_button("view-list-symbolic", "List Packages");
   gtk_box_append(GTK_BOX(hbox_buttons), list_available_button);
   ui->list_available_button = list_available_button;
 
   // --- Refresh Repositories button ---
   // Triggers an asynchronous repository rebuild using BaseManager::rebuild()
   // Runs in a background thread to keep the GTK UI responsive
-  GtkWidget *refresh_button = gtk_button_new_with_label("Refresh Repositories");
+  GtkWidget *refresh_button = ui_helpers_create_icon_button("view-refresh-symbolic", "Refresh Repositories");
   gtk_box_append(GTK_BOX(hbox_buttons), refresh_button);
   ui->refresh_button = refresh_button;
 
@@ -275,23 +275,23 @@ build_main_ui(AppWidgets *ui)
   GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_root), hbox_tx_buttons);
 
-  GtkWidget *install_button = gtk_button_new_with_label("Mark for Install");
+  GtkWidget *install_button = ui_helpers_create_icon_button("list-add-symbolic", "Mark for Install");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), install_button);
   ui->install_button = install_button;
 
-  GtkWidget *reinstall_button = gtk_button_new_with_label("Mark for Reinstall");
+  GtkWidget *reinstall_button = ui_helpers_create_icon_button("view-refresh-symbolic", "Mark for Reinstall");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), reinstall_button);
   ui->reinstall_button = reinstall_button;
 
-  GtkWidget *remove_button = gtk_button_new_with_label("Mark for Removal");
+  GtkWidget *remove_button = ui_helpers_create_icon_button("list-remove-symbolic", "Mark for Removal");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
   ui->remove_button = remove_button;
 
-  GtkWidget *apply_button = gtk_button_new_with_label("Apply Transactions");
+  GtkWidget *apply_button = ui_helpers_create_icon_button("emblem-ok-symbolic", "Apply Transactions");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), apply_button);
   ui->apply_button = apply_button;
 
-  GtkWidget *clear_pending_button = gtk_button_new_with_label("Clear Transactions");
+  GtkWidget *clear_pending_button = ui_helpers_create_icon_button("edit-clear-symbolic", "Clear Transactions");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), clear_pending_button);
   ui->clear_pending_button = clear_pending_button;
 

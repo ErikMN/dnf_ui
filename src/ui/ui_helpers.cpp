@@ -8,6 +8,56 @@
 
 #include "widgets.hpp"
 
+namespace {
+
+constexpr const char *ICON_BUTTON_IMAGE_KEY = "dnfui-icon-button-image";
+constexpr const char *ICON_BUTTON_LABEL_KEY = "dnfui-icon-button-label";
+
+} // namespace
+
+GtkWidget *
+ui_helpers_create_icon_button(const char *icon_name, const char *label)
+{
+  GtkWidget *button = gtk_button_new();
+  ui_helpers_set_icon_button(GTK_BUTTON(button), icon_name, label);
+
+  return button;
+}
+
+void
+ui_helpers_set_icon_button(GtkButton *button, const char *icon_name, const char *label)
+{
+  if (!button) {
+    return;
+  }
+
+  GtkWidget *image = GTK_WIDGET(g_object_get_data(G_OBJECT(button), ICON_BUTTON_IMAGE_KEY));
+  GtkWidget *label_widget = GTK_WIDGET(g_object_get_data(G_OBJECT(button), ICON_BUTTON_LABEL_KEY));
+
+  if (!image || !label_widget) {
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+    gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
+
+    image = gtk_image_new();
+    gtk_widget_set_valign(image, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(box), image);
+
+    label_widget = gtk_label_new(nullptr);
+    gtk_widget_set_valign(label_widget, GTK_ALIGN_CENTER);
+    gtk_box_append(GTK_BOX(box), label_widget);
+
+    gtk_button_set_child(button, box);
+    g_object_set_data(G_OBJECT(button), ICON_BUTTON_IMAGE_KEY, image);
+    g_object_set_data(G_OBJECT(button), ICON_BUTTON_LABEL_KEY, label_widget);
+  }
+
+  const bool has_icon = icon_name && icon_name[0] != '\0';
+  gtk_image_set_from_icon_name(GTK_IMAGE(image), has_icon ? icon_name : nullptr);
+  gtk_widget_set_visible(image, has_icon);
+  gtk_label_set_text(GTK_LABEL(label_widget), label ? label : "");
+}
+
 // -----------------------------------------------------------------------------
 // Helper: Update status label with color
 // -----------------------------------------------------------------------------
@@ -53,21 +103,21 @@ ui_helpers_update_action_button_labels(SearchWidgets *widgets, const std::string
   }
 
   if (pending_install) {
-    gtk_button_set_label(widgets->transaction.install_button, "Unmark Install");
-    gtk_button_set_label(widgets->transaction.remove_button, "Mark for Removal");
-    gtk_button_set_label(widgets->transaction.reinstall_button, "Mark for Reinstall");
+    ui_helpers_set_icon_button(widgets->transaction.install_button, "edit-clear-symbolic", "Unmark Install");
+    ui_helpers_set_icon_button(widgets->transaction.remove_button, "list-remove-symbolic", "Mark for Removal");
+    ui_helpers_set_icon_button(widgets->transaction.reinstall_button, "view-refresh-symbolic", "Mark for Reinstall");
   } else if (pending_reinstall) {
-    gtk_button_set_label(widgets->transaction.install_button, "Mark for Install");
-    gtk_button_set_label(widgets->transaction.remove_button, "Mark for Removal");
-    gtk_button_set_label(widgets->transaction.reinstall_button, "Unmark Reinstall");
+    ui_helpers_set_icon_button(widgets->transaction.install_button, "list-add-symbolic", "Mark for Install");
+    ui_helpers_set_icon_button(widgets->transaction.remove_button, "list-remove-symbolic", "Mark for Removal");
+    ui_helpers_set_icon_button(widgets->transaction.reinstall_button, "edit-clear-symbolic", "Unmark Reinstall");
   } else if (pending_remove) {
-    gtk_button_set_label(widgets->transaction.install_button, "Mark for Install");
-    gtk_button_set_label(widgets->transaction.remove_button, "Unmark Removal");
-    gtk_button_set_label(widgets->transaction.reinstall_button, "Mark for Reinstall");
+    ui_helpers_set_icon_button(widgets->transaction.install_button, "list-add-symbolic", "Mark for Install");
+    ui_helpers_set_icon_button(widgets->transaction.remove_button, "edit-clear-symbolic", "Unmark Removal");
+    ui_helpers_set_icon_button(widgets->transaction.reinstall_button, "view-refresh-symbolic", "Mark for Reinstall");
   } else {
-    gtk_button_set_label(widgets->transaction.install_button, "Mark for Install");
-    gtk_button_set_label(widgets->transaction.remove_button, "Mark for Removal");
-    gtk_button_set_label(widgets->transaction.reinstall_button, "Mark for Reinstall");
+    ui_helpers_set_icon_button(widgets->transaction.install_button, "list-add-symbolic", "Mark for Install");
+    ui_helpers_set_icon_button(widgets->transaction.remove_button, "list-remove-symbolic", "Mark for Removal");
+    ui_helpers_set_icon_button(widgets->transaction.reinstall_button, "view-refresh-symbolic", "Mark for Reinstall");
   }
 }
 

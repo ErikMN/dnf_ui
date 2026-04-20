@@ -179,10 +179,10 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
   widgets->query_state.current_package_list_request_kind = kind;
   GtkButton *stop_button = package_list_stop_button(widgets, kind);
 
-  gtk_button_set_label(widgets->query.search_button, "Search");
-  gtk_button_set_label(widgets->query.list_button, "List Installed");
-  gtk_button_set_label(widgets->query.list_available_button, "List Packages");
-  gtk_button_set_label(stop_button, "Stop");
+  ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", "Search");
+  ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", "List Installed");
+  ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", "List Packages");
+  ui_helpers_set_icon_button(stop_button, "process-stop-symbolic", "Stop");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), FALSE);
@@ -201,9 +201,9 @@ restore_package_list_controls(SearchWidgets *widgets)
     return;
   }
 
-  gtk_button_set_label(widgets->query.search_button, "Search");
-  gtk_button_set_label(widgets->query.list_button, "List Installed");
-  gtk_button_set_label(widgets->query.list_available_button, "List Packages");
+  ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", "Search");
+  ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", "List Installed");
+  ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", "List Packages");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), TRUE);
