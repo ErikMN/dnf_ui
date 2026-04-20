@@ -13,6 +13,7 @@
 #include "service/transaction_service_dbus.hpp"
 #include "service/transaction_service_introspection.hpp"
 #include "service/transaction_service_preview_formatter.hpp"
+#include "service/transaction_service_request_parser.hpp"
 #include "transaction_request.hpp"
 
 #include <gio/gio.h>
@@ -115,40 +116,6 @@ static void complete_apply_request(TransactionSession *session, GDBusMethodInvoc
 // -----------------------------------------------------------------------------
 static gboolean start_transaction_preview(gpointer user_data);
 static gboolean start_transaction_apply(gpointer user_data);
-
-// -----------------------------------------------------------------------------
-// Transaction request conversion
-// -----------------------------------------------------------------------------
-// Unpack the StartTransaction arrays in install, remove, and reinstall order.
-static TransactionRequest
-request_from_variant(GVariant *parameters)
-{
-  gchar **install = nullptr;
-  gchar **remove = nullptr;
-  gchar **reinstall = nullptr;
-  g_variant_get(parameters, "(^as^as^as)", &install, &remove, &reinstall);
-
-  TransactionRequest request;
-
-  auto append_specs = [](std::vector<std::string> &target, gchar **specs) {
-    if (!specs) {
-      return;
-    }
-    for (gchar **it = specs; *it; ++it) {
-      target.emplace_back(*it);
-    }
-  };
-
-  append_specs(request.install, install);
-  append_specs(request.remove, remove);
-  append_specs(request.reinstall, reinstall);
-
-  g_strfreev(install);
-  g_strfreev(remove);
-  g_strfreev(reinstall);
-
-  return request;
-}
 
 // -----------------------------------------------------------------------------
 // Main loop dispatch helpers
@@ -1054,7 +1021,7 @@ on_manager_method_call(GDBusConnection *,
     return;
   }
 
-  TransactionRequest request = request_from_variant(parameters);
+  TransactionRequest request = transaction_service_request_from_variant(parameters);
   std::string error_out;
   if (!request.validate(error_out)) {
     g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS, "%s", error_out.c_str());
