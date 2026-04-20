@@ -1,5 +1,6 @@
 service_sources = files(
   'transaction_service.cpp',
+  'transaction_service_introspection.cpp',
   'transaction_service_preview_formatter.cpp',
   'transaction_service_main.cpp',
 )

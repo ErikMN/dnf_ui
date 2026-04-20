@@ -11,6 +11,7 @@
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
 #include "service/transaction_service_dbus.hpp"
+#include "service/transaction_service_introspection.hpp"
 #include "service/transaction_service_preview_formatter.hpp"
 #include "transaction_request.hpp"
 
@@ -28,58 +29,13 @@
 #include <vector>
 
 // -----------------------------------------------------------------------------
-// Transaction service D-Bus names and introspection data
+// Transaction service D-Bus names
 // -----------------------------------------------------------------------------
 constexpr const char *kServiceName = kTransactionServiceName;
 constexpr const char *kManagerObjectPath = kTransactionServiceManagerPath;
 constexpr const char *kManagerInterface = kTransactionServiceManagerInterface;
 constexpr const char *kTransactionInterface = kTransactionServiceRequestInterface;
 constexpr const char *kApplyActionId = "com.fedora.dnfui.apply-transactions";
-
-constexpr const char *kManagerIntrospectionXml = R"XML(
-<node>
-  <interface name="com.fedora.Dnfui.Transaction1">
-    <method name="StartTransaction">
-      <arg name="install" type="as" direction="in"/>
-      <arg name="remove" type="as" direction="in"/>
-      <arg name="reinstall" type="as" direction="in"/>
-      <arg name="transaction_path" type="o" direction="out"/>
-    </method>
-  </interface>
-</node>
-)XML";
-
-constexpr const char *kTransactionIntrospectionXml = R"XML(
-<node>
-  <interface name="com.fedora.Dnfui.TransactionRequest1">
-    <method name="Cancel"/>
-    <method name="Apply"/>
-    <method name="Release"/>
-    <method name="GetPreview">
-      <arg name="install" type="as" direction="out"/>
-      <arg name="upgrade" type="as" direction="out"/>
-      <arg name="downgrade" type="as" direction="out"/>
-      <arg name="reinstall" type="as" direction="out"/>
-      <arg name="remove" type="as" direction="out"/>
-      <arg name="disk_space_delta" type="x" direction="out"/>
-    </method>
-    <method name="GetResult">
-      <arg name="stage" type="s" direction="out"/>
-      <arg name="finished" type="b" direction="out"/>
-      <arg name="success" type="b" direction="out"/>
-      <arg name="details" type="s" direction="out"/>
-    </method>
-    <signal name="Progress">
-      <arg name="line" type="s"/>
-    </signal>
-    <signal name="Finished">
-      <arg name="stage" type="s"/>
-      <arg name="success" type="b"/>
-      <arg name="details" type="s"/>
-    </signal>
-  </interface>
-</node>
-)XML";
 
 // -----------------------------------------------------------------------------
 // Transaction service runtime state
@@ -1281,7 +1237,7 @@ transaction_service_run(const TransactionServiceOptions &options)
   service->main_context = g_main_loop_get_context(service->loop);
 
   GError *error = nullptr;
-  service->manager_node_info = g_dbus_node_info_new_for_xml(kManagerIntrospectionXml, &error);
+  service->manager_node_info = g_dbus_node_info_new_for_xml(kTransactionServiceManagerIntrospectionXml, &error);
   if (!service->manager_node_info) {
     std::fprintf(stderr, "Failed to parse manager introspection XML: %s\n", error ? error->message : "unknown");
     g_clear_error(&error);
@@ -1289,7 +1245,7 @@ transaction_service_run(const TransactionServiceOptions &options)
     return 1;
   }
 
-  service->transaction_node_info = g_dbus_node_info_new_for_xml(kTransactionIntrospectionXml, &error);
+  service->transaction_node_info = g_dbus_node_info_new_for_xml(kTransactionServiceRequestIntrospectionXml, &error);
   if (!service->transaction_node_info) {
     std::fprintf(stderr, "Failed to parse transaction introspection XML: %s\n", error ? error->message : "unknown");
     g_clear_error(&error);
