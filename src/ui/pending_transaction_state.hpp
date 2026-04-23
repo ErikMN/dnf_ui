@@ -28,6 +28,7 @@ struct PendingTransactionWidgets {
   GtkButton *apply_button = nullptr;
   GtkButton *clear_pending_button = nullptr;
   GtkListBox *pending_list = nullptr;
+  bool preview_request_in_progress = false;
   std::vector<PendingAction> actions;
   std::string preview_transaction_path;
 };

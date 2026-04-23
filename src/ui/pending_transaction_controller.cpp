@@ -24,16 +24,32 @@ struct ApplyTaskData {
   TransactionProgressWindow *progress_window;
 };
 
+// Task payload for the async transaction-preview worker.
+struct PreviewTaskData {
+  TransactionRequest request;
+  TransactionPreview preview;
+  std::string transaction_path;
+};
+
 // Button payload used to jump from one pending action back to its package row.
 struct PendingJumpButtonData {
   SearchWidgets *widgets;
   PendingAction action;
 };
 
+static void update_apply_button(SearchWidgets *widgets);
+
 static void
 apply_task_data_free(gpointer p)
 {
   ApplyTaskData *d = static_cast<ApplyTaskData *>(p);
+  delete d;
+}
+
+static void
+preview_task_data_free(gpointer p)
+{
+  PreviewTaskData *d = static_cast<PreviewTaskData *>(p);
   delete d;
 }
 
@@ -65,6 +81,40 @@ static std::string
 self_protected_transaction_message(const PackageRow &pkg)
 {
   return "Cannot modify " + pkg.name + " while DNF UI is running. Close the application and use another tool.";
+}
+
+static const char *
+pending_transaction_preview_busy_message()
+{
+  return "Wait for the current transaction preview to finish.";
+}
+
+static bool
+pending_transaction_preview_is_busy(SearchWidgets *widgets)
+{
+  return widgets && widgets->transaction.preview_request_in_progress;
+}
+
+static void
+set_preview_request_busy_state(SearchWidgets *widgets, bool busy)
+{
+  if (!widgets) {
+    return;
+  }
+
+  widgets->transaction.preview_request_in_progress = busy;
+  if (widgets->transaction.pending_list) {
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.pending_list), !busy);
+  }
+
+  if (busy) {
+    ui_helpers_set_icon_button(widgets->transaction.apply_button, "emblem-ok-symbolic", "Preparing Preview...");
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), FALSE);
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), FALSE);
+    return;
+  }
+
+  update_apply_button(widgets);
 }
 
 // Show the selected pending action in the main package list so it can be reviewed or changed.
@@ -354,6 +404,10 @@ void
 pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (pending_transaction_preview_is_busy(widgets)) {
+    ui_helpers_set_status(widgets->query.status_label, pending_transaction_preview_busy_message(), "blue");
+    return;
+  }
 
   // Determine the selected package from the current package table.
   PackageRow pkg;
@@ -390,6 +444,10 @@ void
 pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (pending_transaction_preview_is_busy(widgets)) {
+    ui_helpers_set_status(widgets->query.status_label, pending_transaction_preview_busy_message(), "blue");
+    return;
+  }
 
   // Determine the selected package from the current package table.
   PackageRow pkg;
@@ -433,6 +491,10 @@ void
 pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (pending_transaction_preview_is_busy(widgets)) {
+    ui_helpers_set_status(widgets->query.status_label, pending_transaction_preview_busy_message(), "blue");
+    return;
+  }
 
   PackageRow pkg;
   if (!package_table_get_selected_package_row(widgets, pkg)) {
@@ -472,6 +534,10 @@ void
 pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (pending_transaction_preview_is_busy(widgets)) {
+    ui_helpers_set_status(widgets->query.status_label, pending_transaction_preview_busy_message(), "blue");
+    return;
+  }
 
   if (widgets->transaction.actions.empty()) {
     ui_helpers_set_status(widgets->query.status_label, "No pending actions to clear.", "blue");
@@ -498,6 +564,10 @@ void
 pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (pending_transaction_preview_is_busy(widgets)) {
+    ui_helpers_set_status(widgets->query.status_label, pending_transaction_preview_busy_message(), "blue");
+    return;
+  }
 
   if (widgets->transaction.actions.empty()) {
     ui_helpers_set_status(widgets->query.status_label, "No pending changes.", "gray");
@@ -505,8 +575,6 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
   }
 
   TransactionRequest request;
-  TransactionPreview preview;
-  std::string transaction_path;
   std::string error;
   pending_transaction_build_request(widgets->transaction.actions, request);
 
@@ -517,19 +585,72 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
   }
 
   invalidate_service_preview(widgets);
+  ui_helpers_set_status(widgets->query.status_label, "Preparing transaction preview...", "blue");
+  widgets_spinner_acquire(widgets->query.spinner);
+  set_preview_request_busy_state(widgets, true);
 
-  if (!transaction_service_client_preview_request(request, preview, transaction_path, error)) {
-    const char *status_message = error.empty() ? "Unable to prepare transaction preview." : error.c_str();
-    ui_helpers_set_status(widgets->query.status_label, status_message, "red");
-    transaction_progress_show_error_dialog(widgets,
-                                           "Transaction Preview Failed",
-                                           "The transaction could not be prepared. Review the details below.",
-                                           error.empty() ? std::string(status_message) : error);
-    return;
-  }
+  PreviewTaskData *td = new PreviewTaskData();
+  td->request = std::move(request);
 
-  widgets->transaction.preview_transaction_path = transaction_path;
-  transaction_progress_show_summary_dialog(widgets, preview, start_apply_transaction, invalidate_service_preview);
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  GTask *task = g_task_new(
+      nullptr,
+      c,
+      +[](GObject *, GAsyncResult *res, gpointer user_data) {
+        GTask *task = G_TASK(res);
+        SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+        PreviewTaskData *td = static_cast<PreviewTaskData *>(g_task_get_task_data(task));
+
+        if (GCancellable *c = g_task_get_cancellable(task)) {
+          if (g_cancellable_is_cancelled(c)) {
+            return;
+          }
+        }
+
+        widgets_spinner_release(widgets->query.spinner);
+        set_preview_request_busy_state(widgets, false);
+
+        GError *error = nullptr;
+        gboolean success = g_task_propagate_boolean(task, &error);
+        if (!success || !td) {
+          const char *status_message =
+              error && error->message ? error->message : "Unable to prepare transaction preview.";
+          ui_helpers_set_status(widgets->query.status_label, status_message, "red");
+          transaction_progress_show_error_dialog(widgets,
+                                                 "Transaction Preview Failed",
+                                                 "The transaction could not be prepared. Review the details below.",
+                                                 status_message);
+          if (error) {
+            g_error_free(error);
+          }
+          return;
+        }
+
+        widgets->transaction.preview_transaction_path = td->transaction_path;
+        transaction_progress_show_summary_dialog(
+            widgets, td->preview, start_apply_transaction, invalidate_service_preview);
+      },
+      widgets);
+
+  g_task_set_task_data(task, td, preview_task_data_free);
+  g_task_run_in_thread(
+      task, +[](GTask *task, gpointer, gpointer task_data, GCancellable *) {
+        PreviewTaskData *td = static_cast<PreviewTaskData *>(task_data);
+        std::string error;
+        if (!td || !transaction_service_client_preview_request(td->request, td->preview, td->transaction_path, error)) {
+          g_task_return_new_error(task,
+                                  G_IO_ERROR,
+                                  G_IO_ERROR_FAILED,
+                                  "%s",
+                                  error.empty() ? "Unable to prepare transaction preview." : error.c_str());
+          return;
+        }
+
+        g_task_return_boolean(task, TRUE);
+      });
+
+  g_object_unref(task);
+  g_object_unref(c);
 }
 
 // -----------------------------------------------------------------------------
