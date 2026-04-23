@@ -8,9 +8,71 @@
 #include "debug_trace.hpp"
 
 #include <libdnf5/conf/const.hpp>
+#include <libdnf5/repo/repo.hpp>
 
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
+
+namespace {
+
+enum class RepoLoadMode {
+  FULL,
+  SYSTEM_ONLY,
+};
+
+// Build one fully configured Base before any repo metadata is loaded.
+static std::shared_ptr<libdnf5::Base>
+create_configured_base()
+{
+  DNFUI_TRACE("BaseManager initialize start");
+
+  auto base = std::make_shared<libdnf5::Base>();
+  DNFUI_TRACE("BaseManager load config start");
+  base->load_config();
+  DNFUI_TRACE("BaseManager load config done");
+
+  // Changelog lookups for available packages need repo "other" metadata.
+  base->get_config().get_optional_metadata_types_option().add_item(libdnf5::Option::Priority::RUNTIME,
+                                                                   libdnf5::METADATA_TYPE_OTHER);
+  DNFUI_TRACE("BaseManager setup start");
+  base->setup();
+  DNFUI_TRACE("BaseManager setup done");
+
+  auto repo_sack = base->get_repo_sack();
+  DNFUI_TRACE("BaseManager create repos start");
+  repo_sack->create_repos_from_system_configuration();
+  DNFUI_TRACE("BaseManager create repos done");
+
+  return base;
+}
+
+// Load repository data for one already configured Base. Startup fallback should
+// only trigger when this step fails for the full repo set.
+static void
+load_repo_data(libdnf5::Base &base, RepoLoadMode mode)
+{
+  auto repo_sack = base.get_repo_sack();
+
+#ifdef DNFUI_BUILD_TESTS
+  if (mode == RepoLoadMode::FULL) {
+    const char *force_failure = std::getenv("DNFUI_TEST_FORCE_FULL_REPO_LOAD_FAILURE");
+    if (force_failure && std::string(force_failure) == "1") {
+      throw std::runtime_error("forced full repo load failure");
+    }
+  }
+#endif
+
+  DNFUI_TRACE("BaseManager load repos start");
+  if (mode == RepoLoadMode::SYSTEM_ONLY) {
+    repo_sack->load_repos(libdnf5::repo::Repo::Type::SYSTEM);
+  } else {
+    repo_sack->load_repos();
+  }
+  DNFUI_TRACE("BaseManager load repos done");
+}
+
+} // namespace
 
 // -----------------------------------------------------------------------------
 // Singleton: BaseManager instance accessor
@@ -85,8 +147,7 @@ BaseManager::rebuild()
   std::unique_lock lock(base_mutex);
 
   // Build the replacement first so a repo-refresh failure does not discard the
-  // last known-good Base. This keeps local rpmdb-backed operations available
-  // even when repository metadata refresh fails.
+  // last known-good repo-backed Base.
   auto rebuilt_base = build_initialized_base();
   if (!rebuilt_base) {
     throw std::runtime_error("Repository rebuild failed (Base is null).");
@@ -106,31 +167,9 @@ BaseManager::rebuild()
 std::shared_ptr<libdnf5::Base>
 BaseManager::build_initialized_base()
 {
-  DNFUI_TRACE("BaseManager initialize start");
-
-  // Create and fully initialize a new libdnf5::Base
-  auto base = std::make_shared<libdnf5::Base>();
-  DNFUI_TRACE("BaseManager load config start");
-  base->load_config();
-  DNFUI_TRACE("BaseManager load config done");
-
-  // Changelog lookups for available packages need repo "other" metadata.
-  base->get_config().get_optional_metadata_types_option().add_item(libdnf5::Option::Priority::RUNTIME,
-                                                                   libdnf5::METADATA_TYPE_OTHER);
-  DNFUI_TRACE("BaseManager setup start");
-  base->setup();
-  DNFUI_TRACE("BaseManager setup done");
-
-  // Load system repositories
-  auto repo_sack = base->get_repo_sack();
-  DNFUI_TRACE("BaseManager create repos start");
-  repo_sack->create_repos_from_system_configuration();
-  DNFUI_TRACE("BaseManager create repos done");
-  // Force load all enabled repos; skip disabled safely
+  auto base = create_configured_base();
   try {
-    DNFUI_TRACE("BaseManager load repos start");
-    repo_sack->load_repos();
-    DNFUI_TRACE("BaseManager load repos done");
+    load_repo_data(*base, RepoLoadMode::FULL);
   } catch (const std::exception &e) {
     std::cerr << "Warning: repo load failed: " << e.what() << std::endl;
     DNFUI_TRACE("BaseManager load repos failed: %s", e.what());
@@ -149,9 +188,41 @@ void
 BaseManager::ensure_base_initialized()
 {
   if (!base_ptr) {
-    base_ptr = build_initialized_base();
+    auto base = create_configured_base();
+    try {
+      load_repo_data(*base, RepoLoadMode::FULL);
+      DNFUI_TRACE("BaseManager initialize done");
+      base_ptr = std::move(base);
+    } catch (const std::exception &repo_error) {
+      std::cerr << "Warning: repo load failed: " << repo_error.what() << std::endl;
+      DNFUI_TRACE("BaseManager load repos failed: %s", repo_error.what());
+      std::cerr << "Warning: startup repo load failed, falling back to installed-package-only mode: "
+                << repo_error.what() << std::endl;
+      DNFUI_TRACE("BaseManager startup full repo load failed, trying system-only fallback: %s", repo_error.what());
+
+      auto fallback_base = create_configured_base();
+      try {
+        load_repo_data(*fallback_base, RepoLoadMode::SYSTEM_ONLY);
+        DNFUI_TRACE("BaseManager initialize done");
+        base_ptr = std::move(fallback_base);
+      } catch (const std::exception &fallback_error) {
+        throw std::runtime_error(
+            "DNF backend initialization failed after repo load error: " + std::string(repo_error.what()) +
+            "; system-only fallback failed: " + fallback_error.what());
+      }
+    }
   }
 }
+
+#ifdef DNFUI_BUILD_TESTS
+void
+BaseManager::reset_for_tests()
+{
+  std::unique_lock<std::shared_mutex> unique(base_mutex);
+  base_ptr.reset();
+  generation.store(0, std::memory_order_relaxed);
+}
+#endif
 
 // -----------------------------------------------------------------------------
 // EOF

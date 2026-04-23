@@ -66,6 +66,10 @@ class BaseManager {
   // Force rebuild
   void rebuild();
 
+#ifdef DNFUI_BUILD_TESTS
+  void reset_for_tests();
+#endif
+
   private:
   BaseManager() = default;
   BaseManager(const BaseManager &) = delete;

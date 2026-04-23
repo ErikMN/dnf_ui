@@ -2,7 +2,9 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 
+#include <cstdlib>
 #include <set>
+#include <string>
 #include <vector>
 
 inline void
@@ -31,3 +33,36 @@ package_row_nevras(const std::vector<PackageRow> &rows)
 
   return nevras;
 }
+
+struct ScopedEnvVar {
+  explicit ScopedEnvVar(const char *key, const char *value)
+      : key(key ? key : "")
+  {
+    const char *existing = this->key.empty() ? nullptr : std::getenv(this->key.c_str());
+    if (existing) {
+      had_old_value = true;
+      old_value = existing;
+    }
+
+    if (!this->key.empty()) {
+      setenv(this->key.c_str(), value ? value : "", 1);
+    }
+  }
+
+  ~ScopedEnvVar()
+  {
+    if (key.empty()) {
+      return;
+    }
+
+    if (had_old_value) {
+      setenv(key.c_str(), old_value.c_str(), 1);
+    } else {
+      unsetenv(key.c_str());
+    }
+  }
+
+  std::string key;
+  std::string old_value;
+  bool had_old_value = false;
+};

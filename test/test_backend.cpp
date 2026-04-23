@@ -35,6 +35,40 @@ TEST_CASE("acquire_read returns current generation snapshot")
   REQUIRE(read.generation == expected);
 }
 
+TEST_CASE("BaseManager falls back to system-only initialization when full repo load fails")
+{
+  reset_backend_globals();
+
+  auto &mgr = BaseManager::instance();
+  mgr.reset_for_tests();
+  {
+    ScopedEnvVar force_failure("DNFUI_TEST_FORCE_FULL_REPO_LOAD_FAILURE", "1");
+    REQUIRE_NOTHROW(dnf_backend_refresh_installed_nevras());
+    REQUIRE(dnf_backend_installed_snapshot_size() > 0);
+  }
+  mgr.reset_for_tests();
+}
+
+TEST_CASE("BaseManager rebuild stays strict when full repo load fails after initialization")
+{
+  reset_backend_globals();
+
+  auto &mgr = BaseManager::instance();
+  mgr.reset_for_tests();
+  REQUIRE_NOTHROW(mgr.acquire_read());
+  const auto before = mgr.current_generation();
+
+  {
+    ScopedEnvVar force_failure("DNFUI_TEST_FORCE_FULL_REPO_LOAD_FAILURE", "1");
+    REQUIRE_THROWS(mgr.rebuild());
+  }
+
+  REQUIRE(mgr.current_generation() == before);
+  REQUIRE_NOTHROW(dnf_backend_refresh_installed_nevras());
+  REQUIRE(dnf_backend_installed_snapshot_size() > 0);
+  mgr.reset_for_tests();
+}
+
 // -----------------------------------------------------------------------------
 // Installed package cache consistency tests (read-only)
 // -----------------------------------------------------------------------------
