@@ -25,9 +25,32 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace {
+
+#ifdef DNFUI_BUILD_TESTS
+// Force one preview worker exception in test builds so the service smoke test
+// can verify that the request still ends in a final failed state.
+static void
+throw_if_test_preview_exception_requested()
+{
+  const char *force_exception = g_getenv("DNFUI_TEST_FORCE_PREVIEW_WORKER_EXCEPTION");
+  if (force_exception && g_strcmp0(force_exception, "1") == 0) {
+    throw std::runtime_error("Forced transaction preview worker exception.");
+  }
+}
+#else
+static void
+throw_if_test_preview_exception_requested()
+{
+}
+#endif
+
+} // namespace
 
 // -----------------------------------------------------------------------------
 // Transaction service D-Bus names
@@ -564,6 +587,7 @@ run_transaction_preview(TransactionSession *session)
     auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
     DNFUI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
+    throw_if_test_preview_exception_requested();
     try {
       // The transaction service is a long-lived process, so packages installed or
       // removed outside the GUI can leave its cached Base out of date. Rebuild it

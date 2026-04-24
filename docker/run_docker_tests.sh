@@ -13,6 +13,7 @@ echo "*** Running Docker Catch2 test suite ***"
 
 echo "*** Running Docker session bus transaction service smoke tests ***"
 "$MAKE_BIN" -C "$PROJECT_ROOT" dockerservicetest
+"$MAKE_BIN" -C "$PROJECT_ROOT" dockerservicepreviewfailuretest
 "$MAKE_BIN" -C "$PROJECT_ROOT" dockerservicecanceltest
 "$MAKE_BIN" -C "$PROJECT_ROOT" dockerserviceapplytest
 

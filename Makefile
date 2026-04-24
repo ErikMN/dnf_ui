@@ -284,6 +284,11 @@ dockertests:
 dockerservicetest:
 	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_test.sh
 
+# Run the session bus forced preview failure smoke test in Docker:
+.PHONY: dockerservicepreviewfailuretest
+dockerservicepreviewfailuretest:
+	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_service_preview_failure_test.sh
+
 # Run the session bus apply smoke test in Docker:
 .PHONY: dockerserviceapplytest
 dockerserviceapplytest:
