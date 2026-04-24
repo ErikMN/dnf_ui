@@ -10,6 +10,7 @@
 #include "ui/main_window.hpp"
 #include "ui/widgets.hpp"
 
+#include <atomic>
 #include <gtk/gtk.h>
 
 // -----------------------------------------------------------------------------
@@ -17,11 +18,18 @@
 // -----------------------------------------------------------------------------
 static void activate(GtkApplication *app, gpointer user_data);
 static void setup_periodic_tasks(void);
+static gboolean on_periodic_installed_refresh_tick(gpointer user_data);
+static void start_installed_refresh_task(void);
+static void
+on_installed_refresh_task(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable);
+static void on_installed_refresh_task_finished(GObject *source_object, GAsyncResult *result, gpointer user_data);
 static void startup_warmup_data_free(gpointer data);
 static gboolean start_backend_warmup_idle(gpointer user_data);
 static void start_backend_warmup_task(SearchWidgets *widgets);
 static void on_backend_warmup_task(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable);
 static void on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gpointer user_data);
+
+static std::atomic<bool> g_installed_refresh_running { false };
 
 struct StartupWarmupData {
   SearchWidgets *widgets = nullptr;
@@ -50,13 +58,62 @@ static void
 setup_periodic_tasks(void)
 {
   // --- Periodic refresh of installed package names every 5 minutes ---
-  g_timeout_add_seconds(
-      300, // 5 minutes
-      [](gpointer) -> gboolean {
-        dnf_backend_refresh_installed_nevras();
-        return TRUE; // keep repeating
-      },
-      nullptr);
+  g_timeout_add_seconds(300, on_periodic_installed_refresh_tick, nullptr);
+}
+
+static gboolean
+on_periodic_installed_refresh_tick(gpointer)
+{
+  start_installed_refresh_task();
+  return TRUE;
+}
+
+// -----------------------------------------------------------------------------
+// Refresh the installed-package snapshot in the background so the periodic
+// refresh does not block the GTK main thread.
+// -----------------------------------------------------------------------------
+static void
+start_installed_refresh_task(void)
+{
+  if (g_installed_refresh_running.exchange(true)) {
+    DNFUI_TRACE("Installed package refresh skipped because the previous refresh is still running");
+    return;
+  }
+
+  DNFUI_TRACE("Installed package refresh task start");
+
+  GTask *task = g_task_new(nullptr, nullptr, on_installed_refresh_task_finished, nullptr);
+  g_task_run_in_thread(task, on_installed_refresh_task);
+  g_object_unref(task);
+}
+
+static void
+on_installed_refresh_task(GTask *task, gpointer, gpointer, GCancellable *)
+{
+  try {
+    dnf_backend_refresh_installed_nevras();
+    g_task_return_boolean(task, TRUE);
+  } catch (const std::exception &e) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
+  } catch (...) {
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "Installed package refresh failed.");
+  }
+}
+
+static void
+on_installed_refresh_task_finished(GObject *, GAsyncResult *result, gpointer)
+{
+  GError *error = nullptr;
+  g_task_propagate_boolean(G_TASK(result), &error);
+
+  if (error) {
+    DNFUI_TRACE("Installed package refresh task failed: %s", error->message);
+  } else {
+    DNFUI_TRACE("Installed package refresh task done");
+  }
+
+  g_clear_error(&error);
+  g_installed_refresh_running = false;
 }
 
 // -----------------------------------------------------------------------------
