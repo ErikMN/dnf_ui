@@ -557,50 +557,59 @@ run_transaction_preview(TransactionSession *session)
     return;
   }
 
-  TransactionPreview preview;
-  std::string error_out;
-  queue_transaction_progress(session, "Loading package base...");
-  auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
-
-  DNFUI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
   try {
-    // The transaction service is a long-lived process, so packages installed or
-    // removed outside the GUI can leave its cached Base out of date. Rebuild it
-    // before each preview so resolve/apply requests always use the current
-    // rpmdb and repository metadata snapshot.
-    queue_transaction_progress(session, "Refreshing backend state...");
-    BaseManager::instance().rebuild();
+    TransactionPreview preview;
+    std::string error_out;
+    queue_transaction_progress(session, "Loading package base...");
+    auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
+
+    DNFUI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
+    try {
+      // The transaction service is a long-lived process, so packages installed or
+      // removed outside the GUI can leave its cached Base out of date. Rebuild it
+      // before each preview so resolve and apply requests always use the current
+      // rpmdb and repository metadata snapshot.
+      queue_transaction_progress(session, "Refreshing backend state...");
+      BaseManager::instance().rebuild();
+    } catch (const std::exception &e) {
+      DNFUI_TRACE(
+          "Transaction service preview refresh failed path=%s error=%s", session->object_path.c_str(), e.what());
+      queue_transaction_progress(session,
+                                 "Backend refresh failed; retrying preview with the last known-good package state.");
+    }
+
+    bool ok = dnf_backend_preview_transaction(
+        session->request.install, session->request.remove, session->request.reinstall, preview, error_out, progress_cb);
+
+    if (session->cancelled.load()) {
+      DNFUI_TRACE("Transaction service preview cancelled path=%s", session->object_path.c_str());
+      queue_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
+      return;
+    }
+
+    if (!ok) {
+      DNFUI_TRACE("Transaction service preview failed path=%s", session->object_path.c_str());
+      queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, error_out);
+      return;
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(session->state_mutex);
+      session->preview = preview;
+    }
+    DNFUI_TRACE("Transaction service preview done path=%s items=%zu",
+                session->object_path.c_str(),
+                preview.install.size() + preview.upgrade.size() + preview.downgrade.size() + preview.reinstall.size() +
+                    preview.remove.size());
+    queue_transaction_finished(
+        session, TransactionStage::PREVIEW_READY, true, format_transaction_preview_details(preview));
   } catch (const std::exception &e) {
-    DNFUI_TRACE("Transaction service preview refresh failed path=%s error=%s", session->object_path.c_str(), e.what());
-    queue_transaction_progress(session,
-                               "Backend refresh failed; retrying preview with the last known-good package state.");
+    DNFUI_TRACE("Transaction service preview exception path=%s error=%s", session->object_path.c_str(), e.what());
+    queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, e.what());
+  } catch (...) {
+    DNFUI_TRACE("Transaction service preview exception path=%s error=unknown", session->object_path.c_str());
+    queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, "Transaction preview failed.");
   }
-
-  bool ok = dnf_backend_preview_transaction(
-      session->request.install, session->request.remove, session->request.reinstall, preview, error_out, progress_cb);
-
-  if (session->cancelled.load()) {
-    DNFUI_TRACE("Transaction service preview cancelled path=%s", session->object_path.c_str());
-    queue_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
-    return;
-  }
-
-  if (!ok) {
-    DNFUI_TRACE("Transaction service preview failed path=%s", session->object_path.c_str());
-    queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, error_out);
-    return;
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(session->state_mutex);
-    session->preview = preview;
-  }
-  DNFUI_TRACE("Transaction service preview done path=%s items=%zu",
-              session->object_path.c_str(),
-              preview.install.size() + preview.upgrade.size() + preview.downgrade.size() + preview.reinstall.size() +
-                  preview.remove.size());
-  queue_transaction_finished(
-      session, TransactionStage::PREVIEW_READY, true, format_transaction_preview_details(preview));
 }
 
 // Start the transaction preview worker for one new request object.
@@ -641,36 +650,45 @@ run_transaction_apply(TransactionSession *session)
     return;
   }
 
-  std::string error_out;
   ApplyGuard apply_guard { session->service->apply_running };
-  queue_transaction_progress(session, "Loading package base...");
-  auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
-  DNFUI_TRACE("Transaction service apply start path=%s", session->object_path.c_str());
-  bool ok = dnf_backend_apply_transaction(
-      session->request.install, session->request.remove, session->request.reinstall, error_out, progress_cb);
+  try {
+    std::string error_out;
+    queue_transaction_progress(session, "Loading package base...");
+    auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
-  std::string details;
-  TransactionStage stage = TransactionStage::APPLY_FAILED;
-  bool success = false;
+    DNFUI_TRACE("Transaction service apply start path=%s", session->object_path.c_str());
+    bool ok = dnf_backend_apply_transaction(
+        session->request.install, session->request.remove, session->request.reinstall, error_out, progress_cb);
 
-  if (ok) {
-    details = "Transaction applied successfully.";
-    stage = TransactionStage::APPLY_SUCCEEDED;
-    success = true;
+    std::string details;
+    TransactionStage stage = TransactionStage::APPLY_FAILED;
+    bool success = false;
 
-    try {
-      queue_transaction_progress(session, "Refreshing backend state...");
-      BaseManager::instance().rebuild();
-    } catch (const std::exception &e) {
-      details += "\nBackend refresh failed: " + std::string(e.what());
+    if (ok) {
+      details = "Transaction applied successfully.";
+      stage = TransactionStage::APPLY_SUCCEEDED;
+      success = true;
+
+      try {
+        queue_transaction_progress(session, "Refreshing backend state...");
+        BaseManager::instance().rebuild();
+      } catch (const std::exception &e) {
+        details += "\nBackend refresh failed: " + std::string(e.what());
+      }
+    } else {
+      details = error_out;
     }
-  } else {
-    details = error_out;
-  }
 
-  DNFUI_TRACE("Transaction service apply done path=%s success=%d", session->object_path.c_str(), success ? 1 : 0);
-  queue_transaction_finished(session, stage, success, details);
+    DNFUI_TRACE("Transaction service apply done path=%s success=%d", session->object_path.c_str(), success ? 1 : 0);
+    queue_transaction_finished(session, stage, success, details);
+  } catch (const std::exception &e) {
+    DNFUI_TRACE("Transaction service apply exception path=%s error=%s", session->object_path.c_str(), e.what());
+    queue_transaction_finished(session, TransactionStage::APPLY_FAILED, false, e.what());
+  } catch (...) {
+    DNFUI_TRACE("Transaction service apply exception path=%s error=unknown", session->object_path.c_str());
+    queue_transaction_finished(session, TransactionStage::APPLY_FAILED, false, "Transaction apply failed.");
+  }
 }
 
 // Start the transaction apply worker after authorization succeeds.
