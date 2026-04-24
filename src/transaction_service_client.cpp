@@ -347,6 +347,7 @@ release_transaction_request(GDBusConnection *connection, const std::string &tran
 // -----------------------------------------------------------------------------
 struct FinishedWaitState {
   bool received = false;
+  bool service_disappeared = false;
   std::string stage;
   bool success = false;
   std::string details;
@@ -369,9 +370,9 @@ wait_for_transaction_stage(GDBusConnection *connection,
 {
   error_out.clear();
 
-  // Subscribe to Finished before the initial state poll to close the narrow
-  // window where the service could finish between StartTransaction returning
-  // and the subscription being registered (TOCTOU race).
+  // Subscribe to Finished before the first state poll.
+  // This covers the short gap where the service could finish after the request
+  // starts but before the client begins waiting for the result.
   FinishedWaitState wait_state;
   guint finished_id = g_dbus_connection_signal_subscribe(
       connection,
@@ -401,9 +402,38 @@ wait_for_transaction_stage(GDBusConnection *connection,
       &wait_state,
       nullptr);
 
+  guint name_owner_changed_id = g_dbus_connection_signal_subscribe(
+      connection,
+      "org.freedesktop.DBus",
+      "org.freedesktop.DBus",
+      "NameOwnerChanged",
+      "/org/freedesktop/DBus",
+      kTransactionServiceName,
+      G_DBUS_SIGNAL_FLAGS_NONE,
+      +[](GDBusConnection *,
+          const gchar *,
+          const gchar *,
+          const gchar *,
+          const gchar *,
+          GVariant *parameters,
+          gpointer user_data) {
+        auto *state = static_cast<FinishedWaitState *>(user_data);
+        const gchar *name = nullptr;
+        const gchar *old_owner = nullptr;
+        const gchar *new_owner = nullptr;
+        g_variant_get(parameters, "(&s&s&s)", &name, &old_owner, &new_owner);
+        if (name && g_strcmp0(name, kTransactionServiceName) == 0 && old_owner && *old_owner &&
+            (!new_owner || !*new_owner)) {
+          state->service_disappeared = true;
+        }
+      },
+      &wait_state,
+      nullptr);
+
   // One initial GetResult call handles the case where the service already
   // reached a final state before our Finished subscription was registered.
   if (!get_transaction_result(connection, transaction_path, result_out, error_out)) {
+    g_dbus_connection_signal_unsubscribe(connection, name_owner_changed_id);
     g_dbus_connection_signal_unsubscribe(connection, finished_id);
     return false;
   }
@@ -411,11 +441,20 @@ wait_for_transaction_stage(GDBusConnection *connection,
   // Block on context until the Finished signal fires or the initial poll
   // already shows a final state. Any other signals pending on context
   // (such as Progress callbacks in the apply path) are also dispatched here.
-  while (!wait_state.received && result_out.stage == running_stage && !result_out.finished) {
+  while (!wait_state.received && !wait_state.service_disappeared && result_out.stage == running_stage &&
+         !result_out.finished) {
     g_main_context_iteration(context, TRUE);
   }
 
+  g_dbus_connection_signal_unsubscribe(connection, name_owner_changed_id);
   g_dbus_connection_signal_unsubscribe(connection, finished_id);
+
+  // Return a normal client error if the service disappears while the client
+  // is still waiting for the final state signal.
+  if (wait_state.service_disappeared && !wait_state.received) {
+    error_out = "Transaction service disappeared while waiting for the result.";
+    return false;
+  }
 
   // Populate result directly from the signal payload when the signal drove the
   // exit, avoiding an extra GetResult round-trip.
