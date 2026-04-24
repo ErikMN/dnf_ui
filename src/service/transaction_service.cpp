@@ -43,9 +43,39 @@ throw_if_test_preview_exception_requested()
     throw std::runtime_error("Forced transaction preview worker exception.");
   }
 }
+
+// In test builds, allow one preview worker to announce that it has started and
+// then wait for a short time. This lets one integration test stop the service
+// while the client is blocked waiting for the preview result.
+static void
+run_test_preview_wait_hook_if_requested()
+{
+  const char *started_file = g_getenv("DNFUI_TEST_PREVIEW_STARTED_FILE");
+  if (started_file && *started_file) {
+    g_file_set_contents(started_file, "", 0, nullptr);
+  }
+
+  const char *delay_ms_text = g_getenv("DNFUI_TEST_PREVIEW_DELAY_MS");
+  if (!delay_ms_text || !*delay_ms_text) {
+    return;
+  }
+
+  gchar *end = nullptr;
+  guint64 delay_ms = g_ascii_strtoull(delay_ms_text, &end, 10);
+  if (end == delay_ms_text || (end && *end != '\0') || delay_ms == 0) {
+    return;
+  }
+
+  g_usleep(delay_ms * 1000);
+}
 #else
 static void
 throw_if_test_preview_exception_requested()
+{
+}
+
+static void
+run_test_preview_wait_hook_if_requested()
 {
 }
 #endif
@@ -588,6 +618,7 @@ run_transaction_preview(TransactionSession *session)
 
     DNFUI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
     throw_if_test_preview_exception_requested();
+    run_test_preview_wait_hook_if_requested();
     try {
       // The transaction service is a long-lived process, so packages installed or
       // removed outside the GUI can leave its cached Base out of date. Rebuild it

@@ -150,10 +150,10 @@ dnfui-tests: meson-setup
 run: dnfui
 	@./$(APP_BIN_NAME)
 
-# Run the backend test suite:
+# Run the test suite:
 .PHONY: test
-test: dnfui-tests
-	@echo "*** Running backend test suite ***"
+test: dnfui-tests dnfui-service
+	@echo "*** Running test suite ***"
 	@./$(TEST_BIN_NAME)
 
 # Run the full native test matrix, including service smoke tests:

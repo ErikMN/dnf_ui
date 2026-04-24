@@ -26,6 +26,12 @@ bool transaction_service_client_apply_started_request(const std::string &transac
 // Release one finished transaction request that is no longer needed.
 void transaction_service_client_release_request(const std::string &transaction_path);
 
+#ifdef DNFUI_BUILD_TESTS
+// Drop the cached D-Bus connection so integration tests can stop their private
+// session bus cleanly between runs.
+void transaction_service_client_reset_for_tests();
+#endif
+
 // -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

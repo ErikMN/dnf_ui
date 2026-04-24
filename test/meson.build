@@ -8,16 +8,20 @@ dnfui_tests = executable(
   files(
     'test_backend.cpp',
     'test_search.cpp',
+    'test_transaction_service_client.cpp',
     'test_transaction_preview.cpp',
     'test_transaction_request.cpp',
-  ) + backend_sources,
+  ) + backend_sources + files('../src/transaction_service_client.cpp'),
   include_directories: src_inc,
   dependencies: [
     libdnf5_dep,
     gio_dep,
     catch2_dep,
   ],
-  cpp_args: ['-DDNFUI_BUILD_TESTS=1'],
+  cpp_args: [
+    '-DDNFUI_BUILD_TESTS=1',
+    '-DDNFUI_TEST_SERVICE_BIN="@0@"'.format(dnfui_service.full_path()),
+  ],
 )
 
 test('dnfui-tests', dnfui_tests)

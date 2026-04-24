@@ -708,6 +708,21 @@ transaction_service_client_release_request(const std::string &transaction_path)
   g_object_unref(connection);
 }
 
+#ifdef DNFUI_BUILD_TESTS
+void
+transaction_service_client_reset_for_tests()
+{
+  TransactionServiceConnectionCache &cache = get_transaction_service_connection_cache();
+  std::lock_guard<std::mutex> lock(cache.mutex);
+  if (!cache.connection) {
+    return;
+  }
+
+  g_object_unref(cache.connection);
+  cache.connection = nullptr;
+}
+#endif
+
 // -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

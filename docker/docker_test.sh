@@ -26,7 +26,7 @@ if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   exit 1
 fi
 
-color_print "$FMT_GREEN" "*** Running backend test suite inside container... ***"
+color_print "$FMT_GREEN" "*** Running test suite inside container... ***"
 
 docker run --rm -it \
   --name "$CONTAINER_NAME" \
@@ -37,4 +37,4 @@ docker run --rm -it \
   -e DNFUI_MESON_BUILD_ROOT=/tmp/dnfui-build \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
-  bash -c 'BUILD_DIR="$(./utils/meson_build.sh build-dir)" && ./utils/meson_build.sh tests && meson test -C "$BUILD_DIR" --print-errorlogs'
+  bash -c 'BUILD_DIR="$(./utils/meson_build.sh build-dir)" && ./utils/meson_build.sh service tests && meson test -C "$BUILD_DIR" --print-errorlogs'
