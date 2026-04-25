@@ -102,6 +102,7 @@ jobs:
                 systemd-devel \
                 systemd-rpm-macros
 
+              git config --global --add safe.directory /workspace
               make rpm
               test -L dnf-ui-latest.rpm
               test -L dnf-ui-latest.src.rpm
