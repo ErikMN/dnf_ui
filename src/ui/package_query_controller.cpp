@@ -296,13 +296,15 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   const PackageListTaskData *td = static_cast<const PackageListTaskData *>(g_task_get_task_data(task));
 
-  if (GCancellable *c = g_task_get_cancellable(task)) {
-    if (g_cancellable_is_cancelled(c)) {
-      if (td) {
-        end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    if (widgets && !widgets->window_state.destroyed) {
+      if (GCancellable *c = g_task_get_cancellable(task)) {
+        if (g_cancellable_is_cancelled(c) && td) {
+          end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
+        }
       }
-      return;
     }
+    return;
   }
 
   // Drop stale results if the backend Base changed while the worker was running.
@@ -378,13 +380,15 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   const PackageListTaskData *td = static_cast<const PackageListTaskData *>(g_task_get_task_data(task));
 
-  if (GCancellable *c = g_task_get_cancellable(task)) {
-    if (g_cancellable_is_cancelled(c)) {
-      if (td) {
-        end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    if (widgets && !widgets->window_state.destroyed) {
+      if (GCancellable *c = g_task_get_cancellable(task)) {
+        if (g_cancellable_is_cancelled(c) && td) {
+          end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+        }
       }
-      return;
     }
+    return;
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
@@ -468,8 +472,8 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   GCancellable *c = g_task_get_cancellable(task);
   const SearchTaskData *td = static_cast<const SearchTaskData *>(g_task_get_task_data(task));
 
-  if (c && g_cancellable_is_cancelled(c)) {
-    if (td) {
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    if (widgets && !widgets->window_state.destroyed && c && g_cancellable_is_cancelled(c) && td) {
       end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
     }
     return;
@@ -614,7 +618,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   // The shared request helper owns disabling the search controls and flipping
   // the initiating Search button to Stop.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::SEARCH);
-  GTask *task = g_task_new(nullptr, c, on_search_task_finished, widgets);
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_search_task_finished);
   g_task_set_task_data(task, td, search_task_data_free);
   g_task_run_in_thread(task, on_search_task);
   g_object_unref(task);
@@ -652,7 +656,7 @@ package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
   // The shared request helper owns disabling the entry and flipping the
   // initiating button from List Installed to Stop.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_INSTALLED);
-  GTask *task = g_task_new(nullptr, c, on_list_task_finished, widgets);
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_list_task_finished);
   g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
 
   g_task_run_in_thread(task, on_list_task);
@@ -689,7 +693,7 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
   // The shared request helper owns disabling the entry and flipping the
   // initiating button from List Packages to Stop.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
-  GTask *task = g_task_new(nullptr, c, on_list_available_task_finished, widgets);
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_list_available_task_finished);
   g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
 
   g_task_run_in_thread(task, on_list_available_task);

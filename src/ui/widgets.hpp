@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include <gtk/gtk.h>
 
@@ -54,12 +55,14 @@ struct MainWindowState {
   GtkLabel *backend_warmup_label = nullptr;
   // Cancellable owned by the startup backend warm up task.
   GCancellable *backend_warmup_cancellable = nullptr;
+  // Set when the main window is being destroyed.
+  bool destroyed = false;
 };
 
 // -----------------------------------------------------------------------------
 // Shared widget state bag passed between the split controller modules
 // -----------------------------------------------------------------------------
-struct SearchWidgets {
+struct SearchWidgets : std::enable_shared_from_this<SearchWidgets> {
   PackageQueryWidgets query;
   PackageResultsWidgets results;
   PendingTransactionWidgets transaction;

@@ -11,6 +11,12 @@
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
 
+namespace {
+
+constexpr const char *kTaskSearchWidgetsHoldKey = "dnfui-task-search-widgets-hold";
+
+}
+
 // Shared cancellable helper used by background widget tasks.
 GCancellable *
 widgets_make_task_cancellable_for(GtkWidget *w)
@@ -20,6 +26,39 @@ widgets_make_task_cancellable_for(GtkWidget *w)
     g_signal_connect_object(w, "destroy", G_CALLBACK(g_cancellable_cancel), c, G_CONNECT_SWAPPED);
   }
   return c;
+}
+
+static void
+hold_search_widgets_for_task(GTask *task, SearchWidgets *widgets)
+{
+  if (!task || !widgets) {
+    return;
+  }
+
+  auto *held_widgets = new std::shared_ptr<SearchWidgets>(widgets->shared_from_this());
+  g_object_set_data_full(G_OBJECT(task), kTaskSearchWidgetsHoldKey, held_widgets, [](gpointer p) {
+    delete static_cast<std::shared_ptr<SearchWidgets> *>(p);
+  });
+}
+
+// Create a task that keeps SearchWidgets alive until its completion callback returns.
+GTask *
+widgets_task_new_for_search_widgets(SearchWidgets *widgets, GCancellable *c, GAsyncReadyCallback callback)
+{
+  GTask *task = g_task_new(nullptr, c, callback, widgets);
+  hold_search_widgets_for_task(task, widgets);
+  return task;
+}
+
+bool
+widgets_task_should_skip_completion(GTask *task, SearchWidgets *widgets)
+{
+  if (!widgets || widgets->window_state.destroyed) {
+    return true;
+  }
+
+  GCancellable *c = task ? g_task_get_cancellable(task) : nullptr;
+  return c && g_cancellable_is_cancelled(c);
 }
 
 // -----------------------------------------------------------------------------
@@ -97,12 +136,11 @@ void
 widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
-  if (GCancellable *c = g_task_get_cancellable(task)) {
-    if (g_cancellable_is_cancelled(c)) {
-      return;
-    }
-  }
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    return;
+  }
+
   GError *error = nullptr;
   gboolean success = g_task_propagate_boolean(task, &error);
 
@@ -142,7 +180,7 @@ widgets_on_refresh_button_clicked(GtkButton *, gpointer user_data)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  GTask *task = g_task_new(nullptr, c, widgets_on_rebuild_task_finished, widgets);
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, widgets_on_rebuild_task_finished);
   g_task_run_in_thread(task, widgets_on_rebuild_task);
   g_object_unref(task);
   g_object_unref(c);

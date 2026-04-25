@@ -208,13 +208,11 @@ static void
 on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
-  if (GCancellable *c = g_task_get_cancellable(task)) {
-    if (g_cancellable_is_cancelled(c)) {
-      return;
-    }
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    return;
   }
 
-  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   const InfoTaskData *td = static_cast<const InfoTaskData *>(g_task_get_task_data(task));
   GError *error = nullptr;
   InfoTaskResult *result = static_cast<InfoTaskResult *>(g_task_propagate_pointer(task, &error));
@@ -279,7 +277,7 @@ package_info_load_selected_package_info(SearchWidgets *widgets, const PackageRow
   update_selected_package_actions(widgets, selected);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  GTask *task = g_task_new(nullptr, c, on_package_info_task_finished, widgets);
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_package_info_task_finished);
 
   // Pass package NEVRA to background task
   InfoTaskData *td = static_cast<InfoTaskData *>(g_malloc0(sizeof *td));

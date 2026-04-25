@@ -266,12 +266,11 @@ static void
 rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
-  if (GCancellable *c = g_task_get_cancellable(task)) {
-    if (g_cancellable_is_cancelled(c)) {
-      return;
-    }
-  }
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    return;
+  }
+
   GError *error = nullptr;
   gboolean ok = g_task_propagate_boolean(task, &error);
 
@@ -299,7 +298,7 @@ rebuild_after_tx_async(SearchWidgets *widgets)
   package_query_clear_search_cache();
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  GTask *task = g_task_new(nullptr, c, rebuild_after_tx_finished, widgets);
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, rebuild_after_tx_finished);
   g_task_run_in_thread(task, widgets_on_rebuild_task);
   g_object_unref(task);
   g_object_unref(c);
@@ -330,18 +329,15 @@ start_apply_transaction(SearchWidgets *widgets)
   widgets_spinner_acquire(widgets->query.spinner);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  GTask *task = g_task_new(
-      nullptr,
-      c,
-      +[](GObject *, GAsyncResult *res, gpointer user_data) {
+  GTask *task = widgets_task_new_for_search_widgets(
+      widgets, c, +[](GObject *, GAsyncResult *res, gpointer user_data) {
         GTask *task = G_TASK(res);
         ApplyTaskData *td = static_cast<ApplyTaskData *>(g_task_get_task_data(task));
-        if (GCancellable *c = g_task_get_cancellable(task)) {
-          if (g_cancellable_is_cancelled(c)) {
-            return;
-          }
-        }
         SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+        if (widgets_task_should_skip_completion(task, widgets)) {
+          return;
+        }
+
         GError *error = nullptr;
         gboolean success = g_task_propagate_boolean(task, &error);
 
@@ -373,8 +369,7 @@ start_apply_transaction(SearchWidgets *widgets)
             g_error_free(error);
           }
         }
-      },
-      widgets);
+      });
 
   g_task_set_task_data(task, td, apply_task_data_free);
 
@@ -593,18 +588,14 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
   td->request = std::move(request);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  GTask *task = g_task_new(
-      nullptr,
-      c,
-      +[](GObject *, GAsyncResult *res, gpointer user_data) {
+  GTask *task = widgets_task_new_for_search_widgets(
+      widgets, c, +[](GObject *, GAsyncResult *res, gpointer user_data) {
         GTask *task = G_TASK(res);
         SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
         PreviewTaskData *td = static_cast<PreviewTaskData *>(g_task_get_task_data(task));
 
-        if (GCancellable *c = g_task_get_cancellable(task)) {
-          if (g_cancellable_is_cancelled(c)) {
-            return;
-          }
+        if (widgets_task_should_skip_completion(task, widgets)) {
+          return;
         }
 
         widgets_spinner_release(widgets->query.spinner);
@@ -629,8 +620,7 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
         widgets->transaction.preview_transaction_path = td->transaction_path;
         transaction_progress_show_summary_dialog(
             widgets, td->preview, start_apply_transaction, invalidate_service_preview);
-      },
-      widgets);
+      });
 
   g_task_set_task_data(task, td, preview_task_data_free);
   g_task_run_in_thread(
