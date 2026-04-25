@@ -20,6 +20,16 @@ Interfaces, behavior, and features may change while the application is being sta
 - Strong focus on code quality and maintainability
 - No unnecessary complexity or bloat
 
+## Scope
+
+DNF UI is a package manager frontend, **NOT** an app store.
+
+It focuses on fast package search, package details, installed package inspection,
+explicit transaction review, and applying DNF package transactions through Polkit.
+
+DNF UI does **NOT** aim to manage Flatpaks, firmware updates, ratings, featured
+applications, or software-center discovery workflows.
+
 ## Current features
 
 - Search repo packages together with installed-only local RPMs
