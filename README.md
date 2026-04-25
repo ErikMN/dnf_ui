@@ -146,6 +146,45 @@ Run the full native test matrix, including transaction service smoke tests:
 SERVICE_TEST_INSTALL_SPEC=cowsay make nativetests
 ```
 
+### Memory checks
+
+Run a quick smoke test under Valgrind Memcheck:
+
+```sh
+make memcheck
+```
+
+Run the automated test binary under Valgrind Memcheck:
+
+```sh
+make memcheck-tests
+```
+
+`make memory-check` currently runs the full automated Memcheck target.
+
+Run the desktop app under Valgrind Memcheck:
+
+```sh
+make memcheck-app
+```
+
+Memcheck logs are written under `build/memcheck/`.
+
+The default Memcheck setup fails on definite and indirect leaks from this
+project. Reachable and possible leak noise from GLib, GTK, DNF, and related
+libraries is suppressed in `utils/valgrind-dnfui.supp`.
+
+Useful options:
+
+```sh
+MEMCHECK_SMOKE_FILTER="Transaction request validation rejects an empty request" make memcheck
+MEMCHECK_SMOKE_TIMEOUT=5m make memcheck
+MEMCHECK_TEST_FILTER="Search returns empty for impossible package name" make memcheck-tests
+MEMCHECK_TEST_TIMEOUT=10m make memcheck-tests
+MEMCHECK_TRACK_FDS=yes make memcheck-tests
+MEMCHECK_GEN_SUPPRESSIONS=yes make memcheck-tests
+```
+
 ### Docker
 
 Build the development image:

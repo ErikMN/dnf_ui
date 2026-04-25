@@ -9,6 +9,12 @@ include utils/transaction_service_paths.conf
 APP_BIN_NAME = dnfui
 APP_BIN_DEST = /usr/bin/dnfui
 TEST_BIN_NAME = dnfui-tests
+MEMCHECK ?= ./utils/run_memcheck.sh
+MEMCHECK_APP_ARGS ?=
+MEMCHECK_SMOKE_FILTER ?= Transaction request validation rejects an empty request
+MEMCHECK_SMOKE_TIMEOUT ?= 2m
+MEMCHECK_TEST_FILTER ?=
+MEMCHECK_TEST_TIMEOUT ?= 30m
 
 ifeq ($(FINAL),y)
   MESON_BUILD_NAME = final
@@ -34,7 +40,7 @@ else
   MESON_DEBUG_TRACE = false
 endif
 
-ifneq ($(filter test $(TEST_BIN_NAME),$(MAKECMDGOALS)),)
+ifneq ($(filter test $(TEST_BIN_NAME) memcheck memcheck-smoke memcheck-tests memory-check,$(MAKECMDGOALS)),)
   MESON_BUILD_TESTS = true
 else
   MESON_BUILD_TESTS = false
@@ -342,16 +348,38 @@ dockerrpm:
 # Developer utility targets
 # -----------------------------------------------------------------------------
 
-# FIXME: Run valgrind on the app binary:
+# Run a quick automated smoke test under Valgrind Memcheck:
+.PHONY: memcheck
+memcheck: memcheck-smoke
+
+# Run a quick automated smoke test under Valgrind Memcheck:
+.PHONY: memcheck-smoke
+memcheck-smoke: dnfui-tests
+	@MEMCHECK_TIMEOUT="$(MEMCHECK_SMOKE_TIMEOUT)" $(MEMCHECK) test ./$(TEST_BIN_NAME) "$(MEMCHECK_SMOKE_FILTER)"
+
+# Run the automated test binary under Valgrind Memcheck:
+.PHONY: memcheck-tests
+memcheck-tests: dnfui-tests dnfui-service
+	@$(MAKE) run-memcheck-tests
+
+# Run the main automated memory checks:
+.PHONY: memory-check
+memory-check: dnfui-tests dnfui-service
+	@$(MAKE) run-memcheck-tests
+
+# Internal helper used by the public automated memory check targets:
+.PHONY: run-memcheck-tests
+run-memcheck-tests:
+	@MEMCHECK_TIMEOUT="$(MEMCHECK_TEST_TIMEOUT)" $(MEMCHECK) test ./$(TEST_BIN_NAME) $(if $(strip $(MEMCHECK_TEST_FILTER)),"$(MEMCHECK_TEST_FILTER)")
+
+# Run the desktop app under Valgrind Memcheck:
+.PHONY: memcheck-app
+memcheck-app: dnfui
+	@$(MEMCHECK) app ./$(APP_BIN_NAME) $(MEMCHECK_APP_ARGS)
+
+# Backward compatible alias for running the desktop app under Valgrind:
 .PHONY: valgrind
-valgrind: dnfui
-	@valgrind \
-		--tool=memcheck \
-		--leak-check=yes \
-		--show-reachable=yes \
-		--num-callers=20 \
-		--track-fds=yes \
-		./$(APP_BIN_NAME)
+valgrind: memcheck-app
 
 # FIXME: Run cppcheck on the source tree:
 .PHONY: cppcheck

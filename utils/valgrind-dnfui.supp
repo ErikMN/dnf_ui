@@ -1,0 +1,88 @@
+{
+   glib reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libglib-2.0.so*
+   ...
+}
+{
+   gobject reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libgobject-2.0.so*
+   ...
+}
+{
+   gio reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libgio-2.0.so*
+   ...
+}
+{
+   gtk reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libgtk-4.so*
+   ...
+}
+{
+   gdk pixbuf reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libgdk_pixbuf-2.0.so*
+   ...
+}
+{
+   pango reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libpango-1.0.so*
+   ...
+}
+{
+   cairo reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libcairo.so*
+   ...
+}
+{
+   dnf reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libdnf5.so*
+   ...
+}
+{
+   librepo reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*librepo.so*
+   ...
+}
+{
+   libsolv reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*libsolv.so*
+   ...
+}
+{
+   rpm reachable allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   obj:*librpm.so*
+   ...
+}
