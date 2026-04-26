@@ -169,6 +169,7 @@ static void complete_apply_request(TransactionSession *session, GDBusMethodInvoc
 // -----------------------------------------------------------------------------
 static gboolean start_transaction_preview(gpointer user_data);
 static gboolean start_transaction_apply(gpointer user_data);
+static bool transaction_apply_should_stop_before_work(TransactionSession *session, std::string &details_out);
 
 // -----------------------------------------------------------------------------
 // Main loop dispatch helpers
@@ -707,6 +708,14 @@ run_transaction_apply(TransactionSession *session)
 
   ApplyGuard apply_guard { session->service->apply_running };
 
+  // Stop if the request was released after the worker started but before
+  // backend package work begins.
+  std::string stop_details;
+  if (transaction_apply_should_stop_before_work(session, stop_details)) {
+    queue_transaction_finished(session, TransactionStage::CANCELLED, false, stop_details);
+    return;
+  }
+
   try {
     std::string error_out;
     queue_transaction_progress(session, "Loading package base...");
@@ -751,7 +760,16 @@ static gboolean
 start_transaction_apply(gpointer user_data)
 {
   TransactionSession *session = static_cast<TransactionSession *>(user_data);
-  if (!session) {
+  if (!session || !session->service) {
+    return G_SOURCE_REMOVE;
+  }
+
+  // Stop if the request was released before the apply worker could be started.
+  // No ApplyGuard exists yet, so clear the service-wide apply flag here.
+  std::string stop_details;
+  if (transaction_apply_should_stop_before_work(session, stop_details)) {
+    session->service->apply_running = false;
+    queue_transaction_finished(session, TransactionStage::CANCELLED, false, stop_details);
     return G_SOURCE_REMOVE;
   }
 
@@ -764,6 +782,26 @@ start_transaction_apply(gpointer user_data)
       session);
   g_thread_unref(thread);
   return G_SOURCE_REMOVE;
+}
+
+// Return true when apply should stop before package work begins.
+// Release and client disconnect handling already mark the session cancelled.
+static bool
+transaction_apply_should_stop_before_work(TransactionSession *session, std::string &details_out)
+{
+  details_out.clear();
+
+  if (session->service->shutting_down.load()) {
+    details_out = "Transaction service is shutting down.";
+    return true;
+  }
+
+  if (session->release_requested.load() || session->cancelled.load()) {
+    details_out = "Transaction apply was cancelled before it started.";
+    return true;
+  }
+
+  return false;
 }
 
 // -----------------------------------------------------------------------------
