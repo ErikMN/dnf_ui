@@ -215,6 +215,12 @@ Run the application in Docker with networking disabled:
 make dockerrunoffline
 ```
 
+Run the application in Docker with networking disabled and an empty repo cache:
+
+```sh
+make dockerruncoldoffline
+```
+
 Run the system bus service smoke tests in Docker:
 
 ```sh

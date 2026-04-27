@@ -280,6 +280,11 @@ dockerrun:
 dockerrunoffline:
 	@DOCKER_NETWORK_MODE=none THEME="$(THEME)" DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_build.sh
 
+# Run the app in Docker with networking disabled and an empty repo cache:
+.PHONY: dockerruncoldoffline
+dockerruncoldoffline:
+	@DOCKER_NETWORK_MODE=none CACHE_MODE=empty THEME="$(THEME)" DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_build.sh
+
 # Run the backend test suite in Docker:
 .PHONY: dockertest
 dockertest:

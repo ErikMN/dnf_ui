@@ -73,6 +73,8 @@ class BaseManager {
     return generation.load(std::memory_order_relaxed);
   }
 
+  BaseRepoState current_repo_state() const;
+
   // Force rebuild
   BaseRepoState rebuild();
   void rebuild_system_only();
@@ -91,6 +93,7 @@ class BaseManager {
   void ensure_base_initialized();
 
   std::shared_ptr<libdnf5::Base> base_ptr;
+  BaseRepoState repo_state = BaseRepoState::LIVE_METADATA;
 
   std::atomic<uint64_t> generation { 0 };
 

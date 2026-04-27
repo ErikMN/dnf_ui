@@ -151,6 +151,13 @@ BaseManager::instance()
   return mgr;
 }
 
+BaseRepoState
+BaseManager::current_repo_state() const
+{
+  std::shared_lock<std::shared_mutex> shared(base_mutex);
+  return repo_state;
+}
+
 // -----------------------------------------------------------------------------
 // Thread-safe read accessor
 // -----------------------------------------------------------------------------
@@ -222,6 +229,7 @@ BaseManager::rebuild()
   }
 
   base_ptr = rebuilt.base;
+  repo_state = rebuilt.repo_state;
 
   // Publish the generation change only after the new Base is ready so readers
   // never drop their cached results without a replacement snapshot to use.
@@ -243,6 +251,7 @@ BaseManager::rebuild_system_only()
   }
 
   base_ptr = rebuilt_base;
+  repo_state = BaseRepoState::INSTALLED_ONLY;
   generation.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -255,6 +264,7 @@ BaseManager::ensure_system_only_initialized_if_needed()
   std::unique_lock<std::shared_mutex> unique(base_mutex);
   if (!base_ptr) {
     base_ptr = build_initialized_system_only_base();
+    repo_state = BaseRepoState::INSTALLED_ONLY;
   }
 }
 
@@ -272,7 +282,9 @@ void
 BaseManager::ensure_base_initialized()
 {
   if (!base_ptr) {
-    base_ptr = build_base_with_offline_fallback().base;
+    BuiltBase built = build_base_with_offline_fallback();
+    base_ptr = built.base;
+    repo_state = built.repo_state;
   }
 }
 

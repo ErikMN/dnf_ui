@@ -20,6 +20,7 @@ IMAGE_NAME="dnfui-dev"
 CONTAINER_NAME="dnfui-run"
 THEME_MODE="${THEME:-default}"
 DOCKER_NETWORK_MODE="${DOCKER_NETWORK_MODE:-}"
+CACHE_MODE="${CACHE_MODE:-persistent}"
 CACHE_VOLUME_NAME="${CACHE_VOLUME_NAME:-dnfui-repo-cache}"
 
 # Optional GTK theme override for Docker UI testing:
@@ -78,7 +79,21 @@ else
   color_print "$FMT_BLUE" "*** Docker network: default ***"
 fi
 
-color_print "$FMT_BLUE" "*** DNF cache volume: $CACHE_VOLUME_NAME ***"
+CACHE_OPTS=()
+case "$CACHE_MODE" in
+"persistent")
+  color_print "$FMT_BLUE" "*** DNF cache: persistent volume $CACHE_VOLUME_NAME ***"
+  CACHE_OPTS=(-v "$CACHE_VOLUME_NAME:/var/cache/libdnf5")
+  ;;
+"empty")
+  color_print "$FMT_BLUE" "*** DNF cache: empty tmpfs ***"
+  CACHE_OPTS=(--tmpfs /var/cache/libdnf5)
+  ;;
+*)
+  color_print "$FMT_RED" "*** Invalid CACHE_MODE value: $CACHE_MODE. Use persistent or empty. ***"
+  exit 1
+  ;;
+esac
 
 # Run the build inside the container:
 color_print "$FMT_GREEN" "*** Running build inside container... ***"
@@ -95,6 +110,6 @@ docker run --rm -it \
   -e ASAN \
   -e DEBUG_TRACE \
   -v "$HOST_DIR:/workspace" \
-  -v "$CACHE_VOLUME_NAME:/var/cache/libdnf5" \
+  "${CACHE_OPTS[@]}" \
   "$IMAGE_NAME" \
   bash /workspace/docker/docker_gui_service_run_inner.sh

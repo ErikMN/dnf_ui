@@ -8,7 +8,9 @@
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
 #include "ui/main_window.hpp"
+#include "ui/ui_helpers.hpp"
 #include "ui/widgets.hpp"
+#include "ui/widgets_internal.hpp"
 
 #include <atomic>
 #include <gtk/gtk.h>
@@ -28,6 +30,7 @@ static gboolean start_backend_warmup_idle(gpointer user_data);
 static void start_backend_warmup_task(SearchWidgets *widgets);
 static void on_backend_warmup_task(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable);
 static void on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gpointer user_data);
+static const char *base_repo_state_trace_name(BaseRepoState state);
 
 static std::atomic<bool> g_installed_refresh_running { false };
 
@@ -35,6 +38,21 @@ struct StartupWarmupData {
   SearchWidgets *widgets = nullptr;
   GCancellable *startup_cancellable = nullptr;
 };
+
+static const char *
+base_repo_state_trace_name(BaseRepoState state)
+{
+  switch (state) {
+  case BaseRepoState::LIVE_METADATA:
+    return "live-metadata";
+  case BaseRepoState::CACHED_METADATA:
+    return "cached-metadata";
+  case BaseRepoState::INSTALLED_ONLY:
+    return "installed-only";
+  default:
+    return "unknown";
+  }
+}
 
 // -----------------------------------------------------------------------------
 // Run GTK application and return process exit status
@@ -160,10 +178,8 @@ start_backend_warmup_task(SearchWidgets *widgets)
 
   widgets->window_state.backend_warmup_cancellable = g_cancellable_new();
 
-  GTask *task = g_task_new(G_OBJECT(widgets->window_state.backend_warmup_label),
-                           widgets->window_state.backend_warmup_cancellable,
-                           on_backend_warmup_task_finished,
-                           nullptr);
+  GTask *task = widgets_task_new_for_search_widgets(
+      widgets, widgets->window_state.backend_warmup_cancellable, on_backend_warmup_task_finished);
   g_task_run_in_thread(task, on_backend_warmup_task);
   g_object_unref(task);
 }
@@ -185,7 +201,9 @@ on_backend_warmup_task(GTask *task, gpointer, gpointer, GCancellable *cancellabl
       g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Backend warm up was cancelled.");
       return;
     }
-    g_task_return_boolean(task, TRUE);
+    BaseRepoState repo_state = BaseManager::instance().current_repo_state();
+    g_task_return_pointer(
+        task, new BaseRepoState(repo_state), [](gpointer p) { delete static_cast<BaseRepoState *>(p); });
   } catch (const std::exception &e) {
     g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
   } catch (...) {
@@ -197,11 +215,16 @@ on_backend_warmup_task(GTask *task, gpointer, gpointer, GCancellable *cancellabl
 // Ignore warm up errors so startup stays quiet and normal queries handle them.
 // -----------------------------------------------------------------------------
 static void
-on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gpointer)
+on_backend_warmup_task_finished(GObject *, GAsyncResult *result, gpointer user_data)
 {
-  GtkLabel *label = GTK_LABEL(source_object);
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  GTask *task = G_TASK(result);
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    return;
+  }
+
   GError *error = nullptr;
-  g_task_propagate_boolean(G_TASK(result), &error);
+  BaseRepoState *repo_state = static_cast<BaseRepoState *>(g_task_propagate_pointer(task, &error));
 
   if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
     DNFUI_TRACE("Backend warm up task cancelled");
@@ -212,13 +235,21 @@ on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gp
   if (error) {
     DNFUI_TRACE("Backend warm up task failed: %s", error->message);
   } else {
-    DNFUI_TRACE("Backend warm up task done");
+    DNFUI_TRACE("Backend warm up task done: %s", base_repo_state_trace_name(*repo_state));
+    if (*repo_state == BaseRepoState::LIVE_METADATA) {
+      ui_helpers_set_status(widgets->query.status_label, "Ready. Live repository metadata loaded.", "gray");
+    } else if (*repo_state == BaseRepoState::CACHED_METADATA) {
+      ui_helpers_set_status(widgets->query.status_label, "Ready. Using cached repository metadata.", "blue");
+    } else {
+      ui_helpers_set_status(widgets->query.status_label, "Ready. Showing installed packages only.", "blue");
+    }
   }
 
   g_clear_error(&error);
+  delete repo_state;
 
-  if (label) {
-    gtk_widget_set_visible(GTK_WIDGET(label), FALSE);
+  if (widgets && widgets->window_state.backend_warmup_label) {
+    gtk_widget_set_visible(GTK_WIDGET(widgets->window_state.backend_warmup_label), FALSE);
   }
 }
 
