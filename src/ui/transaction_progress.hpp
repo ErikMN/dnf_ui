@@ -11,6 +11,8 @@ struct TransactionProgressWindow;
 using TransactionApplyCallback = void (*)(SearchWidgets *widgets);
 
 TransactionProgressWindow *transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count);
+TransactionProgressWindow *transaction_progress_retain(TransactionProgressWindow *progress);
+void transaction_progress_release(TransactionProgressWindow *progress);
 void transaction_progress_append(TransactionProgressWindow *progress, const std::string &message);
 void transaction_progress_finish(TransactionProgressWindow *progress, bool success, const std::string &summary);
 void transaction_progress_show_error_dialog(SearchWidgets *widgets,

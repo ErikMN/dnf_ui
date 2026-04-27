@@ -7,26 +7,37 @@
 
 #include "widgets.hpp"
 
+#include <atomic>
 #include <sstream>
 
 // -----------------------------------------------------------------------------
 // Transaction progress popup state
 // -----------------------------------------------------------------------------
+// The GTK widgets inside this state still belong to the main thread, but the
+// state object itself can outlive the window for a short time.
+//
+// Ownership rules:
+//   - The newly created progress window starts with one reference for the live window.
+//   - The apply task keeps one reference while background work may still report progress.
+//   - Each queued main-loop progress callback keeps one temporary reference until it runs.
+//
+// Any new queued callback or long-lived background handoff of this pointer must
+// retain it before the handoff and release it after that work is done so delayed
+// callbacks never read freed state.
 struct TransactionProgressWindow {
-  GtkWindow *window;
-  GtkLabel *title_label;
-  GtkLabel *stage_label;
-  GtkTextBuffer *buffer;
-  GtkTextView *view;
-  GtkSpinner *spinner;
-  GtkButton *close_button;
-  bool finished;
+  std::atomic<unsigned> ref_count { 1 };
+  GtkWindow *window = nullptr;
+  GtkLabel *title_label = nullptr;
+  GtkLabel *stage_label = nullptr;
+  GtkTextBuffer *buffer = nullptr;
+  GtkTextView *view = nullptr;
+  GtkSpinner *spinner = nullptr;
+  GtkButton *close_button = nullptr;
+  bool finished = false;
 };
 
 struct ProgressAppendData {
-  GtkLabel *stage_label;
-  GtkTextBuffer *buffer;
-  GtkTextView *view;
+  TransactionProgressWindow *progress = nullptr;
   char *message;
 };
 
@@ -37,11 +48,36 @@ progress_append_data_free(ProgressAppendData *data)
     return;
   }
 
-  g_object_unref(data->stage_label);
-  g_object_unref(data->buffer);
-  g_object_unref(data->view);
+  transaction_progress_release(data->progress);
   g_free(data->message);
   delete data;
+}
+
+// Retain one reference to the progress window state so queued main loop work
+// can safely keep using it after the caller returns.
+TransactionProgressWindow *
+transaction_progress_retain(TransactionProgressWindow *progress)
+{
+  if (!progress) {
+    return nullptr;
+  }
+
+  progress->ref_count.fetch_add(1, std::memory_order_relaxed);
+  return progress;
+}
+
+// Release one reference to the progress window state and delete it after the
+// last owner is done with it.
+void
+transaction_progress_release(TransactionProgressWindow *progress)
+{
+  if (!progress) {
+    return;
+  }
+
+  if (progress->ref_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+    delete progress;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -131,11 +167,24 @@ transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count)
                    }),
                    progress);
 
-  g_signal_connect(
-      progress->window,
-      "destroy",
-      G_CALLBACK(+[](GtkWidget *, gpointer user_data) { delete static_cast<TransactionProgressWindow *>(user_data); }),
-      progress);
+  g_signal_connect(progress->window,
+                   "destroy",
+                   G_CALLBACK(+[](GtkWidget *, gpointer user_data) {
+                     auto *progress = static_cast<TransactionProgressWindow *>(user_data);
+                     if (!progress) {
+                       return;
+                     }
+
+                     progress->window = nullptr;
+                     progress->title_label = nullptr;
+                     progress->stage_label = nullptr;
+                     progress->buffer = nullptr;
+                     progress->view = nullptr;
+                     progress->spinner = nullptr;
+                     progress->close_button = nullptr;
+                     transaction_progress_release(progress);
+                   }),
+                   progress);
 
   gtk_window_present(progress->window);
 
@@ -153,27 +202,31 @@ append_transaction_progress_line(TransactionProgressWindow *progress, const std:
   }
 
   auto *data = new ProgressAppendData();
-  data->stage_label = GTK_LABEL(g_object_ref(progress->stage_label));
-  data->buffer = GTK_TEXT_BUFFER(g_object_ref(progress->buffer));
-  data->view = GTK_TEXT_VIEW(g_object_ref(progress->view));
+  data->progress = transaction_progress_retain(progress);
   data->message = g_strdup(message.c_str());
 
   g_main_context_invoke(
       nullptr,
       +[](gpointer user_data) -> gboolean {
         auto *data = static_cast<ProgressAppendData *>(user_data);
+        TransactionProgressWindow *progress = data ? data->progress : nullptr;
 
-        gtk_label_set_text(data->stage_label, data->message);
+        if (!progress || !progress->stage_label || !progress->buffer || !progress->view) {
+          progress_append_data_free(data);
+          return G_SOURCE_REMOVE;
+        }
+
+        gtk_label_set_text(progress->stage_label, data->message);
 
         GtkTextIter end;
-        gtk_text_buffer_get_end_iter(data->buffer, &end);
-        gtk_text_buffer_insert(data->buffer, &end, data->message, -1);
-        gtk_text_buffer_insert(data->buffer, &end, "\n", 1);
+        gtk_text_buffer_get_end_iter(progress->buffer, &end);
+        gtk_text_buffer_insert(progress->buffer, &end, data->message, -1);
+        gtk_text_buffer_insert(progress->buffer, &end, "\n", 1);
 
-        gtk_text_buffer_get_end_iter(data->buffer, &end);
-        GtkTextMark *mark = gtk_text_buffer_create_mark(data->buffer, nullptr, &end, FALSE);
-        gtk_text_view_scroll_mark_onscreen(data->view, mark);
-        gtk_text_buffer_delete_mark(data->buffer, mark);
+        gtk_text_buffer_get_end_iter(progress->buffer, &end);
+        GtkTextMark *mark = gtk_text_buffer_create_mark(progress->buffer, nullptr, &end, FALSE);
+        gtk_text_view_scroll_mark_onscreen(progress->view, mark);
+        gtk_text_buffer_delete_mark(progress->buffer, mark);
 
         progress_append_data_free(data);
         return G_SOURCE_REMOVE;
@@ -216,12 +269,20 @@ transaction_progress_finish(TransactionProgressWindow *progress, bool success, c
   }
 
   progress->finished = true;
-  gtk_spinner_stop(progress->spinner);
-  gtk_widget_set_visible(GTK_WIDGET(progress->spinner), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(progress->close_button), TRUE);
-  gtk_label_set_text(progress->stage_label,
-                     success ? "Transaction finished successfully." : "Transaction finished with errors.");
-  gtk_window_set_title(progress->window, success ? "Transaction Complete" : "Transaction Failed");
+  if (progress->spinner) {
+    gtk_spinner_stop(progress->spinner);
+    gtk_widget_set_visible(GTK_WIDGET(progress->spinner), FALSE);
+  }
+  if (progress->close_button) {
+    gtk_widget_set_sensitive(GTK_WIDGET(progress->close_button), TRUE);
+  }
+  if (progress->stage_label) {
+    gtk_label_set_text(progress->stage_label,
+                       success ? "Transaction finished successfully." : "Transaction finished with errors.");
+  }
+  if (progress->window) {
+    gtk_window_set_title(progress->window, success ? "Transaction Complete" : "Transaction Failed");
+  }
 }
 
 struct SummaryDialogApplyData {

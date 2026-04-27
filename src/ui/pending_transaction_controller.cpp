@@ -43,6 +43,12 @@ static void
 apply_task_data_free(gpointer p)
 {
   ApplyTaskData *d = static_cast<ApplyTaskData *>(p);
+  if (!d) {
+    return;
+  }
+
+  // Drop the apply-task reference kept while background progress callbacks may still queue UI updates.
+  transaction_progress_release(d->progress_window);
   delete d;
 }
 
@@ -322,6 +328,8 @@ start_apply_transaction(SearchWidgets *widgets)
   ApplyTaskData *td = new ApplyTaskData;
   td->transaction_path = widgets->transaction.preview_transaction_path;
   td->progress_window = transaction_progress_create_window(widgets, widgets->transaction.actions.size());
+  // Keep the progress state alive for the whole apply task even if the user closes the window first.
+  transaction_progress_retain(td->progress_window);
 
   transaction_progress_append(td->progress_window, "Queued transaction request.");
   ui_helpers_set_status(
