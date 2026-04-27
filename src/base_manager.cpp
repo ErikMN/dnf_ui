@@ -18,12 +18,18 @@ namespace {
 
 enum class RepoLoadMode {
   FULL,
+  CACHE_ONLY_METADATA,
   SYSTEM_ONLY,
+};
+
+struct BuiltBase {
+  std::shared_ptr<libdnf5::Base> base;
+  BaseRepoState repo_state = BaseRepoState::LIVE_METADATA;
 };
 
 // Build one fully configured Base before any repo metadata is loaded.
 static std::shared_ptr<libdnf5::Base>
-create_configured_base()
+create_configured_base(RepoLoadMode mode)
 {
   DNFUI_TRACE("BaseManager initialize start");
 
@@ -32,9 +38,18 @@ create_configured_base()
   base->load_config();
   DNFUI_TRACE("BaseManager load config done");
 
-  // Changelog lookups for available packages need repo "other" metadata.
-  base->get_config().get_optional_metadata_types_option().add_item(libdnf5::Option::Priority::RUNTIME,
-                                                                   libdnf5::METADATA_TYPE_OTHER);
+  if (mode == RepoLoadMode::CACHE_ONLY_METADATA) {
+    // When live repo refresh is not available, keep repo-backed queries working
+    // from cached metadata instead of dropping immediately to installed-only mode.
+    base->get_config().get_cacheonly_option().set("metadata");
+    base->get_config().get_cachedir_option().set(base->get_config().get_system_cachedir_option().get_value());
+  }
+
+  if (mode == RepoLoadMode::FULL) {
+    // Changelog lookups for available packages need repo "other" metadata.
+    base->get_config().get_optional_metadata_types_option().add_item(libdnf5::Option::Priority::RUNTIME,
+                                                                     libdnf5::METADATA_TYPE_OTHER);
+  }
   DNFUI_TRACE("BaseManager setup start");
   base->setup();
   DNFUI_TRACE("BaseManager setup done");
@@ -60,6 +75,11 @@ load_repo_data(libdnf5::Base &base, RepoLoadMode mode)
     if (force_failure && std::string(force_failure) == "1") {
       throw std::runtime_error("forced full repo load failure");
     }
+  } else if (mode == RepoLoadMode::CACHE_ONLY_METADATA) {
+    const char *force_failure = std::getenv("DNFUI_TEST_FORCE_CACHEONLY_REPO_LOAD_FAILURE");
+    if (force_failure && std::string(force_failure) == "1") {
+      throw std::runtime_error("forced cache-only repo load failure");
+    }
   }
 #endif
 
@@ -73,6 +93,53 @@ load_repo_data(libdnf5::Base &base, RepoLoadMode mode)
 }
 
 } // namespace
+
+// Build one Base and load repository data for the requested mode.
+static BuiltBase
+build_base_for_mode(RepoLoadMode mode)
+{
+  BuiltBase result;
+  result.base = create_configured_base(mode);
+  load_repo_data(*result.base, mode);
+  if (mode == RepoLoadMode::CACHE_ONLY_METADATA) {
+    result.repo_state = BaseRepoState::CACHED_METADATA;
+  } else if (mode == RepoLoadMode::SYSTEM_ONLY) {
+    result.repo_state = BaseRepoState::INSTALLED_ONLY;
+  }
+  DNFUI_TRACE("BaseManager initialize done");
+  return result;
+}
+
+// Try the normal live repo load first, then cached metadata, then finally
+// installed-package-only mode so the app stays usable when the network is down.
+static BuiltBase
+build_base_with_offline_fallback()
+{
+  try {
+    return build_base_for_mode(RepoLoadMode::FULL);
+  } catch (const std::exception &repo_error) {
+    std::cerr << "Warning: repo load failed: " << repo_error.what() << std::endl;
+    DNFUI_TRACE("BaseManager load repos failed: %s", repo_error.what());
+    std::cerr << "Warning: live repo load failed, retrying from cached metadata: " << repo_error.what() << std::endl;
+    DNFUI_TRACE("BaseManager live repo load failed, trying cached metadata fallback: %s", repo_error.what());
+
+    try {
+      return build_base_for_mode(RepoLoadMode::CACHE_ONLY_METADATA);
+    } catch (const std::exception &cache_error) {
+      std::cerr << "Warning: cached repo metadata load failed: " << cache_error.what() << std::endl;
+      DNFUI_TRACE("BaseManager cached repo load failed, trying system-only fallback: %s", cache_error.what());
+
+      try {
+        return build_base_for_mode(RepoLoadMode::SYSTEM_ONLY);
+      } catch (const std::exception &fallback_error) {
+        throw std::runtime_error(
+            "DNF backend initialization failed after repo load error: " + std::string(repo_error.what()) +
+            "; cached metadata fallback failed: " + cache_error.what() +
+            "; system-only fallback failed: " + fallback_error.what());
+      }
+    }
+  }
+}
 
 // -----------------------------------------------------------------------------
 // Singleton: BaseManager instance accessor
@@ -140,44 +207,61 @@ BaseManager::acquire_write()
 // -----------------------------------------------------------------------------
 // Force rebuild of cached Base (used when user requests "Refresh Repositories")
 // -----------------------------------------------------------------------------
-void
+BaseRepoState
 BaseManager::rebuild()
 {
   // Lock to ensure only one rebuild runs at a time
   std::unique_lock lock(base_mutex);
 
-  // Build the replacement first so a repo-refresh failure does not discard the
-  // last known-good repo-backed Base.
-  auto rebuilt_base = build_initialized_base();
-  if (!rebuilt_base) {
+  // Build the replacement first so a refresh failure does not discard the last
+  // usable Base. Offline fallback keeps the UI query paths working from cached
+  // metadata or, as a last resort, from the local rpmdb only.
+  BuiltBase rebuilt = build_base_with_offline_fallback();
+  if (!rebuilt.base) {
     throw std::runtime_error("Repository rebuild failed (Base is null).");
   }
 
-  base_ptr = rebuilt_base;
+  base_ptr = rebuilt.base;
 
   // Publish the generation change only after the new Base is ready so readers
   // never drop their cached results without a replacement snapshot to use.
   generation.fetch_add(1, std::memory_order_relaxed);
+  return rebuilt.repo_state;
 }
 
-// -----------------------------------------------------------------------------
-// Internal helper: build one fully initialized Base instance without touching
-// the shared cache until initialization succeeds.
-// -----------------------------------------------------------------------------
-std::shared_ptr<libdnf5::Base>
-BaseManager::build_initialized_base()
+// Force a local-only rebuild that loads only the installed-package view from
+// the rpmdb. This keeps remove-only transaction flows independent of remote
+// repository availability.
+void
+BaseManager::rebuild_system_only()
 {
-  auto base = create_configured_base();
-  try {
-    load_repo_data(*base, RepoLoadMode::FULL);
-  } catch (const std::exception &e) {
-    std::cerr << "Warning: repo load failed: " << e.what() << std::endl;
-    DNFUI_TRACE("BaseManager load repos failed: %s", e.what());
-    throw;
+  std::unique_lock lock(base_mutex);
+
+  auto rebuilt_base = build_initialized_system_only_base();
+  if (!rebuilt_base) {
+    throw std::runtime_error("System-only repository rebuild failed (Base is null).");
   }
 
-  DNFUI_TRACE("BaseManager initialize done");
-  return base;
+  base_ptr = rebuilt_base;
+  generation.fetch_add(1, std::memory_order_relaxed);
+}
+
+// Ensure one local-only Base exists without attempting a live repo refresh.
+// Remove-only transaction flows use this when the shared Base has not been
+// initialized yet and no repo metadata is required.
+void
+BaseManager::ensure_system_only_initialized_if_needed()
+{
+  std::unique_lock<std::shared_mutex> unique(base_mutex);
+  if (!base_ptr) {
+    base_ptr = build_initialized_system_only_base();
+  }
+}
+
+std::shared_ptr<libdnf5::Base>
+BaseManager::build_initialized_system_only_base()
+{
+  return build_base_for_mode(RepoLoadMode::SYSTEM_ONLY).base;
 }
 
 // -----------------------------------------------------------------------------
@@ -188,29 +272,7 @@ void
 BaseManager::ensure_base_initialized()
 {
   if (!base_ptr) {
-    auto base = create_configured_base();
-    try {
-      load_repo_data(*base, RepoLoadMode::FULL);
-      DNFUI_TRACE("BaseManager initialize done");
-      base_ptr = std::move(base);
-    } catch (const std::exception &repo_error) {
-      std::cerr << "Warning: repo load failed: " << repo_error.what() << std::endl;
-      DNFUI_TRACE("BaseManager load repos failed: %s", repo_error.what());
-      std::cerr << "Warning: startup repo load failed, falling back to installed-package-only mode: "
-                << repo_error.what() << std::endl;
-      DNFUI_TRACE("BaseManager startup full repo load failed, trying system-only fallback: %s", repo_error.what());
-
-      auto fallback_base = create_configured_base();
-      try {
-        load_repo_data(*fallback_base, RepoLoadMode::SYSTEM_ONLY);
-        DNFUI_TRACE("BaseManager initialize done");
-        base_ptr = std::move(fallback_base);
-      } catch (const std::exception &fallback_error) {
-        throw std::runtime_error(
-            "DNF backend initialization failed after repo load error: " + std::string(repo_error.what()) +
-            "; system-only fallback failed: " + fallback_error.what());
-      }
-    }
+    base_ptr = build_base_with_offline_fallback().base;
   }
 }
 

@@ -19,6 +19,8 @@ color_print() {
 IMAGE_NAME="dnfui-dev"
 CONTAINER_NAME="dnfui-run"
 THEME_MODE="${THEME:-default}"
+DOCKER_NETWORK_MODE="${DOCKER_NETWORK_MODE:-}"
+CACHE_VOLUME_NAME="${CACHE_VOLUME_NAME:-dnfui-repo-cache}"
 
 # Optional GTK theme override for Docker UI testing:
 THEME_OPTS=()
@@ -68,11 +70,22 @@ if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
   exit 1
 fi
 
+DOCKER_NETWORK_OPTS=()
+if [ -n "$DOCKER_NETWORK_MODE" ]; then
+  color_print "$FMT_BLUE" "*** Docker network: $DOCKER_NETWORK_MODE ***"
+  DOCKER_NETWORK_OPTS=(--network "$DOCKER_NETWORK_MODE")
+else
+  color_print "$FMT_BLUE" "*** Docker network: default ***"
+fi
+
+color_print "$FMT_BLUE" "*** DNF cache volume: $CACHE_VOLUME_NAME ***"
+
 # Run the build inside the container:
 color_print "$FMT_GREEN" "*** Running build inside container... ***"
 docker run --rm -it \
   --name "$CONTAINER_NAME" \
   --init \
+  "${DOCKER_NETWORK_OPTS[@]}" \
   -w /workspace \
   "${DISPLAY_OPTS[@]}" \
   "${THEME_OPTS[@]}" \
@@ -82,5 +95,6 @@ docker run --rm -it \
   -e ASAN \
   -e DEBUG_TRACE \
   -v "$HOST_DIR:/workspace" \
+  -v "$CACHE_VOLUME_NAME:/var/cache/libdnf5" \
   "$IMAGE_NAME" \
   bash /workspace/docker/docker_gui_service_run_inner.sh

@@ -35,7 +35,7 @@ TEST_CASE("acquire_read returns current generation snapshot")
   REQUIRE(read.generation == expected);
 }
 
-TEST_CASE("BaseManager falls back to system-only initialization when full repo load fails")
+TEST_CASE("BaseManager falls back to installed-package-only initialization when repo-backed startup fails")
 {
   reset_backend_globals();
 
@@ -43,13 +43,14 @@ TEST_CASE("BaseManager falls back to system-only initialization when full repo l
   mgr.reset_for_tests();
   {
     ScopedEnvVar force_failure("DNFUI_TEST_FORCE_FULL_REPO_LOAD_FAILURE", "1");
+    ScopedEnvVar force_cache_failure("DNFUI_TEST_FORCE_CACHEONLY_REPO_LOAD_FAILURE", "1");
     REQUIRE_NOTHROW(dnf_backend_refresh_installed_nevras());
     REQUIRE(dnf_backend_installed_snapshot_size() > 0);
   }
   mgr.reset_for_tests();
 }
 
-TEST_CASE("BaseManager rebuild stays strict when full repo load fails after initialization")
+TEST_CASE("BaseManager rebuild keeps the app usable when repo-backed refresh fails")
 {
   reset_backend_globals();
 
@@ -60,10 +61,11 @@ TEST_CASE("BaseManager rebuild stays strict when full repo load fails after init
 
   {
     ScopedEnvVar force_failure("DNFUI_TEST_FORCE_FULL_REPO_LOAD_FAILURE", "1");
-    REQUIRE_THROWS(mgr.rebuild());
+    ScopedEnvVar force_cache_failure("DNFUI_TEST_FORCE_CACHEONLY_REPO_LOAD_FAILURE", "1");
+    REQUIRE_NOTHROW(mgr.rebuild());
   }
 
-  REQUIRE(mgr.current_generation() == before);
+  REQUIRE(mgr.current_generation() > before);
   REQUIRE_NOTHROW(dnf_backend_refresh_installed_nevras());
   REQUIRE(dnf_backend_installed_snapshot_size() > 0);
   mgr.reset_for_tests();

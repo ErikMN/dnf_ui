@@ -44,6 +44,16 @@ struct BaseRead {
   uint64_t generation;
 };
 
+// Result of one repository rebuild attempt.
+// LIVE_METADATA means a normal online refresh succeeded.
+// CACHED_METADATA means live refresh failed but cached repo metadata loaded.
+// INSTALLED_ONLY means both repo-backed paths failed and only the local rpmdb remains.
+enum class BaseRepoState {
+  LIVE_METADATA,
+  CACHED_METADATA,
+  INSTALLED_ONLY,
+};
+
 // -----------------------------------------------------------------------------
 // BaseManager
 // Provides cached access to a libdnf5::Base instance with safe locking
@@ -64,7 +74,9 @@ class BaseManager {
   }
 
   // Force rebuild
-  void rebuild();
+  BaseRepoState rebuild();
+  void rebuild_system_only();
+  void ensure_system_only_initialized_if_needed();
 
 #ifdef DNFUI_BUILD_TESTS
   void reset_for_tests();
@@ -75,7 +87,7 @@ class BaseManager {
   BaseManager(const BaseManager &) = delete;
   BaseManager &operator=(const BaseManager &) = delete;
 
-  std::shared_ptr<libdnf5::Base> build_initialized_base();
+  std::shared_ptr<libdnf5::Base> build_initialized_system_only_base();
   void ensure_base_initialized();
 
   std::shared_ptr<libdnf5::Base> base_ptr;

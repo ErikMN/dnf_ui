@@ -275,10 +275,20 @@ dockersetup:
 dockerrun:
 	@THEME="$(THEME)" DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_build.sh
 
+# Run the app in Docker with networking disabled:
+.PHONY: dockerrunoffline
+dockerrunoffline:
+	@DOCKER_NETWORK_MODE=none THEME="$(THEME)" DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_build.sh
+
 # Run the backend test suite in Docker:
 .PHONY: dockertest
 dockertest:
 	@./docker/docker_test.sh
+
+# Run the offline Docker smoke tests after priming the repo cache online:
+.PHONY: dockerofflinetest
+dockerofflinetest:
+	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_offline_test.sh
 
 # Run the full Docker-backed test matrix:
 .PHONY: dockertests

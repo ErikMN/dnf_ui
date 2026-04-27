@@ -7,6 +7,7 @@ dnfui_tests = executable(
   'dnfui-tests',
   files(
     'test_backend.cpp',
+    'test_offline.cpp',
     'test_search.cpp',
     'test_transaction_service_client.cpp',
     'test_transaction_preview.cpp',

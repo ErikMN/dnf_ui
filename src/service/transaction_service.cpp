@@ -170,6 +170,7 @@ static void complete_apply_request(TransactionSession *session, GDBusMethodInvoc
 static gboolean start_transaction_preview(gpointer user_data);
 static gboolean start_transaction_apply(gpointer user_data);
 static bool transaction_apply_should_stop_before_work(TransactionSession *session, std::string &details_out);
+static bool transaction_request_needs_available_repos(const TransactionRequest &request);
 
 // -----------------------------------------------------------------------------
 // Main loop dispatch helpers
@@ -603,6 +604,14 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
 // -----------------------------------------------------------------------------
 // Transaction execution
 // -----------------------------------------------------------------------------
+// Return true when the transaction may need available-repo metadata instead of
+// just the local rpmdb.
+static bool
+transaction_request_needs_available_repos(const TransactionRequest &request)
+{
+  return !request.install.empty() || !request.reinstall.empty();
+}
+
 // Resolve the requested install, remove, and reinstall changes in a worker thread.
 static void
 run_transaction_preview(TransactionSession *session)
@@ -621,17 +630,27 @@ run_transaction_preview(TransactionSession *session)
     throw_if_test_preview_exception_requested();
     run_test_preview_wait_hook_if_requested();
     try {
-      // The transaction service is a long-lived process, so packages installed or
-      // removed outside the GUI can leave its cached Base out of date. Rebuild it
-      // before each preview so resolve and apply requests always use the current
-      // rpmdb and repository metadata snapshot.
-      queue_transaction_progress(session, "Refreshing backend state...");
-      BaseManager::instance().rebuild();
+      if (transaction_request_needs_available_repos(session->request)) {
+        // The transaction service is a long-lived process, so packages installed or
+        // removed outside the GUI can leave its cached Base out of date. Rebuild it
+        // before each preview so resolve and apply requests always use the current
+        // rpmdb and repository metadata snapshot.
+        queue_transaction_progress(session, "Refreshing backend state...");
+        BaseManager::instance().rebuild();
+      } else {
+        // Remove-only requests are local-first and should stay usable without
+        // waiting on remote repository availability.
+        queue_transaction_progress(session, "Refreshing installed package state...");
+        BaseManager::instance().rebuild_system_only();
+      }
     } catch (const std::exception &e) {
       DNFUI_TRACE(
           "Transaction service preview refresh failed path=%s error=%s", session->object_path.c_str(), e.what());
       queue_transaction_progress(session,
                                  "Backend refresh failed; retrying preview with the last known-good package state.");
+      if (!transaction_request_needs_available_repos(session->request)) {
+        BaseManager::instance().ensure_system_only_initialized_if_needed();
+      }
     }
 
     bool ok = dnf_backend_preview_transaction(
@@ -735,8 +754,13 @@ run_transaction_apply(TransactionSession *session)
       success = true;
 
       try {
-        queue_transaction_progress(session, "Refreshing backend state...");
-        BaseManager::instance().rebuild();
+        if (transaction_request_needs_available_repos(session->request)) {
+          queue_transaction_progress(session, "Refreshing backend state...");
+          BaseManager::instance().rebuild();
+        } else {
+          queue_transaction_progress(session, "Refreshing installed package state...");
+          BaseManager::instance().rebuild_system_only();
+        }
       } catch (const std::exception &e) {
         details += "\nBackend refresh failed: " + std::string(e.what());
       }

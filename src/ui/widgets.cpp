@@ -122,8 +122,11 @@ void
 widgets_on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *)
 {
   try {
-    BaseManager::instance().rebuild();
-    g_task_return_boolean(task, TRUE);
+    BaseRepoState refresh_state = BaseManager::instance().rebuild();
+    // GTask completion transfers this heap value back to the GTK thread where
+    // widgets_on_rebuild_task_finished() deletes it after reading the result.
+    g_task_return_pointer(
+        task, new BaseRepoState(refresh_state), [](gpointer p) { delete static_cast<BaseRepoState *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
   }
@@ -142,19 +145,30 @@ widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
   }
 
   GError *error = nullptr;
-  gboolean success = g_task_propagate_boolean(task, &error);
+  // When rebuild succeeds, this returns the heap value from widgets_on_rebuild_task().
+  // This handler owns that pointer and must delete it after use.
+  BaseRepoState *refresh_state = static_cast<BaseRepoState *>(g_task_propagate_pointer(task, &error));
 
   // Refresh temporarily disables the main Search button while the rebuild runs.
   // Restore it once the background refresh finishes so the query UI unlocks.
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), TRUE);
 
-  if (success) {
+  if (refresh_state) {
     // Search caches are bound to the old Base generation and must be dropped
     // before the user can query against freshly refreshed repositories.
     package_query_clear_search_cache();
     dnf_backend_refresh_installed_nevras();
-    ui_helpers_set_status(widgets->query.status_label, "Repositories refreshed.", "green");
+    if (*refresh_state == BaseRepoState::LIVE_METADATA) {
+      ui_helpers_set_status(widgets->query.status_label, "Repositories refreshed.", "green");
+    } else if (*refresh_state == BaseRepoState::CACHED_METADATA) {
+      ui_helpers_set_status(
+          widgets->query.status_label, "Live repo refresh failed. Using cached repository metadata.", "blue");
+    } else {
+      ui_helpers_set_status(
+          widgets->query.status_label, "Live repo refresh failed. Showing installed packages only.", "blue");
+    }
     package_query_reload_current_view(widgets);
+    delete refresh_state;
   } else {
     ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Repo refresh failed.", "red");
     if (error) {

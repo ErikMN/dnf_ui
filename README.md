@@ -209,6 +209,12 @@ Run the application:
 make dockerrun
 ```
 
+Run the application in Docker with networking disabled:
+
+```sh
+make dockerrunoffline
+```
+
 Run the system bus service smoke tests in Docker:
 
 ```sh
@@ -220,6 +226,19 @@ Run the test suite in Docker:
 
 ```sh
 make dockertest
+```
+
+Prime repo metadata online, then rerun the offline-tagged tests in Docker with
+networking disabled:
+
+```sh
+make dockerofflinetest
+```
+
+Run the Docker app path with networking disabled:
+
+```sh
+DOCKER_NETWORK_MODE=none make dockerrun
 ```
 
 Run the full Docker-backed test matrix:
