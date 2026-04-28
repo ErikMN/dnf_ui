@@ -8,23 +8,23 @@
 #include <gtk/gtk.h>
 
 // -----------------------------------------------------------------------------
-// pending_transaction_on_install_button_clicked
+// Mark the selected package for install.
 // -----------------------------------------------------------------------------
 void pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
-// pending_transaction_on_remove_button_clicked
+// Mark the selected package for removal.
 // -----------------------------------------------------------------------------
 void pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
-// pending_transaction_on_reinstall_button_clicked
+// Mark the selected package for reinstall.
 // -----------------------------------------------------------------------------
 void pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
-// pending_transaction_on_apply_button_clicked
+// Start previewing and applying pending package actions.
 // -----------------------------------------------------------------------------
 void pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
-// pending_transaction_on_clear_pending_button_clicked
+// Clear all pending package actions.
 // -----------------------------------------------------------------------------
 void pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_data);
 

@@ -14,7 +14,7 @@
 struct SearchWidgets;
 
 // -----------------------------------------------------------------------------
-// package_table_show_context_menu
+// Show the package table context menu for one row.
 // -----------------------------------------------------------------------------
 void package_table_show_context_menu(GtkWidget *anchor,
                                      SearchWidgets *widgets,

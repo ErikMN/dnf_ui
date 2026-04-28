@@ -6,31 +6,31 @@
 struct SearchWidgets;
 
 // -----------------------------------------------------------------------------
-// Private helpers shared by the split widget controller implementation files
+// Create a cancellable that is cancelled when the widget is destroyed.
 // -----------------------------------------------------------------------------
 GCancellable *widgets_make_task_cancellable_for(GtkWidget *w);
 // -----------------------------------------------------------------------------
-// SearchWidgets must be owned by std::shared_ptr before calling this helper.
+// Create a task that keeps SearchWidgets alive until completion handling ends.
 // -----------------------------------------------------------------------------
 GTask *widgets_task_new_for_search_widgets(SearchWidgets *widgets, GCancellable *c, GAsyncReadyCallback callback);
 // -----------------------------------------------------------------------------
-// widgets_task_should_skip_completion
+// Return true when an async widget task should skip completion handling.
 // -----------------------------------------------------------------------------
 bool widgets_task_should_skip_completion(GTask *task, SearchWidgets *widgets);
 // -----------------------------------------------------------------------------
-// widgets_spinner_acquire
+// Increment the active task count for a spinner.
 // -----------------------------------------------------------------------------
 void widgets_spinner_acquire(GtkSpinner *spinner);
 // -----------------------------------------------------------------------------
-// widgets_spinner_release
+// Decrement the active task count for a spinner.
 // -----------------------------------------------------------------------------
 void widgets_spinner_release(GtkSpinner *spinner);
 // -----------------------------------------------------------------------------
-// widgets_on_rebuild_task
+// Rebuild repositories on a background task thread.
 // -----------------------------------------------------------------------------
 void widgets_on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *);
 // -----------------------------------------------------------------------------
-// widgets_on_rebuild_task_finished
+// Finish repository rebuild handling on the GTK thread.
 // -----------------------------------------------------------------------------
 void widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data);
 

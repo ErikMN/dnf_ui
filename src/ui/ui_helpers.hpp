@@ -8,19 +8,19 @@
 struct SearchWidgets;
 
 // -----------------------------------------------------------------------------
-// UI utility helpers
+// Create a button with an icon and text label.
 // -----------------------------------------------------------------------------
 GtkWidget *ui_helpers_create_icon_button(const char *icon_name, const char *label);
 // -----------------------------------------------------------------------------
-// ui_helpers_set_icon_button
+// Update the icon and text label for an icon button.
 // -----------------------------------------------------------------------------
 void ui_helpers_set_icon_button(GtkButton *button, const char *icon_name, const char *label);
 // -----------------------------------------------------------------------------
-// ui_helpers_set_status
+// Set the status label text and background color.
 // -----------------------------------------------------------------------------
 void ui_helpers_set_status(GtkLabel *label, const std::string &text, const std::string &color);
 // -----------------------------------------------------------------------------
-// ui_helpers_update_action_button_labels
+// Update action button labels for the selected package.
 // -----------------------------------------------------------------------------
 void ui_helpers_update_action_button_labels(SearchWidgets *widgets, const std::string &pkg);
 

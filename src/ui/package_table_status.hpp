@@ -12,19 +12,19 @@
 struct SearchWidgets;
 
 // -----------------------------------------------------------------------------
-// package_table_status_text
+// Return display text for one package install state.
 // -----------------------------------------------------------------------------
 const char *package_table_status_text(PackageInstallState state);
 // -----------------------------------------------------------------------------
-// package_table_status_rank
+// Return the package table sort rank for one install state.
 // -----------------------------------------------------------------------------
 int package_table_status_rank(PackageInstallState state);
 // -----------------------------------------------------------------------------
-// package_table_clear_status_css
+// Remove all status CSS classes from a status label.
 // -----------------------------------------------------------------------------
 void package_table_clear_status_css(GtkWidget *label);
 // -----------------------------------------------------------------------------
-// package_table_update_status_label
+// Update one package status label for the current row state.
 // -----------------------------------------------------------------------------
 void package_table_update_status_label(GtkWidget *label, SearchWidgets *widgets, const PackageRow &row);
 

@@ -12,11 +12,11 @@
 #include <vector>
 
 // -----------------------------------------------------------------------------
-// pending_transaction_build_request
+// Convert pending UI actions into a transaction request.
 // -----------------------------------------------------------------------------
 void pending_transaction_build_request(const std::vector<PendingAction> &actions, TransactionRequest &request);
 // -----------------------------------------------------------------------------
-// pending_transaction_validate_request
+// Reject self-protected remove and reinstall requests before preview.
 // -----------------------------------------------------------------------------
 bool pending_transaction_validate_request(const TransactionRequest &request, std::string &error_out);
 

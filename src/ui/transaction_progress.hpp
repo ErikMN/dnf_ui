@@ -11,34 +11,34 @@ struct TransactionProgressWindow;
 using TransactionApplyCallback = void (*)(SearchWidgets *widgets);
 
 // -----------------------------------------------------------------------------
-// transaction_progress_create_window
+// Create a transaction progress window for the pending action count.
 // -----------------------------------------------------------------------------
 TransactionProgressWindow *transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count);
 // -----------------------------------------------------------------------------
-// transaction_progress_retain
+// Add one reference to a transaction progress window.
 // -----------------------------------------------------------------------------
 TransactionProgressWindow *transaction_progress_retain(TransactionProgressWindow *progress);
 // -----------------------------------------------------------------------------
-// transaction_progress_release
+// Release one reference to a transaction progress window.
 // -----------------------------------------------------------------------------
 void transaction_progress_release(TransactionProgressWindow *progress);
 // -----------------------------------------------------------------------------
-// transaction_progress_append
+// Append a progress message to the transaction progress window.
 // -----------------------------------------------------------------------------
 void transaction_progress_append(TransactionProgressWindow *progress, const std::string &message);
 // -----------------------------------------------------------------------------
-// transaction_progress_finish
+// Mark the transaction progress window as finished.
 // -----------------------------------------------------------------------------
 void transaction_progress_finish(TransactionProgressWindow *progress, bool success, const std::string &summary);
 // -----------------------------------------------------------------------------
-// transaction_progress_show_error_dialog
+// Show a transaction error dialog with optional details.
 // -----------------------------------------------------------------------------
 void transaction_progress_show_error_dialog(SearchWidgets *widgets,
                                             const char *title,
                                             const char *intro,
                                             const std::string &details);
 // -----------------------------------------------------------------------------
-// transaction_progress_show_summary_dialog
+// Show the resolved transaction summary before apply.
 // -----------------------------------------------------------------------------
 void transaction_progress_show_summary_dialog(SearchWidgets *widgets,
                                               const TransactionPreview &preview,

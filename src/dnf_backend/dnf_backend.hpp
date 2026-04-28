@@ -70,28 +70,28 @@ struct PackageRow {
   PackageRepoCandidateRelation repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN;
 
   // -----------------------------------------------------------------------------
-  // get_epoch
+  // Return the package epoch field.
   // -----------------------------------------------------------------------------
   const std::string &get_epoch() const
   {
     return epoch;
   }
   // -----------------------------------------------------------------------------
-  // get_version
+  // Return the package version field.
   // -----------------------------------------------------------------------------
   const std::string &get_version() const
   {
     return version;
   }
   // -----------------------------------------------------------------------------
-  // get_release
+  // Return the package release field.
   // -----------------------------------------------------------------------------
   const std::string &get_release() const
   {
     return release;
   }
   // -----------------------------------------------------------------------------
-  // name_arch_key
+  // Return the package identity key used for name and architecture lookups.
   // -----------------------------------------------------------------------------
   std::string name_arch_key() const
   {
@@ -99,7 +99,7 @@ struct PackageRow {
   }
 
   // -----------------------------------------------------------------------------
-  // display_version
+  // Return the user-visible version and release string.
   // -----------------------------------------------------------------------------
   std::string display_version() const
   {
@@ -146,21 +146,20 @@ struct DnfBackendSearchOptions {
 };
 
 // -----------------------------------------------------------------------------
-// Publish and read the backend-owned search option snapshot.
+// Publish the backend-owned search option snapshot.
 // -----------------------------------------------------------------------------
 void dnf_backend_set_search_options(const DnfBackendSearchOptions &options);
 // -----------------------------------------------------------------------------
-// dnf_backend_get_search_options
+// Return the current backend-owned search option snapshot.
 // -----------------------------------------------------------------------------
 DnfBackendSearchOptions dnf_backend_get_search_options();
 
 // -----------------------------------------------------------------------------
-// Inspect the installed-package snapshot without exposing the backend mutex or
-// mutable NEVRA set to callers.
+// Return true when the installed-package snapshot contains the exact NEVRA.
 // -----------------------------------------------------------------------------
 bool dnf_backend_installed_snapshot_contains(const std::string &nevra);
 // -----------------------------------------------------------------------------
-// dnf_backend_installed_snapshot_size
+// Return the number of exact NEVRA entries in the installed snapshot.
 // -----------------------------------------------------------------------------
 size_t dnf_backend_installed_snapshot_size();
 
@@ -210,11 +209,6 @@ bool dnf_backend_is_package_self_protected(const PackageRow &row);
 bool dnf_backend_is_self_protected_transaction_spec(const std::string &spec);
 
 // -----------------------------------------------------------------------------
-// Structured package row queries used by the main package list presentation.
-// Browse and search results use a merged package view: the newest repo candidate
-// for each name+arch pair plus any installed-only local RPMs that are missing
-// from enabled repositories. Callers that do not need cancellation can pass
-// nullptr as the cancellable.
 // Query all installed packages. This path remains local-first and should still
 // work when repository metadata is unavailable; repo provenance is annotated
 // only as a best-effort extra when possible.
@@ -233,27 +227,27 @@ std::vector<PackageRow> dnf_backend_search_package_rows_interruptible(const std:
                                                                       GCancellable *cancellable);
 
 // -----------------------------------------------------------------------------
-// Exact NEVRA helpers used by details views and pending-action navigation.
+// Return installed package rows that exactly match one NEVRA.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow> dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra);
 // -----------------------------------------------------------------------------
-// dnf_backend_get_available_package_rows_by_nevra
+// Return available package rows that exactly match one NEVRA.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow> dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra);
 // -----------------------------------------------------------------------------
-// dnf_backend_get_package_info
+// Return formatted package details for one NEVRA.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_package_info(const std::string &pkg_nevra);
 // -----------------------------------------------------------------------------
-// dnf_backend_get_installed_package_files
+// Return the installed file list for one NEVRA.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max_files_for_display = 1500);
 // -----------------------------------------------------------------------------
-// dnf_backend_get_package_deps
+// Return formatted dependency details for one NEVRA.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_package_deps(const std::string &pkg_nevra);
 // -----------------------------------------------------------------------------
-// dnf_backend_get_package_changelog
+// Return formatted changelog entries for one NEVRA.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_package_changelog(const std::string &pkg_nevra);
 // -----------------------------------------------------------------------------
@@ -266,7 +260,7 @@ bool dnf_backend_preview_transaction(const std::vector<std::string> &install_nev
                                      std::string &error_out,
                                      const TransactionProgressCallback &progress_cb = {});
 // -----------------------------------------------------------------------------
-// dnf_backend_apply_transaction
+// Resolve and apply the requested transaction and report progress.
 // -----------------------------------------------------------------------------
 bool dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
                                    const std::vector<std::string> &remove_nevras,
@@ -281,7 +275,7 @@ bool dnf_backend_apply_transaction(const std::vector<std::string> &install_nevra
 // -----------------------------------------------------------------------------
 void dnf_backend_testonly_clear_installed_snapshot();
 // -----------------------------------------------------------------------------
-// dnf_backend_testonly_replace_installed_snapshot
+// Replace the installed snapshot with test data.
 // -----------------------------------------------------------------------------
 void dnf_backend_testonly_replace_installed_snapshot(const std::set<std::string> &nevras);
 // -----------------------------------------------------------------------------

@@ -1,8 +1,7 @@
 #pragma once
 
 // -----------------------------------------------------------------------------
-// src/app.hpp
-// Application entrypoint
+// Run the GTK application and return its process exit status.
 // -----------------------------------------------------------------------------
 int app_run_dnfui(int argc, char **argv);
 

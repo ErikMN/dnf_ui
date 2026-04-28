@@ -12,15 +12,15 @@
 struct SearchWidgets;
 
 // -----------------------------------------------------------------------------
-// package_table_get_selected_package_row
+// Return the currently selected package row.
 // -----------------------------------------------------------------------------
 bool package_table_get_selected_package_row(SearchWidgets *widgets, PackageRow &out_pkg);
 // -----------------------------------------------------------------------------
-// package_table_fill_package_view
+// Replace the package table contents with the provided rows.
 // -----------------------------------------------------------------------------
 void package_table_fill_package_view(SearchWidgets *widgets, const std::vector<PackageRow> &items);
 // -----------------------------------------------------------------------------
-// package_table_refresh_statuses
+// Refresh status values for all visible package rows.
 // -----------------------------------------------------------------------------
 void package_table_refresh_statuses(SearchWidgets *widgets);
 

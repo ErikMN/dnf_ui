@@ -15,11 +15,11 @@ struct MainMenuWidgets {
 };
 
 // -----------------------------------------------------------------------------
-// main_menu_create
+// Create the main window menu bar widget.
 // -----------------------------------------------------------------------------
 GtkWidget *main_menu_create();
 // -----------------------------------------------------------------------------
-// main_menu_connect_actions
+// Connect menu actions to the main window widget state.
 // -----------------------------------------------------------------------------
 void main_menu_connect_actions(const MainMenuWidgets &menu_widgets, SearchWidgets *widgets);
 

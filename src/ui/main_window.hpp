@@ -18,7 +18,7 @@ struct MainWindow {
 };
 
 // -----------------------------------------------------------------------------
-// main_window_create
+// Build the main window and return its startup handles.
 // -----------------------------------------------------------------------------
 MainWindow main_window_create(GtkApplication *app);
 

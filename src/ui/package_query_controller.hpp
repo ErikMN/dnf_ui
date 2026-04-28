@@ -10,31 +10,31 @@
 struct SearchWidgets;
 
 // -----------------------------------------------------------------------------
-// package_query_on_list_button_clicked
+// Handle the installed packages list button click.
 // -----------------------------------------------------------------------------
 void package_query_on_list_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
-// package_query_on_list_available_button_clicked
+// Handle the available packages list button click.
 // -----------------------------------------------------------------------------
 void package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
-// package_query_on_search_button_clicked
+// Handle the package search button click.
 // -----------------------------------------------------------------------------
 void package_query_on_search_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
-// package_query_on_history_row_selected
+// Restore and run a search from a selected history row.
 // -----------------------------------------------------------------------------
 void package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data);
 // -----------------------------------------------------------------------------
-// package_query_on_clear_button_clicked
+// Clear the current package list and search status.
 // -----------------------------------------------------------------------------
 void package_query_on_clear_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
-// package_query_clear_search_cache
+// Clear cached package query results.
 // -----------------------------------------------------------------------------
 void package_query_clear_search_cache();
 // -----------------------------------------------------------------------------
-// package_query_reload_current_view
+// Reload the currently displayed package query view.
 // -----------------------------------------------------------------------------
 void package_query_reload_current_view(SearchWidgets *widgets);
 

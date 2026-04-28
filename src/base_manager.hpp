@@ -16,7 +16,7 @@
 class BaseGuard {
   public:
   // -----------------------------------------------------------------------------
-  // BaseGuard
+  // Take ownership of a shared BaseManager lock.
   // -----------------------------------------------------------------------------
   explicit BaseGuard(std::shared_lock<std::shared_mutex> &&l)
       : lock(std::move(l))
@@ -30,7 +30,7 @@ class BaseGuard {
 class BaseWriteGuard {
   public:
   // -----------------------------------------------------------------------------
-  // BaseWriteGuard
+  // Take ownership of a unique BaseManager lock.
   // -----------------------------------------------------------------------------
   explicit BaseWriteGuard(std::unique_lock<std::shared_mutex> &&l)
       : lock(std::move(l))
@@ -67,23 +67,21 @@ enum class BaseRepoState {
 class BaseManager {
   public:
   // -----------------------------------------------------------------------------
-  // instance
+  // Return the process-wide BaseManager instance.
   // -----------------------------------------------------------------------------
   static BaseManager &instance();
 
   // -----------------------------------------------------------------------------
-  // Thread-safe guarded accessors
-  // Each accessor returns a reference to Base plus a guard object that keeps
-  // the appropriate mutex lock alive until the guard goes out of scope.
+  // Return read access to the cached Base with its lock guard.
   // -----------------------------------------------------------------------------
   BaseRead acquire_read();
   // -----------------------------------------------------------------------------
-  // acquire_write
+  // Return write access to the cached Base with its lock guard.
   // -----------------------------------------------------------------------------
   std::pair<libdnf5::Base &, BaseWriteGuard> acquire_write();
 
   // -----------------------------------------------------------------------------
-  // current_generation
+  // Return the current Base generation counter.
   // -----------------------------------------------------------------------------
   uint64_t current_generation() const
   {
@@ -91,50 +89,50 @@ class BaseManager {
   }
 
   // -----------------------------------------------------------------------------
-  // current_repo_state
+  // Return the repo state of the cached Base.
   // -----------------------------------------------------------------------------
   BaseRepoState current_repo_state() const;
 
   // -----------------------------------------------------------------------------
-  // Force rebuild
+  // Rebuild the cached Base from live metadata with fallback.
   // -----------------------------------------------------------------------------
   BaseRepoState rebuild();
   // -----------------------------------------------------------------------------
-  // rebuild_system_only
+  // Rebuild the cached Base from the local rpmdb only.
   // -----------------------------------------------------------------------------
   void rebuild_system_only();
   // -----------------------------------------------------------------------------
-  // ensure_system_only_initialized_if_needed
+  // Initialize a system-only Base when no Base exists yet.
   // -----------------------------------------------------------------------------
   void ensure_system_only_initialized_if_needed();
 
 #ifdef DNFUI_BUILD_TESTS
   // -----------------------------------------------------------------------------
-  // reset_for_tests
+  // Drop cached backend state for test setup.
   // -----------------------------------------------------------------------------
   void reset_for_tests();
 #endif
 
   private:
   // -----------------------------------------------------------------------------
-  // BaseManager
+  // Construct the singleton BaseManager.
   // -----------------------------------------------------------------------------
   BaseManager() = default;
   // -----------------------------------------------------------------------------
-  // BaseManager
+  // Prevent copying the singleton BaseManager.
   // -----------------------------------------------------------------------------
   BaseManager(const BaseManager &) = delete;
   // -----------------------------------------------------------------------------
-  // operator=
+  // Prevent assigning the singleton BaseManager.
   // -----------------------------------------------------------------------------
   BaseManager &operator=(const BaseManager &) = delete;
 
   // -----------------------------------------------------------------------------
-  // build_initialized_system_only_base
+  // Build a Base initialized from the local rpmdb only.
   // -----------------------------------------------------------------------------
   std::shared_ptr<libdnf5::Base> build_initialized_system_only_base();
   // -----------------------------------------------------------------------------
-  // ensure_base_initialized
+  // Initialize the cached Base when it has not been built yet.
   // -----------------------------------------------------------------------------
   void ensure_base_initialized();
 

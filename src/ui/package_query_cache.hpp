@@ -12,19 +12,19 @@
 #include <vector>
 
 // -----------------------------------------------------------------------------
-// package_query_cache_key_for
+// Build the cache key from the current search options and search term.
 // -----------------------------------------------------------------------------
 std::string package_query_cache_key_for(const std::string &term);
 // -----------------------------------------------------------------------------
-// package_query_cache_clear
+// Clear all cached package query results.
 // -----------------------------------------------------------------------------
 void package_query_cache_clear();
 // -----------------------------------------------------------------------------
-// package_query_cache_lookup
+// Look up cached package rows for one key and generation.
 // -----------------------------------------------------------------------------
 bool package_query_cache_lookup(const std::string &key, uint64_t generation, std::vector<PackageRow> &out_packages);
 // -----------------------------------------------------------------------------
-// package_query_cache_store
+// Store package rows for one key and generation.
 // -----------------------------------------------------------------------------
 void package_query_cache_store(const std::string &key, uint64_t generation, const std::vector<PackageRow> &packages);
 

@@ -57,7 +57,7 @@ std::map<std::string, PackageRow> collect_available_rows_by_name_arch(libdnf5::B
                                                                       const DnfBackendSearchOptions &search_options,
                                                                       const std::string *pattern = nullptr);
 // -----------------------------------------------------------------------------
-// collect_installed_rows
+// Collect installed rows and exact NEVRA cache data in one scan.
 // -----------------------------------------------------------------------------
 InstalledQueryResult collect_installed_rows(libdnf5::Base &base,
                                             GCancellable *cancellable,
@@ -71,13 +71,13 @@ InstalledQueryResult collect_installed_rows(libdnf5::Base &base,
 void annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
                                                 const std::map<std::string, PackageRow> &available_rows);
 // -----------------------------------------------------------------------------
-// annotate_installed_rows_with_repo_candidates_best_effort
+// Annotate installed rows with repo candidate state when repo data is available.
 // -----------------------------------------------------------------------------
 void annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow> &installed_rows,
                                                               GCancellable *cancellable,
                                                               const AvailableRowsProvider &available_rows_provider);
 // -----------------------------------------------------------------------------
-// visible_rows_from_maps
+// Merge available and installed row maps into the visible package list.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow> visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
                                                std::map<std::string, PackageRow> installed_rows);
@@ -87,7 +87,7 @@ std::vector<PackageRow> visible_rows_from_maps(std::map<std::string, PackageRow>
 // -----------------------------------------------------------------------------
 std::set<std::string> collect_self_protected_package_names(libdnf5::Base &base);
 // -----------------------------------------------------------------------------
-// publish_installed_snapshot
+// Publish a completed installed-package scan to shared backend state.
 // -----------------------------------------------------------------------------
 void publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string> protected_names);
 

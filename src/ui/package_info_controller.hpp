@@ -6,15 +6,15 @@
 struct SearchWidgets;
 
 // -----------------------------------------------------------------------------
-// Package selection and details notebook controller helpers
+// Clear the selected package state and disable package actions.
 // -----------------------------------------------------------------------------
 void package_info_clear_selected_package_state(SearchWidgets *widgets);
 // -----------------------------------------------------------------------------
-// package_info_load_selected_package_info
+// Start loading details for the selected package.
 // -----------------------------------------------------------------------------
 void package_info_load_selected_package_info(SearchWidgets *widgets, const PackageRow &selected);
 // -----------------------------------------------------------------------------
-// package_info_reset_details_view
+// Reset the package details notebook to its empty state.
 // -----------------------------------------------------------------------------
 void package_info_reset_details_view(SearchWidgets *widgets);
 

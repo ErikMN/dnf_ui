@@ -8,7 +8,7 @@
 #include <vector>
 
 // -----------------------------------------------------------------------------
-// reset_backend_globals
+// Reset backend test globals to their default state.
 // -----------------------------------------------------------------------------
 inline void
 reset_backend_globals()
@@ -18,7 +18,7 @@ reset_backend_globals()
 }
 
 // -----------------------------------------------------------------------------
-// set_backend_search_options
+// Set backend search options for a test case.
 // -----------------------------------------------------------------------------
 inline void
 set_backend_search_options(bool search_in_description, bool exact_match)
@@ -30,7 +30,7 @@ set_backend_search_options(bool search_in_description, bool exact_match)
 }
 
 // -----------------------------------------------------------------------------
-// package_row_nevras
+// Return the NEVRA set from package rows.
 // -----------------------------------------------------------------------------
 inline std::set<std::string>
 package_row_nevras(const std::vector<PackageRow> &rows)
@@ -45,7 +45,7 @@ package_row_nevras(const std::vector<PackageRow> &rows)
 
 struct ScopedEnvVar {
   // -----------------------------------------------------------------------------
-  // ScopedEnvVar
+  // Set one environment variable and remember its old state.
   // -----------------------------------------------------------------------------
   explicit ScopedEnvVar(const char *key, const char *value)
       : key(key ? key : "")
@@ -62,7 +62,7 @@ struct ScopedEnvVar {
   }
 
   // -----------------------------------------------------------------------------
-  // ~ScopedEnvVar
+  // Restore the environment variable to its old state.
   // -----------------------------------------------------------------------------
   ~ScopedEnvVar()
   {
