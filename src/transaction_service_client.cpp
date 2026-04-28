@@ -709,6 +709,9 @@ transaction_service_client_release_request(const std::string &transaction_path)
 }
 
 #ifdef DNFUI_BUILD_TESTS
+// -----------------------------------------------------------------------------
+// transaction_service_client_reset_for_tests
+// -----------------------------------------------------------------------------
 void
 transaction_service_client_reset_for_tests()
 {

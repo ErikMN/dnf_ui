@@ -13,7 +13,9 @@
 #include <string>
 #include <vector>
 
+// -----------------------------------------------------------------------------
 // Format the resolved disk space change for the transaction summary text.
+// -----------------------------------------------------------------------------
 static std::string
 format_transaction_preview_space_change(long long delta_bytes)
 {
@@ -36,7 +38,9 @@ format_transaction_preview_space_change(long long delta_bytes)
   return line;
 }
 
+// -----------------------------------------------------------------------------
 // Append one resolved package section to the transaction summary text.
+// -----------------------------------------------------------------------------
 static void
 append_transaction_preview_section(std::ostringstream &summary,
                                    const char *title,
@@ -53,7 +57,9 @@ append_transaction_preview_section(std::ostringstream &summary,
   summary << "\n";
 }
 
+// -----------------------------------------------------------------------------
 // Format the full resolved transaction preview as a readable summary string.
+// -----------------------------------------------------------------------------
 std::string
 format_transaction_preview_details(const TransactionPreview &preview)
 {

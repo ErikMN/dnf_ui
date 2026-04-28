@@ -39,6 +39,9 @@ struct PendingJumpButtonData {
 
 static void update_apply_button(SearchWidgets *widgets);
 
+// -----------------------------------------------------------------------------
+// apply_task_data_free
+// -----------------------------------------------------------------------------
 static void
 apply_task_data_free(gpointer p)
 {
@@ -52,6 +55,9 @@ apply_task_data_free(gpointer p)
   delete d;
 }
 
+// -----------------------------------------------------------------------------
+// preview_task_data_free
+// -----------------------------------------------------------------------------
 static void
 preview_task_data_free(gpointer p)
 {
@@ -59,6 +65,9 @@ preview_task_data_free(gpointer p)
   delete d;
 }
 
+// -----------------------------------------------------------------------------
+// pending_jump_button_data_free
+// -----------------------------------------------------------------------------
 static void
 pending_jump_button_data_free(gpointer p)
 {
@@ -66,6 +75,9 @@ pending_jump_button_data_free(gpointer p)
   delete d;
 }
 
+// -----------------------------------------------------------------------------
+// invalidate_service_preview
+// -----------------------------------------------------------------------------
 static void
 invalidate_service_preview(SearchWidgets *widgets)
 {
@@ -81,26 +93,37 @@ invalidate_service_preview(SearchWidgets *widgets)
   widgets->transaction.preview_transaction_path.clear();
 }
 
+// -----------------------------------------------------------------------------
 // Explain why the running application package can be viewed but not modified
 // from inside the same process.
+// -----------------------------------------------------------------------------
 static std::string
 self_protected_transaction_message(const PackageRow &pkg)
 {
   return "Cannot modify " + pkg.name + " while DNF UI is running. Close the application and use another tool.";
 }
 
+// -----------------------------------------------------------------------------
+// pending_transaction_preview_busy_message
+// -----------------------------------------------------------------------------
 static const char *
 pending_transaction_preview_busy_message()
 {
   return "Wait for the current transaction preview to finish.";
 }
 
+// -----------------------------------------------------------------------------
+// pending_transaction_preview_is_busy
+// -----------------------------------------------------------------------------
 static bool
 pending_transaction_preview_is_busy(SearchWidgets *widgets)
 {
   return widgets && widgets->transaction.preview_request_in_progress;
 }
 
+// -----------------------------------------------------------------------------
+// set_preview_request_busy_state
+// -----------------------------------------------------------------------------
 static void
 set_preview_request_busy_state(SearchWidgets *widgets, bool busy)
 {
@@ -123,7 +146,9 @@ set_preview_request_busy_state(SearchWidgets *widgets, bool busy)
   update_apply_button(widgets);
 }
 
+// -----------------------------------------------------------------------------
 // Show the selected pending action in the main package list so it can be reviewed or changed.
+// -----------------------------------------------------------------------------
 static void
 show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
 {
@@ -296,6 +321,9 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
   package_query_reload_current_view(widgets);
 }
 
+// -----------------------------------------------------------------------------
+// rebuild_after_tx_async
+// -----------------------------------------------------------------------------
 static void
 rebuild_after_tx_async(SearchWidgets *widgets)
 {

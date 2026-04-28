@@ -20,7 +20,9 @@ struct CachedSearchResults {
 static std::map<std::string, CachedSearchResults> g_search_cache;
 static std::mutex g_cache_mutex; // Protects g_search_cache
 
+// -----------------------------------------------------------------------------
 // Helper: Build a unique cache key based on search flags and term
+// -----------------------------------------------------------------------------
 std::string
 package_query_cache_key_for(const std::string &term)
 {
@@ -32,8 +34,10 @@ package_query_cache_key_for(const std::string &term)
   return key;
 }
 
+// -----------------------------------------------------------------------------
 // Clear cached search results.
 // Used both by the Clear Cache button and after successful Base rebuilds.
+// -----------------------------------------------------------------------------
 void
 package_query_cache_clear()
 {
@@ -41,9 +45,11 @@ package_query_cache_clear()
   g_search_cache.clear();
 }
 
+// -----------------------------------------------------------------------------
 // Check cache first.
 // Reuse only results produced from the current Base generation so refreshes
 // and transaction rebuilds cannot surface outdated package metadata.
+// -----------------------------------------------------------------------------
 bool
 package_query_cache_lookup(const std::string &key, uint64_t generation, std::vector<PackageRow> &out_packages)
 {
@@ -62,9 +68,11 @@ package_query_cache_lookup(const std::string &key, uint64_t generation, std::vec
   return true;
 }
 
+// -----------------------------------------------------------------------------
 // Cache results for faster re-display next time.
 // Search results are only reusable while the backend Base generation stays
 // the same, otherwise repo state may have changed underneath the cache.
+// -----------------------------------------------------------------------------
 void
 package_query_cache_store(const std::string &key, uint64_t generation, const std::vector<PackageRow> &packages)
 {

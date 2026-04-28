@@ -70,6 +70,9 @@ struct SearchWidgets : std::enable_shared_from_this<SearchWidgets> {
   MainWindowState window_state;
 };
 
+// -----------------------------------------------------------------------------
+// widgets_on_refresh_button_clicked
+// -----------------------------------------------------------------------------
 void widgets_on_refresh_button_clicked(GtkButton *, gpointer user_data);
 
 // -----------------------------------------------------------------------------

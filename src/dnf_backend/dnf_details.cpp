@@ -24,7 +24,9 @@
 
 using namespace dnf_backend_internal;
 
+// -----------------------------------------------------------------------------
 // Format package size in a way that is easy to read in the details pane.
+// -----------------------------------------------------------------------------
 static std::string
 format_package_size(unsigned long long size_bytes)
 {
@@ -34,9 +36,11 @@ format_package_size(unsigned long long size_bytes)
   return text;
 }
 
+// -----------------------------------------------------------------------------
 // Collect installed packages whose requires match capabilities provided by the
 // selected installed package. This keeps reverse dependency reporting narrow
 // and focused on the current system state.
+// -----------------------------------------------------------------------------
 static std::set<std::string>
 collect_installed_reverse_dependency_nevras(libdnf5::Base &base, const libdnf5::rpm::Package &pkg)
 {
@@ -60,10 +64,12 @@ collect_installed_reverse_dependency_nevras(libdnf5::Base &base, const libdnf5::
   return required_by_nevras;
 }
 
+// -----------------------------------------------------------------------------
 // Fetch and format detailed info for one exact NEVRA, including package
 // identity, repo, size, install reason, summary, and description. Installed
 // matches are preferred because rpmdb metadata is authoritative for the current
 // system.
+// -----------------------------------------------------------------------------
 std::string
 dnf_backend_get_package_info(const std::string &pkg_nevra)
 {
@@ -140,10 +146,12 @@ dnf_backend_get_package_info(const std::string &pkg_nevra)
   return oss.str();
 }
 
+// -----------------------------------------------------------------------------
 // Return newline-separated file paths for an installed package. Large file
 // lists can overwhelm the GTK clipboard/socket path, so callers can pass a
 // positive max_files_for_display to append a truncation notice after that many
 // visible entries. Passing 0 returns the full list.
+// -----------------------------------------------------------------------------
 std::string
 dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max_files_for_display)
 {
@@ -194,9 +202,11 @@ dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max
   return result;
 }
 
+// -----------------------------------------------------------------------------
 // Retrieve dependency information for one exact NEVRA and format it for the
 // package details Dependencies tab. Installed packages also include a narrow
 // "Required By" section based on installed reverse dependencies.
+// -----------------------------------------------------------------------------
 std::string
 dnf_backend_get_package_deps(const std::string &pkg_nevra)
 {
@@ -250,9 +260,11 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra)
   return out.str();
 }
 
+// -----------------------------------------------------------------------------
 // Retrieve and format changelog entries for one exact NEVRA. Installed package
 // metadata is preferred because rpmdb entries often contain a fuller local
 // history than repository metadata.
+// -----------------------------------------------------------------------------
 std::string
 dnf_backend_get_package_changelog(const std::string &pkg_nevra)
 {

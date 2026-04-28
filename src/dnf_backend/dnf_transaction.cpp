@@ -25,6 +25,7 @@
 #include <libdnf5/repo/download_callbacks.hpp>
 #include <libdnf5/rpm/package_query.hpp>
 
+// -----------------------------------------------------------------------------
 // Format a short, bounded summary of package specs for diagnostic error paths.
 //
 // Output format:
@@ -33,6 +34,7 @@
 //
 // The output is intentionally truncated so failure details stay readable even
 // when the UI sends a large transaction request.
+// -----------------------------------------------------------------------------
 static std::string
 format_specs(const std::vector<std::string> &specs)
 {
@@ -60,7 +62,9 @@ format_specs(const std::vector<std::string> &specs)
   return out.str();
 }
 
+// -----------------------------------------------------------------------------
 // Forward one progress line to the UI callback when a callback is installed.
+// -----------------------------------------------------------------------------
 static void
 emit_progress_line(const TransactionProgressCallback &progress_cb, const std::string &message)
 {
@@ -71,8 +75,10 @@ emit_progress_line(const TransactionProgressCallback &progress_cb, const std::st
   progress_cb(message);
 }
 
+// -----------------------------------------------------------------------------
 // Forward a multi-line diagnostic block as individual progress lines so the
 // transaction dialog can stream readable status updates.
+// -----------------------------------------------------------------------------
 static void
 emit_progress_block(const TransactionProgressCallback &progress_cb, const std::string &message)
 {
@@ -90,7 +96,9 @@ emit_progress_block(const TransactionProgressCallback &progress_cb, const std::s
   }
 }
 
+// -----------------------------------------------------------------------------
 // Convert one libdnf transaction action to the verb used in progress output.
+// -----------------------------------------------------------------------------
 static std::string
 transaction_action_label(libdnf5::base::TransactionPackage::Action action)
 {
@@ -116,8 +124,10 @@ transaction_action_label(libdnf5::base::TransactionPackage::Action action)
   }
 }
 
+// -----------------------------------------------------------------------------
 // Produce the stable package label used by transaction previews and progress
 // logs. Full NEVRA is used so dependency-driven actions remain unambiguous.
+// -----------------------------------------------------------------------------
 static std::string
 transaction_package_label(const libdnf5::base::TransactionPackage &item)
 {
@@ -127,11 +137,17 @@ transaction_package_label(const libdnf5::base::TransactionPackage &item)
 // libdnf5 download callbacks that stream package download progress to the UI.
 class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks {
   public:
+  // -----------------------------------------------------------------------------
+  // StreamingDownloadCallbacks
+  // -----------------------------------------------------------------------------
   explicit StreamingDownloadCallbacks(TransactionProgressCallback progress_cb)
       : progress_cb(std::move(progress_cb))
   {
   }
 
+  // -----------------------------------------------------------------------------
+  // add_new_download
+  // -----------------------------------------------------------------------------
   void *add_new_download(void *, const char *description, double) override
   {
     auto *state = new DownloadState;
@@ -140,6 +156,9 @@ class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks
     return state;
   }
 
+  // -----------------------------------------------------------------------------
+  // progress
+  // -----------------------------------------------------------------------------
   int progress(void *user_cb_data, double total_to_download, double downloaded) override
   {
     auto *state = static_cast<DownloadState *>(user_cb_data);
@@ -160,6 +179,9 @@ class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks
     return OK;
   }
 
+  // -----------------------------------------------------------------------------
+  // end
+  // -----------------------------------------------------------------------------
   int end(void *user_cb_data, TransferStatus status, const char *msg) override
   {
     std::unique_ptr<DownloadState> state(static_cast<DownloadState *>(user_cb_data));
@@ -194,11 +216,17 @@ class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks
 // Reset Base download callbacks when leaving transaction apply scope.
 class DownloadCallbacksReset {
   public:
+  // -----------------------------------------------------------------------------
+  // DownloadCallbacksReset
+  // -----------------------------------------------------------------------------
   explicit DownloadCallbacksReset(libdnf5::Base &base)
       : base(base)
   {
   }
 
+  // -----------------------------------------------------------------------------
+  // ~DownloadCallbacksReset
+  // -----------------------------------------------------------------------------
   ~DownloadCallbacksReset()
   {
     base.set_download_callbacks(std::unique_ptr<libdnf5::repo::DownloadCallbacks>());
@@ -208,9 +236,11 @@ class DownloadCallbacksReset {
   libdnf5::Base &base;
 };
 
+// -----------------------------------------------------------------------------
 // Prefer removing exact installed packages by rpmdb object when the UI passes
 // a full NEVRA. This keeps local-only RPM removals working even when libdnf5
 // does not re-resolve the same string spec back to the installed package.
+// -----------------------------------------------------------------------------
 static void
 add_remove_request(libdnf5::Base &base, libdnf5::Goal &goal, const std::string &spec)
 {
@@ -226,8 +256,10 @@ add_remove_request(libdnf5::Base &base, libdnf5::Goal &goal, const std::string &
   goal.add_rpm_remove(spec);
 }
 
+// -----------------------------------------------------------------------------
 // Resolve the transaction through one shared code path so preview and apply
 // use identical resolution logic.
+// -----------------------------------------------------------------------------
 static bool
 resolve_transaction_plan(libdnf5::Base &base,
                          const std::vector<std::string> &install_nevras,
@@ -298,7 +330,9 @@ resolve_transaction_plan(libdnf5::Base &base,
   return true;
 }
 
+// -----------------------------------------------------------------------------
 // Add one resolved transaction item to the confirmation preview model.
+// -----------------------------------------------------------------------------
 static void
 append_preview_item(TransactionPreview &preview, const libdnf5::base::TransactionPackage &item)
 {
@@ -335,10 +369,12 @@ append_preview_item(TransactionPreview &preview, const libdnf5::base::Transactio
   }
 }
 
+// -----------------------------------------------------------------------------
 // Resolve the final transaction and group the resulting package actions for
 // the confirmation dialog. This deliberately shares resolve_transaction_plan
 // with apply so the preview and actual transaction use identical dependency
 // resolution logic.
+// -----------------------------------------------------------------------------
 bool
 dnf_backend_preview_transaction(const std::vector<std::string> &install_nevras,
                                 const std::vector<std::string> &remove_nevras,
@@ -377,10 +413,12 @@ dnf_backend_preview_transaction(const std::vector<std::string> &install_nevras,
   }
 }
 
+// -----------------------------------------------------------------------------
 // Apply a resolved package transaction after the caller has completed any
 // required authorization. The transaction service enforces Polkit before
 // invoking this function; direct backend callers are expected to run in tests or
 // another already-authorized context.
+// -----------------------------------------------------------------------------
 bool
 dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
                               const std::vector<std::string> &remove_nevras,

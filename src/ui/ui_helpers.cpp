@@ -15,6 +15,9 @@ constexpr const char *ICON_BUTTON_LABEL_KEY = "dnfui-icon-button-label";
 
 } // namespace
 
+// -----------------------------------------------------------------------------
+// ui_helpers_create_icon_button
+// -----------------------------------------------------------------------------
 GtkWidget *
 ui_helpers_create_icon_button(const char *icon_name, const char *label)
 {
@@ -24,6 +27,9 @@ ui_helpers_create_icon_button(const char *icon_name, const char *label)
   return button;
 }
 
+// -----------------------------------------------------------------------------
+// ui_helpers_set_icon_button
+// -----------------------------------------------------------------------------
 void
 ui_helpers_set_icon_button(GtkButton *button, const char *icon_name, const char *label)
 {

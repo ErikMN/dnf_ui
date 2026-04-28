@@ -27,6 +27,9 @@ enum class PackageColumnKind {
   SUMMARY,
 };
 
+// -----------------------------------------------------------------------------
+// package_row_quark
+// -----------------------------------------------------------------------------
 static GQuark
 package_row_quark()
 {
@@ -45,7 +48,9 @@ struct PackageItem {
   int status_rank;
 };
 
+// -----------------------------------------------------------------------------
 // Snapshot the visible status text and its sort order for one package row.
+// -----------------------------------------------------------------------------
 static void
 fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
 {
@@ -78,6 +83,7 @@ fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
 // Package row object helpers
 // -----------------------------------------------------------------------------
 // Wrap one package row in a GObject so GTK list models can sort and select it.
+// -----------------------------------------------------------------------------
 static GObject *
 make_package_object(SearchWidgets *widgets, const PackageRow &row)
 {
@@ -88,7 +94,9 @@ make_package_object(SearchWidgets *widgets, const PackageRow &row)
   return obj;
 }
 
+// -----------------------------------------------------------------------------
 // Read the sortable package wrapper stored on a GTK list item.
+// -----------------------------------------------------------------------------
 static const PackageItem *
 package_item_from_object(GObject *obj)
 {
@@ -99,7 +107,9 @@ package_item_from_object(GObject *obj)
   return static_cast<const PackageItem *>(g_object_get_qdata(obj, package_row_quark()));
 }
 
+// -----------------------------------------------------------------------------
 // Read the mutable package wrapper stored on a GTK list item.
+// -----------------------------------------------------------------------------
 static PackageItem *
 mutable_package_item_from_object(GObject *obj)
 {
@@ -110,7 +120,9 @@ mutable_package_item_from_object(GObject *obj)
   return static_cast<PackageItem *>(g_object_get_qdata(obj, package_row_quark()));
 }
 
+// -----------------------------------------------------------------------------
 // Map a package wrapper back to the package row used elsewhere in the UI.
+// -----------------------------------------------------------------------------
 static const PackageRow *
 package_row_from_object(GObject *obj)
 {
@@ -126,6 +138,7 @@ package_row_from_object(GObject *obj)
 // Column sorter helpers
 // -----------------------------------------------------------------------------
 // Return the visible text for one package table cell.
+// -----------------------------------------------------------------------------
 static std::string
 column_text(const PackageItem &item, PackageColumnKind kind)
 {
@@ -152,13 +165,18 @@ struct ColumnSorterData {
   PackageColumnKind kind;
 };
 
+// -----------------------------------------------------------------------------
+// column_sorter_data_free
+// -----------------------------------------------------------------------------
 static void
 column_sorter_data_free(gpointer p)
 {
   delete static_cast<ColumnSorterData *>(p);
 }
 
+// -----------------------------------------------------------------------------
 // Compare two strings case-insensitively while keeping a stable fallback order.
+// -----------------------------------------------------------------------------
 static int
 compare_text(const std::string &lhs, const std::string &rhs)
 {
@@ -175,7 +193,9 @@ compare_text(const std::string &lhs, const std::string &rhs)
   return result;
 }
 
+// -----------------------------------------------------------------------------
 // Compare two package items for the active package table column.
+// -----------------------------------------------------------------------------
 static int
 compare_package_items(const PackageItem &lhs, const PackageItem &rhs, PackageColumnKind kind)
 {
@@ -214,7 +234,9 @@ compare_package_items(const PackageItem &lhs, const PackageItem &rhs, PackageCol
   return compare_text(lhs.row.nevra, rhs.row.nevra);
 }
 
+// -----------------------------------------------------------------------------
 // Adapter from GTK's custom sorter callback to the package item comparator.
+// -----------------------------------------------------------------------------
 static int
 column_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_data)
 {
@@ -228,7 +250,9 @@ column_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_da
   return compare_package_items(*lhs, *rhs, data->kind);
 }
 
+// -----------------------------------------------------------------------------
 // Refresh stored package status values without changing the GTK model.
+// -----------------------------------------------------------------------------
 static void
 refresh_model_status_values(GtkColumnView *view, SearchWidgets *widgets)
 {
@@ -254,7 +278,9 @@ refresh_model_status_values(GtkColumnView *view, SearchWidgets *widgets)
   }
 }
 
+// -----------------------------------------------------------------------------
 // Refresh the status cells that are currently realized by the virtualized view.
+// -----------------------------------------------------------------------------
 static void
 refresh_visible_status_labels(GtkWidget *widget, SearchWidgets *widgets)
 {
@@ -274,7 +300,9 @@ refresh_visible_status_labels(GtkWidget *widget, SearchWidgets *widgets)
   }
 }
 
+// -----------------------------------------------------------------------------
 // Select the package row that owns the context menu action.
+// -----------------------------------------------------------------------------
 static bool
 select_package_table_row(GtkColumnView *view, const std::string &nevra)
 {
@@ -426,7 +454,9 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
   return column;
 }
 
+// -----------------------------------------------------------------------------
 // Read the current primary package table sort before rebuilding the GTK view.
+// -----------------------------------------------------------------------------
 static bool
 get_package_view_sort_state(SearchWidgets *widgets, PackageColumnKind &out_kind, GtkSortType &out_order)
 {
@@ -455,7 +485,9 @@ get_package_view_sort_state(SearchWidgets *widgets, PackageColumnKind &out_kind,
   return true;
 }
 
+// -----------------------------------------------------------------------------
 // Reapply the primary package table sort after rebuilding the GTK view.
+// -----------------------------------------------------------------------------
 static void
 restore_package_view_sort_state(GtkColumnView *view, PackageColumnKind kind, GtkSortType order)
 {
@@ -523,7 +555,9 @@ package_table_get_selected_package_row(SearchWidgets *widgets, PackageRow &out_p
   return ok;
 }
 
+// -----------------------------------------------------------------------------
 // Refresh package status text and colors without rebuilding the package table.
+// -----------------------------------------------------------------------------
 void
 package_table_refresh_statuses(SearchWidgets *widgets)
 {

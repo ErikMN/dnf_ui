@@ -35,6 +35,9 @@ on_menu_clear_list(GSimpleAction *, GVariant *, gpointer user_data)
   package_query_on_clear_button_clicked(nullptr, data->widgets);
 }
 
+// -----------------------------------------------------------------------------
+// on_menu_clear_cache
+// -----------------------------------------------------------------------------
 static void
 on_menu_clear_cache(GSimpleAction *, GVariant *, gpointer user_data)
 {
@@ -47,6 +50,9 @@ on_menu_clear_cache(GSimpleAction *, GVariant *, gpointer user_data)
   ui_helpers_set_status(data->widgets->query.status_label, "Search cache cleared.", "green");
 }
 
+// -----------------------------------------------------------------------------
+// on_menu_quit
+// -----------------------------------------------------------------------------
 static void
 on_menu_quit(GSimpleAction *, GVariant *, gpointer user_data)
 {
@@ -58,6 +64,9 @@ on_menu_quit(GSimpleAction *, GVariant *, gpointer user_data)
   gtk_window_close(GTK_WINDOW(data->window));
 }
 
+// -----------------------------------------------------------------------------
+// on_menu_about
+// -----------------------------------------------------------------------------
 static void
 on_menu_about(GSimpleAction *, GVariant *, gpointer user_data)
 {
@@ -91,6 +100,9 @@ on_menu_about(GSimpleAction *, GVariant *, gpointer user_data)
                         nullptr);
 }
 
+// -----------------------------------------------------------------------------
+// on_menu_show_history_changed
+// -----------------------------------------------------------------------------
 static void
 on_menu_show_history_changed(GSimpleAction *action, GVariant *value, gpointer user_data)
 {
@@ -104,6 +116,9 @@ on_menu_show_history_changed(GSimpleAction *action, GVariant *value, gpointer us
   g_simple_action_set_state(action, value);
 }
 
+// -----------------------------------------------------------------------------
+// on_menu_show_info_changed
+// -----------------------------------------------------------------------------
 static void
 on_menu_show_info_changed(GSimpleAction *action, GVariant *value, gpointer user_data)
 {

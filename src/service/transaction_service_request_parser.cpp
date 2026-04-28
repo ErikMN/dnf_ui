@@ -8,7 +8,9 @@
 #include <string>
 #include <vector>
 
+// -----------------------------------------------------------------------------
 // Unpack the StartTransaction arrays in install, remove, and reinstall order.
+// -----------------------------------------------------------------------------
 TransactionRequest
 transaction_service_request_from_variant(GVariant *parameters)
 {

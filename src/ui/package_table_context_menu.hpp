@@ -13,6 +13,9 @@
 
 struct SearchWidgets;
 
+// -----------------------------------------------------------------------------
+// package_table_show_context_menu
+// -----------------------------------------------------------------------------
 void package_table_show_context_menu(GtkWidget *anchor,
                                      SearchWidgets *widgets,
                                      const PackageRow &row,

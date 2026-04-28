@@ -17,7 +17,9 @@ constexpr const char *kTaskSearchWidgetsHoldKey = "dnfui-task-search-widgets-hol
 
 }
 
+// -----------------------------------------------------------------------------
 // Shared cancellable helper used by background widget tasks.
+// -----------------------------------------------------------------------------
 GCancellable *
 widgets_make_task_cancellable_for(GtkWidget *w)
 {
@@ -28,6 +30,9 @@ widgets_make_task_cancellable_for(GtkWidget *w)
   return c;
 }
 
+// -----------------------------------------------------------------------------
+// hold_search_widgets_for_task
+// -----------------------------------------------------------------------------
 static void
 hold_search_widgets_for_task(GTask *task, SearchWidgets *widgets)
 {
@@ -41,7 +46,9 @@ hold_search_widgets_for_task(GTask *task, SearchWidgets *widgets)
   });
 }
 
+// -----------------------------------------------------------------------------
 // Create a task that keeps SearchWidgets alive until its completion callback returns.
+// -----------------------------------------------------------------------------
 GTask *
 widgets_task_new_for_search_widgets(SearchWidgets *widgets, GCancellable *c, GAsyncReadyCallback callback)
 {
@@ -50,6 +57,9 @@ widgets_task_new_for_search_widgets(SearchWidgets *widgets, GCancellable *c, GAs
   return task;
 }
 
+// -----------------------------------------------------------------------------
+// widgets_task_should_skip_completion
+// -----------------------------------------------------------------------------
 bool
 widgets_task_should_skip_completion(GTask *task, SearchWidgets *widgets)
 {
@@ -75,6 +85,9 @@ spinner_quark()
   return q;
 }
 
+// -----------------------------------------------------------------------------
+// widgets_spinner_acquire
+// -----------------------------------------------------------------------------
 void
 widgets_spinner_acquire(GtkSpinner *spinner)
 {
@@ -93,6 +106,9 @@ widgets_spinner_acquire(GtkSpinner *spinner)
   }
 }
 
+// -----------------------------------------------------------------------------
+// widgets_spinner_release
+// -----------------------------------------------------------------------------
 void
 widgets_spinner_release(GtkSpinner *spinner)
 {

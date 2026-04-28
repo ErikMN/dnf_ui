@@ -9,7 +9,9 @@
 #include "ui/pending_transaction_state.hpp"
 #include "ui/widgets.hpp"
 
+// -----------------------------------------------------------------------------
 // Find the pending action for the clicked package row, if one exists.
+// -----------------------------------------------------------------------------
 static bool
 get_context_menu_pending_action(SearchWidgets *widgets, const std::string &nevra, PendingAction::Type &out_type)
 {
@@ -23,7 +25,9 @@ get_context_menu_pending_action(SearchWidgets *widgets, const std::string &nevra
   return false;
 }
 
+// -----------------------------------------------------------------------------
 // Add one transaction action to the package context menu.
+// -----------------------------------------------------------------------------
 static void
 append_context_menu_action(GtkBox *box,
                            const char *label,
@@ -38,6 +42,9 @@ append_context_menu_action(GtkBox *box,
   gtk_box_append(box, button);
 }
 
+// -----------------------------------------------------------------------------
+// package_table_show_context_menu
+// -----------------------------------------------------------------------------
 void
 package_table_show_context_menu(GtkWidget *anchor,
                                 SearchWidgets *widgets,

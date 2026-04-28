@@ -11,9 +11,21 @@
 
 struct SearchWidgets;
 
+// -----------------------------------------------------------------------------
+// package_table_status_text
+// -----------------------------------------------------------------------------
 const char *package_table_status_text(PackageInstallState state);
+// -----------------------------------------------------------------------------
+// package_table_status_rank
+// -----------------------------------------------------------------------------
 int package_table_status_rank(PackageInstallState state);
+// -----------------------------------------------------------------------------
+// package_table_clear_status_css
+// -----------------------------------------------------------------------------
 void package_table_clear_status_css(GtkWidget *label);
+// -----------------------------------------------------------------------------
+// package_table_update_status_label
+// -----------------------------------------------------------------------------
 void package_table_update_status_label(GtkWidget *label, SearchWidgets *widgets, const PackageRow &row);
 
 // -----------------------------------------------------------------------------

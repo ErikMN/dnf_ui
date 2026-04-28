@@ -33,8 +33,10 @@
 namespace {
 
 #ifdef DNFUI_BUILD_TESTS
+// -----------------------------------------------------------------------------
 // Force one preview worker exception in test builds so the service smoke test
 // can verify that the request still ends in a final failed state.
+// -----------------------------------------------------------------------------
 static void
 throw_if_test_preview_exception_requested()
 {
@@ -44,9 +46,11 @@ throw_if_test_preview_exception_requested()
   }
 }
 
+// -----------------------------------------------------------------------------
 // In test builds, allow one preview worker to announce that it has started and
 // then wait for a short time. This lets one integration test stop the service
 // while the client is blocked waiting for the preview result.
+// -----------------------------------------------------------------------------
 static void
 run_test_preview_wait_hook_if_requested()
 {
@@ -69,11 +73,17 @@ run_test_preview_wait_hook_if_requested()
   g_usleep(delay_ms * 1000);
 }
 #else
+// -----------------------------------------------------------------------------
+// throw_if_test_preview_exception_requested
+// -----------------------------------------------------------------------------
 static void
 throw_if_test_preview_exception_requested()
 {
 }
 
+// -----------------------------------------------------------------------------
+// run_test_preview_wait_hook_if_requested
+// -----------------------------------------------------------------------------
 static void
 run_test_preview_wait_hook_if_requested()
 {
@@ -192,7 +202,9 @@ struct QueuedSessionRelease {
   std::string object_path;
 };
 
+// -----------------------------------------------------------------------------
 // Copy one queued progress message onto the main loop and emit it on D-Bus.
+// -----------------------------------------------------------------------------
 static gboolean
 dispatch_transaction_progress(gpointer user_data)
 {
@@ -205,7 +217,9 @@ dispatch_transaction_progress(gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
+// -----------------------------------------------------------------------------
 // Copy one queued finished result onto the main loop and publish it on D-Bus.
+// -----------------------------------------------------------------------------
 static gboolean
 dispatch_transaction_finished(gpointer user_data)
 {
@@ -218,7 +232,9 @@ dispatch_transaction_finished(gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
+// -----------------------------------------------------------------------------
 // Remove one finished transaction request object from the live service map.
+// -----------------------------------------------------------------------------
 static gboolean
 dispatch_transaction_release(gpointer user_data)
 {
@@ -265,7 +281,9 @@ dispatch_transaction_release(gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
+// -----------------------------------------------------------------------------
 // Emit one progress line for a live transaction request object.
+// -----------------------------------------------------------------------------
 static void
 emit_transaction_progress(TransactionSession *session, const std::string &line)
 {
@@ -282,7 +300,9 @@ emit_transaction_progress(TransactionSession *session, const std::string &line)
                                 nullptr);
 }
 
+// -----------------------------------------------------------------------------
 // Publish the final state for one transaction request object.
+// -----------------------------------------------------------------------------
 static void
 emit_transaction_finished(TransactionSession *session, TransactionStage stage, bool success, const std::string &details)
 {
@@ -316,7 +336,9 @@ emit_transaction_finished(TransactionSession *session, TransactionStage stage, b
   }
 }
 
+// -----------------------------------------------------------------------------
 // Queue one transaction progress line back onto the service main loop.
+// -----------------------------------------------------------------------------
 static void
 queue_transaction_progress(TransactionSession *session, const std::string &line)
 {
@@ -330,7 +352,9 @@ queue_transaction_progress(TransactionSession *session, const std::string &line)
   g_main_context_invoke(session->service->main_context, dispatch_transaction_progress, message);
 }
 
+// -----------------------------------------------------------------------------
 // Queue the final state update for one transaction request object.
+// -----------------------------------------------------------------------------
 static void
 queue_transaction_finished(TransactionSession *session,
                            TransactionStage stage,
@@ -349,7 +373,9 @@ queue_transaction_finished(TransactionSession *session,
   g_main_context_invoke(session->service->main_context, dispatch_transaction_finished, result);
 }
 
+// -----------------------------------------------------------------------------
 // Queue cleanup of one finished transaction request object.
+// -----------------------------------------------------------------------------
 static void
 queue_transaction_release(TransactionSession *session)
 {
@@ -363,7 +389,9 @@ queue_transaction_release(TransactionSession *session)
   g_main_context_invoke(session->service->main_context, dispatch_transaction_release, release);
 }
 
+// -----------------------------------------------------------------------------
 // Copy one preview section into a D-Bus string array builder.
+// -----------------------------------------------------------------------------
 static void
 append_transaction_preview_array(GVariantBuilder &builder, const std::vector<std::string> &items)
 {
@@ -372,7 +400,9 @@ append_transaction_preview_array(GVariantBuilder &builder, const std::vector<std
   }
 }
 
+// -----------------------------------------------------------------------------
 // Map one internal transaction stage to its D-Bus state string.
+// -----------------------------------------------------------------------------
 static const char *
 transaction_stage_name(TransactionStage stage)
 {
@@ -396,7 +426,9 @@ transaction_stage_name(TransactionStage stage)
   return "unknown";
 }
 
+// -----------------------------------------------------------------------------
 // Reset one transaction request object to a running state before new work starts.
+// -----------------------------------------------------------------------------
 static void
 set_transaction_running(TransactionSession *session, TransactionStage stage)
 {
@@ -606,13 +638,16 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
 // -----------------------------------------------------------------------------
 // Return true when the transaction may need available-repo metadata instead of
 // just the local rpmdb.
+// -----------------------------------------------------------------------------
 static bool
 transaction_request_needs_available_repos(const TransactionRequest &request)
 {
   return !request.install.empty() || !request.reinstall.empty();
 }
 
+// -----------------------------------------------------------------------------
 // Resolve the requested install, remove, and reinstall changes in a worker thread.
+// -----------------------------------------------------------------------------
 static void
 run_transaction_preview(TransactionSession *session)
 {
@@ -687,7 +722,9 @@ run_transaction_preview(TransactionSession *session)
   }
 }
 
+// -----------------------------------------------------------------------------
 // Start the transaction preview worker for one new request object.
+// -----------------------------------------------------------------------------
 static gboolean
 start_transaction_preview(gpointer user_data)
 {
@@ -711,13 +748,18 @@ start_transaction_preview(gpointer user_data)
 // of scope, ensuring the flag is reset even if the apply worker exits early.
 struct ApplyGuard {
   std::atomic<bool> &flag;
+  // -----------------------------------------------------------------------------
+  // ~ApplyGuard
+  // -----------------------------------------------------------------------------
   ~ApplyGuard()
   {
     flag = false;
   }
 };
 
+// -----------------------------------------------------------------------------
 // Run the authorized package transaction in a worker thread.
+// -----------------------------------------------------------------------------
 static void
 run_transaction_apply(TransactionSession *session)
 {
@@ -779,7 +821,9 @@ run_transaction_apply(TransactionSession *session)
   }
 }
 
+// -----------------------------------------------------------------------------
 // Start the transaction apply worker after authorization succeeds.
+// -----------------------------------------------------------------------------
 static gboolean
 start_transaction_apply(gpointer user_data)
 {
@@ -808,8 +852,10 @@ start_transaction_apply(gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
+// -----------------------------------------------------------------------------
 // Return true when apply should stop before package work begins.
 // Release and client disconnect handling already mark the session cancelled.
+// -----------------------------------------------------------------------------
 static bool
 transaction_apply_should_stop_before_work(TransactionSession *session, std::string &details_out)
 {
@@ -832,6 +878,7 @@ transaction_apply_should_stop_before_work(TransactionSession *session, std::stri
 // Per transaction object handling
 // -----------------------------------------------------------------------------
 // Handle one D-Bus method call for a live transaction request object.
+// -----------------------------------------------------------------------------
 static void
 on_transaction_method_call(GDBusConnection *,
                            const gchar *,
@@ -1047,6 +1094,7 @@ static const GDBusInterfaceVTable kTransactionVTable = {
 // Callback invoked when a client that owns transaction sessions disconnects
 // from the bus. Automatically releases all sessions owned by that client to
 // prevent orphaned sessions from accumulating when clients crash or are killed.
+// -----------------------------------------------------------------------------
 static void
 on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer user_data)
 {
@@ -1073,9 +1121,11 @@ on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer
   }
 }
 
+// -----------------------------------------------------------------------------
 // Create and register one new transaction request object on the bus.
 // Watches the client's unique bus name to auto-release the session if the
 // client disconnects without calling Release.
+// -----------------------------------------------------------------------------
 static TransactionSession *
 create_transaction_session(TransactionService *service,
                            const TransactionRequest &request,
@@ -1135,6 +1185,7 @@ create_transaction_session(TransactionService *service,
 // Manager object handling
 // -----------------------------------------------------------------------------
 // Handle StartTransaction calls on the transaction service manager object.
+// -----------------------------------------------------------------------------
 static void
 on_manager_method_call(GDBusConnection *,
                        const gchar *,
@@ -1190,6 +1241,7 @@ static const GDBusInterfaceVTable kManagerVTable = {
 // Main loop and bus ownership callbacks
 // -----------------------------------------------------------------------------
 // Stop the service main loop when the process receives a quit signal.
+// -----------------------------------------------------------------------------
 static gboolean
 on_quit_signal(gpointer user_data)
 {
@@ -1200,7 +1252,9 @@ on_quit_signal(gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
+// -----------------------------------------------------------------------------
 // Register the manager object after the service acquires its D-Bus name.
+// -----------------------------------------------------------------------------
 static void
 on_bus_acquired(GDBusConnection *connection, const gchar *, gpointer user_data)
 {
@@ -1231,7 +1285,9 @@ on_bus_acquired(GDBusConnection *connection, const gchar *, gpointer user_data)
   DNFUI_TRACE("Transaction service bus ready");
 }
 
+// -----------------------------------------------------------------------------
 // Stop the service if its owned D-Bus name is lost.
+// -----------------------------------------------------------------------------
 static void
 on_name_lost(GDBusConnection *, const gchar *, gpointer user_data)
 {
@@ -1248,6 +1304,7 @@ on_name_lost(GDBusConnection *, const gchar *, gpointer user_data)
 // Unregister service objects and release all owned GLib resources.
 // Cancels any pending async authorization operations by replying with errors
 // before destroying sessions to prevent use-after-free in async callbacks.
+// -----------------------------------------------------------------------------
 static void
 cleanup_service(TransactionService &service)
 {
@@ -1330,6 +1387,7 @@ cleanup_service(TransactionService &service)
 // Transaction service entrypoint
 // -----------------------------------------------------------------------------
 // Build the service runtime state, own the bus name, and run the main loop.
+// -----------------------------------------------------------------------------
 int
 transaction_service_run(const TransactionServiceOptions &options)
 {

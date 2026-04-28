@@ -41,6 +41,9 @@ struct SearchTaskData {
   bool exact_match;
 };
 
+// -----------------------------------------------------------------------------
+// search_task_data_free
+// -----------------------------------------------------------------------------
 static void
 search_task_data_free(gpointer p)
 {
@@ -53,9 +56,11 @@ search_task_data_free(gpointer p)
   g_free(d);
 }
 
+// -----------------------------------------------------------------------------
 // Record which main query flow produced the currently displayed table.
 // Transaction/repository rebuilds use this to rerun the same query and replace
 // stale rows with fresh backend data.
+// -----------------------------------------------------------------------------
 static void
 set_displayed_query_kind(SearchWidgets *widgets, DisplayedPackageQueryKind kind)
 {
@@ -67,9 +72,11 @@ set_displayed_query_kind(SearchWidgets *widgets, DisplayedPackageQueryKind kind)
   widgets->query_state.displayed_query.kind = kind;
 }
 
+// -----------------------------------------------------------------------------
 // Preserve the active search term and flags so a post-transaction refresh can
 // rebuild the visible search results even if the user changes the checkboxes
 // while the background work is still running.
+// -----------------------------------------------------------------------------
 static void
 set_displayed_search_query(SearchWidgets *widgets, const SearchTaskData &task_data)
 {
@@ -84,9 +91,11 @@ set_displayed_search_query(SearchWidgets *widgets, const SearchTaskData &task_da
   widgets->query_state.displayed_query.exact_match = task_data.exact_match;
 }
 
+// -----------------------------------------------------------------------------
 // Complete one rebuild-triggered refresh. When the old selection survived the
 // refreshed query result, leave the details pane intact; otherwise clear it so
 // stale package info is not shown for rows that disappeared.
+// -----------------------------------------------------------------------------
 static void
 finish_results_refresh(SearchWidgets *widgets)
 {
@@ -117,7 +126,9 @@ struct PackageListTaskData {
   uint64_t generation;
 };
 
+// -----------------------------------------------------------------------------
 // Return true when the shared package-list request state currently owns a running task.
+// -----------------------------------------------------------------------------
 static bool
 has_active_package_list_request(const SearchWidgets *widgets)
 {
@@ -125,7 +136,9 @@ has_active_package_list_request(const SearchWidgets *widgets)
       !g_cancellable_is_cancelled(widgets->query_state.package_list_cancellable);
 }
 
+// -----------------------------------------------------------------------------
 // Return the button that owns the Stop state for the active package list request.
+// -----------------------------------------------------------------------------
 static GtkButton *
 package_list_stop_button(SearchWidgets *widgets, PackageListRequestKind kind)
 {
@@ -145,7 +158,9 @@ package_list_stop_button(SearchWidgets *widgets, PackageListRequestKind kind)
   }
 }
 
+// -----------------------------------------------------------------------------
 // Human-readable cancel status for the current background package list request.
+// -----------------------------------------------------------------------------
 static const char *
 package_list_cancelled_status(PackageListRequestKind kind)
 {
@@ -162,7 +177,9 @@ package_list_cancelled_status(PackageListRequestKind kind)
   }
 }
 
+// -----------------------------------------------------------------------------
 // Track the active background package list request and switch the owning button to Stop.
+// -----------------------------------------------------------------------------
 static void
 begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t request_id, PackageListRequestKind kind)
 {
@@ -193,7 +210,9 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
   gtk_widget_set_sensitive(GTK_WIDGET(stop_button), TRUE);
 }
 
+// -----------------------------------------------------------------------------
 // Restore the normal search and list controls after a package query stops or finishes.
+// -----------------------------------------------------------------------------
 static void
 restore_package_list_controls(SearchWidgets *widgets)
 {
@@ -213,7 +232,9 @@ restore_package_list_controls(SearchWidgets *widgets)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), TRUE);
 }
 
+// -----------------------------------------------------------------------------
 // Restore the shared package list UI when the active background request is done.
+// -----------------------------------------------------------------------------
 static void
 end_package_list_request(SearchWidgets *widgets, uint64_t request_id, PackageListRequestKind kind)
 {
@@ -231,7 +252,9 @@ end_package_list_request(SearchWidgets *widgets, uint64_t request_id, PackageLis
   restore_package_list_controls(widgets);
 }
 
+// -----------------------------------------------------------------------------
 // Cancel the active package list request and immediately unlock the shared controls.
+// -----------------------------------------------------------------------------
 static void
 cancel_active_package_list_request(SearchWidgets *widgets)
 {
@@ -270,6 +293,9 @@ cancel_active_package_list_request(SearchWidgets *widgets)
 // Returns a std::vector<PackageRow> containing structured package metadata.
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// on_list_task
+// -----------------------------------------------------------------------------
 static void
 on_list_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
@@ -769,9 +795,11 @@ package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
   ui_helpers_update_action_button_labels(widgets, "");
 }
 
+// -----------------------------------------------------------------------------
 // Rebuild the currently displayed package table after a transaction or repo
 // refresh. Query-backed views are replayed through their normal async entry
 // points, exact one-package views are refreshed from the selected NEVRA.
+// -----------------------------------------------------------------------------
 void
 package_query_reload_current_view(SearchWidgets *widgets)
 {

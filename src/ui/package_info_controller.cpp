@@ -29,6 +29,9 @@ struct InfoTaskResult {
   char *changelog;
 };
 
+// -----------------------------------------------------------------------------
+// info_task_data_free
+// -----------------------------------------------------------------------------
 static void
 info_task_data_free(gpointer p)
 {
@@ -40,7 +43,9 @@ info_task_data_free(gpointer p)
   g_free(d);
 }
 
+// -----------------------------------------------------------------------------
 // Release the text payload returned by the background package-info task.
+// -----------------------------------------------------------------------------
 static void
 info_task_result_free(gpointer p)
 {
@@ -56,14 +61,18 @@ info_task_result_free(gpointer p)
   g_free(r);
 }
 
+// -----------------------------------------------------------------------------
 // Complete the package-info task when the user cancels the current request.
+// -----------------------------------------------------------------------------
 static void
 return_package_info_task_cancelled(GTask *task)
 {
   g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Package info load was cancelled.");
 }
 
+// -----------------------------------------------------------------------------
 // Replace text in a details notebook buffer.
+// -----------------------------------------------------------------------------
 static void
 set_notebook_text(GtkTextBuffer *buffer, const char *text)
 {
@@ -74,7 +83,9 @@ set_notebook_text(GtkTextBuffer *buffer, const char *text)
   gtk_text_buffer_set_text(buffer, text ? text : "", -1);
 }
 
+// -----------------------------------------------------------------------------
 // Reset the details notebook after repopulating the main package view.
+// -----------------------------------------------------------------------------
 void
 package_info_reset_details_view(SearchWidgets *widgets)
 {
@@ -88,7 +99,9 @@ package_info_reset_details_view(SearchWidgets *widgets)
   set_notebook_text(widgets->results.changelog_buffer, "Select a package to view its changelog.");
 }
 
+// -----------------------------------------------------------------------------
 // Disable transaction actions when no package row is currently selected.
+// -----------------------------------------------------------------------------
 void
 package_info_clear_selected_package_state(SearchWidgets *widgets)
 {
@@ -103,7 +116,9 @@ package_info_clear_selected_package_state(SearchWidgets *widgets)
   ui_helpers_update_action_button_labels(widgets, "");
 }
 
+// -----------------------------------------------------------------------------
 // Enable only the transaction actions that make sense for the selected row.
+// -----------------------------------------------------------------------------
 static void
 update_selected_package_actions(SearchWidgets *widgets, const PackageRow &selected)
 {
@@ -124,7 +139,9 @@ update_selected_package_actions(SearchWidgets *widgets, const PackageRow &select
   ui_helpers_update_action_button_labels(widgets, selected.nevra);
 }
 
+// -----------------------------------------------------------------------------
 // Async worker: load the package notebook text in the background.
+// -----------------------------------------------------------------------------
 static void
 on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancellable)
 {
@@ -203,7 +220,9 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
   }
 }
 
+// -----------------------------------------------------------------------------
 // Async completion handler: update the details notebook for the selected package.
+// -----------------------------------------------------------------------------
 static void
 on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
@@ -264,7 +283,9 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   info_task_result_free(result);
 }
 
+// -----------------------------------------------------------------------------
 // Start the async package info load for the newly selected package row.
+// -----------------------------------------------------------------------------
 void
 package_info_load_selected_package_info(SearchWidgets *widgets, const PackageRow &selected)
 {

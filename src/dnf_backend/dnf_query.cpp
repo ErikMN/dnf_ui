@@ -25,7 +25,9 @@
 
 namespace dnf_backend_internal {
 
+// -----------------------------------------------------------------------------
 // Keep the newest row for one package name and architecture tuple.
+// -----------------------------------------------------------------------------
 static void
 remember_newest_row(std::map<std::string, PackageRow> &rows_by_name_arch, const PackageRow &row)
 {
@@ -35,9 +37,11 @@ remember_newest_row(std::map<std::string, PackageRow> &rows_by_name_arch, const 
   }
 }
 
+// -----------------------------------------------------------------------------
 // Fold UTF-8 package search text before comparing it against libdnf5 metadata
 // fields. This keeps manual name/description matching aligned with GTK's
 // case-insensitive text handling for non-ASCII package summaries.
+// -----------------------------------------------------------------------------
 static std::string
 utf8_casefold_copy(const std::string &text)
 {
@@ -47,8 +51,10 @@ utf8_casefold_copy(const std::string &text)
   return result;
 }
 
+// -----------------------------------------------------------------------------
 // Return true when one package matches the active search term using the same
 // name/description flag semantics as the main UI search controls.
+// -----------------------------------------------------------------------------
 static bool
 package_matches_search(const libdnf5::rpm::Package &pkg,
                        const std::string &pattern_lower,
@@ -71,9 +77,11 @@ package_matches_search(const libdnf5::rpm::Package &pkg,
   return description.find(pattern_lower) != std::string::npos;
 }
 
+// -----------------------------------------------------------------------------
 // Collect the newest visible repo candidate for each name+arch tuple. When a
 // search term is provided, apply the same name/description filtering as the
 // main search flow before deduplicating the results.
+// -----------------------------------------------------------------------------
 std::map<std::string, PackageRow>
 collect_available_rows_by_name_arch(libdnf5::Base &base,
                                     GCancellable *cancellable,
@@ -115,9 +123,11 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
   return rows_by_name_arch;
 }
 
+// -----------------------------------------------------------------------------
 // Collect installed package rows and the corresponding exact-NEVRA/name+arch
 // caches in one pass. When a search term is provided, filter the installed list
 // with the same search semantics used for repo-backed rows.
+// -----------------------------------------------------------------------------
 InstalledQueryResult
 collect_installed_rows(libdnf5::Base &base,
                        GCancellable *cancellable,
@@ -151,8 +161,10 @@ collect_installed_rows(libdnf5::Base &base,
   return result;
 }
 
+// -----------------------------------------------------------------------------
 // Compare one installed row against the newest visible repo candidate for the
 // same name+arch tuple and annotate the row with the resolved relationship.
+// -----------------------------------------------------------------------------
 void
 annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
                                            const std::map<std::string, PackageRow> &available_rows)
@@ -173,9 +185,11 @@ annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
   }
 }
 
+// -----------------------------------------------------------------------------
 // Best-effort repo annotation for installed rows. Installed queries should keep
 // working from the local rpmdb even when repository metadata is unavailable, so
 // failures here only leave repo provenance as UNKNOWN.
+// -----------------------------------------------------------------------------
 void
 annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow> &installed_rows,
                                                          GCancellable *cancellable,
@@ -199,6 +213,7 @@ annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow>
   }
 }
 
+// -----------------------------------------------------------------------------
 // Build the merged package view used by search and browse: start with the
 // visible repo-backed candidates, then add installed-only rows for name+arch
 // tuples that are missing from enabled repositories. If an installed package is
@@ -217,6 +232,7 @@ annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow>
 // Code that reads repo_candidate_relation directly should treat UNKNOWN on a
 // non-installed row as "no installed counterpart known", not as a failed repo
 // lookup.
+// -----------------------------------------------------------------------------
 std::vector<PackageRow>
 visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
                        std::map<std::string, PackageRow> installed_rows)
@@ -247,8 +263,10 @@ visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
 
 using namespace dnf_backend_internal;
 
+// -----------------------------------------------------------------------------
 // Search merged repo and installed-only package rows and stop early when the
 // task cancellable is set.
+// -----------------------------------------------------------------------------
 std::vector<PackageRow>
 dnf_backend_search_package_rows_interruptible(const std::string &pattern, GCancellable *cancellable)
 {
@@ -268,6 +286,7 @@ dnf_backend_search_package_rows_interruptible(const std::string &pattern, GCance
   return visible_rows_from_maps(std::move(available_rows), std::move(installed.rows_by_name_arch));
 }
 
+// -----------------------------------------------------------------------------
 // Query installed packages via libdnf5 and return structured rows in one pass.
 // The exact-NEVRA cache is updated only after a complete uncancelled scan, so a
 // cancelled worker cannot publish a partial installed snapshot.
@@ -276,6 +295,7 @@ dnf_backend_search_package_rows_interruptible(const std::string &pattern, GCance
 //   The Base read lock and g_installed_mutex must never be held at the same
 //   time. Rows are collected while the Base lock is held, then the lock is
 //   released before publish_installed_snapshot acquires g_installed_mutex.
+// -----------------------------------------------------------------------------
 std::vector<PackageRow>
 dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 {
@@ -302,9 +322,11 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
   return installed.rows;
 }
 
+// -----------------------------------------------------------------------------
 // Query the combined browse view via libdnf5. The returned rows include the
 // newest available candidate for each package stream plus installed-only local
 // RPMs that are missing from enabled repositories.
+// -----------------------------------------------------------------------------
 std::vector<PackageRow>
 dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
 {
@@ -324,9 +346,11 @@ dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
   return visible_rows_from_maps(std::move(available_rows), std::move(installed.rows_by_name_arch));
 }
 
+// -----------------------------------------------------------------------------
 // Return installed package rows that exactly match one NEVRA. Repo provenance is
 // annotated on a best-effort basis so pending-action navigation can still show
 // local-only or newer-than-repo status when possible.
+// -----------------------------------------------------------------------------
 std::vector<PackageRow>
 dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
 {
@@ -355,8 +379,10 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
 }
 
 #ifdef DNFUI_BUILD_TESTS
+// -----------------------------------------------------------------------------
 // Test-only hook that forces annotation failure and verifies rows retain
 // UNKNOWN repo-candidate relation rather than being misclassified.
+// -----------------------------------------------------------------------------
 bool
 dnf_backend_testonly_annotation_fallback_leaves_rows_unknown(std::vector<PackageRow> &rows)
 {
@@ -375,9 +401,11 @@ dnf_backend_testonly_annotation_fallback_leaves_rows_unknown(std::vector<Package
 }
 #endif
 
+// -----------------------------------------------------------------------------
 // Return available package rows that exactly match one NEVRA. This helper stays
 // repo-only and is used for install-side pending-action navigation and details
 // loading.
+// -----------------------------------------------------------------------------
 std::vector<PackageRow>
 dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra)
 {

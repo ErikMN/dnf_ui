@@ -11,7 +11,13 @@
 #include <string>
 #include <vector>
 
+// -----------------------------------------------------------------------------
+// pending_transaction_build_request
+// -----------------------------------------------------------------------------
 void pending_transaction_build_request(const std::vector<PendingAction> &actions, TransactionRequest &request);
+// -----------------------------------------------------------------------------
+// pending_transaction_validate_request
+// -----------------------------------------------------------------------------
 bool pending_transaction_validate_request(const TransactionRequest &request, std::string &error_out);
 
 // -----------------------------------------------------------------------------

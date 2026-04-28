@@ -35,38 +35,60 @@ struct InstalledQueryResult {
 
 using AvailableRowsProvider = std::function<std::map<std::string, PackageRow>(GCancellable *)>;
 
+// -----------------------------------------------------------------------------
 // Convert one libdnf5 package object to the backend-owned presentation row.
+// -----------------------------------------------------------------------------
 PackageRow
 make_package_row(const libdnf5::rpm::Package &pkg,
                  PackageRepoCandidateRelation repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN);
 
+// -----------------------------------------------------------------------------
 // Return true when the active package query task was cancelled by the UI.
+// -----------------------------------------------------------------------------
 bool package_query_cancelled(GCancellable *cancellable);
 
+// -----------------------------------------------------------------------------
 // Collect query rows keyed by package name+arch. These helpers intentionally
 // require a caller-owned Base reference so the caller controls the Base lock
 // lifetime across related libdnf5 queries.
+// -----------------------------------------------------------------------------
 std::map<std::string, PackageRow> collect_available_rows_by_name_arch(libdnf5::Base &base,
                                                                       GCancellable *cancellable,
                                                                       const DnfBackendSearchOptions &search_options,
                                                                       const std::string *pattern = nullptr);
+// -----------------------------------------------------------------------------
+// collect_installed_rows
+// -----------------------------------------------------------------------------
 InstalledQueryResult collect_installed_rows(libdnf5::Base &base,
                                             GCancellable *cancellable,
                                             const DnfBackendSearchOptions &search_options,
                                             const std::string *pattern = nullptr);
 
+// -----------------------------------------------------------------------------
 // Repo-candidate annotation and browse/search merge helpers shared by query and
 // test-only fallback paths.
+// -----------------------------------------------------------------------------
 void annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
                                                 const std::map<std::string, PackageRow> &available_rows);
+// -----------------------------------------------------------------------------
+// annotate_installed_rows_with_repo_candidates_best_effort
+// -----------------------------------------------------------------------------
 void annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow> &installed_rows,
                                                               GCancellable *cancellable,
                                                               const AvailableRowsProvider &available_rows_provider);
+// -----------------------------------------------------------------------------
+// visible_rows_from_maps
+// -----------------------------------------------------------------------------
 std::vector<PackageRow> visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
                                                std::map<std::string, PackageRow> installed_rows);
 
+// -----------------------------------------------------------------------------
 // State-cache helpers owned by dnf_state.cpp and used by query refresh paths.
+// -----------------------------------------------------------------------------
 std::set<std::string> collect_self_protected_package_names(libdnf5::Base &base);
+// -----------------------------------------------------------------------------
+// publish_installed_snapshot
+// -----------------------------------------------------------------------------
 void publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string> protected_names);
 
 } // namespace dnf_backend_internal

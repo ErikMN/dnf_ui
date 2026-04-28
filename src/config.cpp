@@ -21,6 +21,9 @@ constexpr int DEFAULT_WINDOW_HEIGHT = 820;
 constexpr int MIN_WINDOW_WIDTH = 600;
 constexpr int MIN_WINDOW_HEIGHT = 400;
 
+// -----------------------------------------------------------------------------
+// config_file_path
+// -----------------------------------------------------------------------------
 std::filesystem::path
 config_file_path()
 {
@@ -32,6 +35,9 @@ config_file_path()
   return std::filesystem::path(config_dir) / "dnfui.conf";
 }
 
+// -----------------------------------------------------------------------------
+// config_try_parse_int
+// -----------------------------------------------------------------------------
 bool
 config_try_parse_int(const std::map<std::string, std::string> &config, const char *key, int &value_out)
 {
@@ -55,6 +61,9 @@ config_try_parse_int(const std::map<std::string, std::string> &config, const cha
 }
 } // namespace
 
+// -----------------------------------------------------------------------------
+// config_load_map
+// -----------------------------------------------------------------------------
 std::map<std::string, std::string>
 config_load_map()
 {
@@ -86,6 +95,9 @@ config_load_map()
   return config;
 }
 
+// -----------------------------------------------------------------------------
+// config_save_map
+// -----------------------------------------------------------------------------
 void
 config_save_map(const std::map<std::string, std::string> &config)
 {
@@ -105,6 +117,9 @@ config_save_map(const std::map<std::string, std::string> &config)
   }
 }
 
+// -----------------------------------------------------------------------------
+// config_load_paned_position
+// -----------------------------------------------------------------------------
 int
 config_load_paned_position()
 {
@@ -117,6 +132,9 @@ config_load_paned_position()
   return DEFAULT_PANED_POSITION;
 }
 
+// -----------------------------------------------------------------------------
+// config_save_paned_position
+// -----------------------------------------------------------------------------
 void
 config_save_paned_position(GtkPaned *paned)
 {
@@ -125,6 +143,9 @@ config_save_paned_position(GtkPaned *paned)
   config_save_map(config);
 }
 
+// -----------------------------------------------------------------------------
+// config_load_window_geometry
+// -----------------------------------------------------------------------------
 void
 config_load_window_geometry(GtkWindow *window)
 {
@@ -145,6 +166,9 @@ config_load_window_geometry(GtkWindow *window)
   gtk_window_set_default_size(window, w, h);
 }
 
+// -----------------------------------------------------------------------------
+// config_save_window_geometry
+// -----------------------------------------------------------------------------
 void
 config_save_window_geometry(GtkWindow *window)
 {

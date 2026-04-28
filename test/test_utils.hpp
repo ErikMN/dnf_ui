@@ -7,6 +7,9 @@
 #include <string>
 #include <vector>
 
+// -----------------------------------------------------------------------------
+// reset_backend_globals
+// -----------------------------------------------------------------------------
 inline void
 reset_backend_globals()
 {
@@ -14,6 +17,9 @@ reset_backend_globals()
   dnf_backend_testonly_clear_installed_snapshot();
 }
 
+// -----------------------------------------------------------------------------
+// set_backend_search_options
+// -----------------------------------------------------------------------------
 inline void
 set_backend_search_options(bool search_in_description, bool exact_match)
 {
@@ -23,6 +29,9 @@ set_backend_search_options(bool search_in_description, bool exact_match)
   });
 }
 
+// -----------------------------------------------------------------------------
+// package_row_nevras
+// -----------------------------------------------------------------------------
 inline std::set<std::string>
 package_row_nevras(const std::vector<PackageRow> &rows)
 {
@@ -35,6 +44,9 @@ package_row_nevras(const std::vector<PackageRow> &rows)
 }
 
 struct ScopedEnvVar {
+  // -----------------------------------------------------------------------------
+  // ScopedEnvVar
+  // -----------------------------------------------------------------------------
   explicit ScopedEnvVar(const char *key, const char *value)
       : key(key ? key : "")
   {
@@ -49,6 +61,9 @@ struct ScopedEnvVar {
     }
   }
 
+  // -----------------------------------------------------------------------------
+  // ~ScopedEnvVar
+  // -----------------------------------------------------------------------------
   ~ScopedEnvVar()
   {
     if (key.empty()) {

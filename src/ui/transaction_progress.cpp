@@ -41,6 +41,9 @@ struct ProgressAppendData {
   char *message;
 };
 
+// -----------------------------------------------------------------------------
+// progress_append_data_free
+// -----------------------------------------------------------------------------
 static void
 progress_append_data_free(ProgressAppendData *data)
 {
@@ -53,8 +56,10 @@ progress_append_data_free(ProgressAppendData *data)
   delete data;
 }
 
+// -----------------------------------------------------------------------------
 // Retain one reference to the progress window state so queued main loop work
 // can safely keep using it after the caller returns.
+// -----------------------------------------------------------------------------
 TransactionProgressWindow *
 transaction_progress_retain(TransactionProgressWindow *progress)
 {
@@ -66,8 +71,10 @@ transaction_progress_retain(TransactionProgressWindow *progress)
   return progress;
 }
 
+// -----------------------------------------------------------------------------
 // Release one reference to the progress window state and delete it after the
 // last owner is done with it.
+// -----------------------------------------------------------------------------
 void
 transaction_progress_release(TransactionProgressWindow *progress)
 {
@@ -292,6 +299,9 @@ struct SummaryDialogApplyData {
   bool apply_requested;
 };
 
+// -----------------------------------------------------------------------------
+// summary_dialog_apply_data_free
+// -----------------------------------------------------------------------------
 static void
 summary_dialog_apply_data_free(gpointer p)
 {
@@ -299,7 +309,9 @@ summary_dialog_apply_data_free(gpointer p)
   delete data;
 }
 
+// -----------------------------------------------------------------------------
 // Format the resolved disk-space change for the transaction summary dialog.
+// -----------------------------------------------------------------------------
 static std::string
 format_transaction_space_change(long long delta_bytes)
 {
@@ -322,7 +334,9 @@ format_transaction_space_change(long long delta_bytes)
   return line;
 }
 
+// -----------------------------------------------------------------------------
 // Append one resolved transaction section to the confirmation dialog.
+// -----------------------------------------------------------------------------
 static void
 append_transaction_summary_section(GtkBox *parent, const char *title, const std::vector<std::string> &items)
 {
@@ -350,7 +364,9 @@ append_transaction_summary_section(GtkBox *parent, const char *title, const std:
   }
 }
 
+// -----------------------------------------------------------------------------
 // Show the final confirmation dialog before starting the package transaction.
+// -----------------------------------------------------------------------------
 void
 transaction_progress_show_summary_dialog(SearchWidgets *widgets,
                                          const TransactionPreview &preview,

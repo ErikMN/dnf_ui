@@ -7,10 +7,25 @@
 
 #include <gtk/gtk.h>
 
+// -----------------------------------------------------------------------------
+// pending_transaction_on_install_button_clicked
+// -----------------------------------------------------------------------------
 void pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data);
+// -----------------------------------------------------------------------------
+// pending_transaction_on_remove_button_clicked
+// -----------------------------------------------------------------------------
 void pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data);
+// -----------------------------------------------------------------------------
+// pending_transaction_on_reinstall_button_clicked
+// -----------------------------------------------------------------------------
 void pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data);
+// -----------------------------------------------------------------------------
+// pending_transaction_on_apply_button_clicked
+// -----------------------------------------------------------------------------
 void pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data);
+// -----------------------------------------------------------------------------
+// pending_transaction_on_clear_pending_button_clicked
+// -----------------------------------------------------------------------------
 void pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_data);
 
 // -----------------------------------------------------------------------------

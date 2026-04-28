@@ -27,7 +27,9 @@ struct BuiltBase {
   BaseRepoState repo_state = BaseRepoState::LIVE_METADATA;
 };
 
+// -----------------------------------------------------------------------------
 // Build one fully configured Base before any repo metadata is loaded.
+// -----------------------------------------------------------------------------
 static std::shared_ptr<libdnf5::Base>
 create_configured_base(RepoLoadMode mode)
 {
@@ -62,8 +64,10 @@ create_configured_base(RepoLoadMode mode)
   return base;
 }
 
+// -----------------------------------------------------------------------------
 // Load repository data for one already configured Base. Startup fallback should
 // only trigger when this step fails for the full repo set.
+// -----------------------------------------------------------------------------
 static void
 load_repo_data(libdnf5::Base &base, RepoLoadMode mode)
 {
@@ -94,7 +98,9 @@ load_repo_data(libdnf5::Base &base, RepoLoadMode mode)
 
 } // namespace
 
+// -----------------------------------------------------------------------------
 // Build one Base and load repository data for the requested mode.
+// -----------------------------------------------------------------------------
 static BuiltBase
 build_base_for_mode(RepoLoadMode mode)
 {
@@ -110,8 +116,10 @@ build_base_for_mode(RepoLoadMode mode)
   return result;
 }
 
+// -----------------------------------------------------------------------------
 // Try the normal live repo load first, then cached metadata, then finally
 // installed-package-only mode so the app stays usable when the network is down.
+// -----------------------------------------------------------------------------
 static BuiltBase
 build_base_with_offline_fallback()
 {
@@ -151,6 +159,9 @@ BaseManager::instance()
   return mgr;
 }
 
+// -----------------------------------------------------------------------------
+// BaseManager::current_repo_state
+// -----------------------------------------------------------------------------
 BaseRepoState
 BaseManager::current_repo_state() const
 {
@@ -237,9 +248,11 @@ BaseManager::rebuild()
   return rebuilt.repo_state;
 }
 
+// -----------------------------------------------------------------------------
 // Force a local-only rebuild that loads only the installed-package view from
 // the rpmdb. This keeps remove-only transaction flows independent of remote
 // repository availability.
+// -----------------------------------------------------------------------------
 void
 BaseManager::rebuild_system_only()
 {
@@ -255,9 +268,11 @@ BaseManager::rebuild_system_only()
   generation.fetch_add(1, std::memory_order_relaxed);
 }
 
+// -----------------------------------------------------------------------------
 // Ensure one local-only Base exists without attempting a live repo refresh.
 // Remove-only transaction flows use this when the shared Base has not been
 // initialized yet and no repo metadata is required.
+// -----------------------------------------------------------------------------
 void
 BaseManager::ensure_system_only_initialized_if_needed()
 {
@@ -268,6 +283,9 @@ BaseManager::ensure_system_only_initialized_if_needed()
   }
 }
 
+// -----------------------------------------------------------------------------
+// BaseManager::build_initialized_system_only_base
+// -----------------------------------------------------------------------------
 std::shared_ptr<libdnf5::Base>
 BaseManager::build_initialized_system_only_base()
 {
@@ -289,6 +307,9 @@ BaseManager::ensure_base_initialized()
 }
 
 #ifdef DNFUI_BUILD_TESTS
+// -----------------------------------------------------------------------------
+// BaseManager::reset_for_tests
+// -----------------------------------------------------------------------------
 void
 BaseManager::reset_for_tests()
 {

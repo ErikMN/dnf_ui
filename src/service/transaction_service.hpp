@@ -15,5 +15,7 @@ struct TransactionServiceOptions {
   GBusType bus_type = G_BUS_TYPE_SESSION;
 };
 
+// -----------------------------------------------------------------------------
 // Run the transaction service on the requested D-Bus bus until it exits.
+// -----------------------------------------------------------------------------
 int transaction_service_run(const TransactionServiceOptions &options);

@@ -16,7 +16,9 @@
 
 namespace dnf_backend_internal {
 
+// -----------------------------------------------------------------------------
 // Translate libdnf5 install reasons into the backend-owned row model.
+// -----------------------------------------------------------------------------
 static PackageInstallReason
 package_install_reason_from_libdnf(libdnf5::transaction::TransactionItemReason reason)
 {
@@ -39,9 +41,11 @@ package_install_reason_from_libdnf(libdnf5::transaction::TransactionItemReason r
   }
 }
 
+// -----------------------------------------------------------------------------
 // Convert a libdnf5 package object into the backend-owned presentation row used
 // by controllers and GTK views. This is the only place where libdnf install
 // reasons are translated into PackageInstallReason values.
+// -----------------------------------------------------------------------------
 PackageRow
 make_package_row(const libdnf5::rpm::Package &pkg, PackageRepoCandidateRelation repo_candidate_relation)
 {
@@ -66,8 +70,10 @@ make_package_row(const libdnf5::rpm::Package &pkg, PackageRepoCandidateRelation 
   return row;
 }
 
+// -----------------------------------------------------------------------------
 // Return true when a package query task has been cancelled by the UI worker
 // that owns the provided cancellable.
+// -----------------------------------------------------------------------------
 bool
 package_query_cancelled(GCancellable *cancellable)
 {
@@ -76,7 +82,9 @@ package_query_cancelled(GCancellable *cancellable)
 
 } // namespace dnf_backend_internal
 
+// -----------------------------------------------------------------------------
 // Convert one backend-owned install reason to stable UI text.
+// -----------------------------------------------------------------------------
 std::string
 dnf_backend_install_reason_to_string(PackageInstallReason reason)
 {

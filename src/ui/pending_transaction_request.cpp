@@ -8,7 +8,9 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 
+// -----------------------------------------------------------------------------
 // Split the pending queue into install, remove, and reinstall transaction specs.
+// -----------------------------------------------------------------------------
 static void
 build_pending_transaction_specs(const std::vector<PendingAction> &actions,
                                 std::vector<std::string> &install,
@@ -34,15 +36,20 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
   }
 }
 
+// -----------------------------------------------------------------------------
+// pending_transaction_build_request
+// -----------------------------------------------------------------------------
 void
 pending_transaction_build_request(const std::vector<PendingAction> &actions, TransactionRequest &request)
 {
   build_pending_transaction_specs(actions, request.install, request.remove, request.reinstall);
 }
 
+// -----------------------------------------------------------------------------
 // Reject any transaction that would remove or reinstall the package owning the running GUI.
 // The UI disables those actions already, but this keeps apply safe
 // even if a protected item somehow reaches the pending queue.
+// -----------------------------------------------------------------------------
 bool
 pending_transaction_validate_request(const TransactionRequest &request, std::string &error_out)
 {

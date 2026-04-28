@@ -37,8 +37,10 @@ std::map<std::string, PackageRow> g_installed_rows_by_name_arch;
 // Installed package names that own the running GUI binary.
 std::set<std::string> g_self_protected_package_names;
 
+// -----------------------------------------------------------------------------
 // Resolve the current GUI executable path so the app can block self-removal
 // without hard-coding the RPM package name.
+// -----------------------------------------------------------------------------
 std::vector<std::string>
 self_protected_file_paths()
 {
@@ -56,9 +58,11 @@ self_protected_file_paths()
 
 namespace dnf_backend_internal {
 
+// -----------------------------------------------------------------------------
 // Collect installed package names that own the currently running GUI binary.
 // The result is stored in the installed-state snapshot and used to block
 // self-removal and self-reinstall actions from inside the app.
+// -----------------------------------------------------------------------------
 std::set<std::string>
 collect_self_protected_package_names(libdnf5::Base &base)
 {
@@ -77,9 +81,11 @@ collect_self_protected_package_names(libdnf5::Base &base)
   return protected_names;
 }
 
+// -----------------------------------------------------------------------------
 // Publish installed-package state only after callers have finished all libdnf
 // Base reads. Holding the Base lock while taking g_installed_mutex would make
 // future UI/cache callers vulnerable to lock-order deadlocks.
+// -----------------------------------------------------------------------------
 void
 publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string> protected_names)
 {
@@ -93,7 +99,9 @@ publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string>
 
 using namespace dnf_backend_internal;
 
+// -----------------------------------------------------------------------------
 // Publish the search options used by future backend search workers.
+// -----------------------------------------------------------------------------
 void
 dnf_backend_set_search_options(const DnfBackendSearchOptions &options)
 {
@@ -107,7 +115,9 @@ dnf_backend_set_search_options(const DnfBackendSearchOptions &options)
   g_search_option_bits.store(bits, std::memory_order_relaxed);
 }
 
+// -----------------------------------------------------------------------------
 // Return one consistent snapshot of the backend search options.
+// -----------------------------------------------------------------------------
 DnfBackendSearchOptions
 dnf_backend_get_search_options()
 {
@@ -118,7 +128,9 @@ dnf_backend_get_search_options()
   };
 }
 
+// -----------------------------------------------------------------------------
 // Return true when the installed-package snapshot contains one exact NEVRA.
+// -----------------------------------------------------------------------------
 bool
 dnf_backend_installed_snapshot_contains(const std::string &nevra)
 {
@@ -126,7 +138,9 @@ dnf_backend_installed_snapshot_contains(const std::string &nevra)
   return g_installed_nevras.count(nevra) > 0;
 }
 
+// -----------------------------------------------------------------------------
 // Return the number of exact NEVRAs in the installed-package snapshot.
+// -----------------------------------------------------------------------------
 size_t
 dnf_backend_installed_snapshot_size()
 {
@@ -134,6 +148,7 @@ dnf_backend_installed_snapshot_size()
   return g_installed_nevras.size();
 }
 
+// -----------------------------------------------------------------------------
 // Refresh the exact-installed and self-protection snapshots used by UI state
 // classification. This path is intentionally local-first: it does not require
 // repository metadata and should keep working from the rpmdb alone.
@@ -142,6 +157,7 @@ dnf_backend_installed_snapshot_size()
 //   The Base read lock and g_installed_mutex must never be held simultaneously.
 //   Installed rows are collected into local containers while the Base lock is
 //   held, then published after that lock has been released.
+// -----------------------------------------------------------------------------
 void
 dnf_backend_refresh_installed_nevras()
 {
@@ -157,18 +173,22 @@ dnf_backend_refresh_installed_nevras()
   publish_installed_snapshot(installed, protected_names);
 }
 
+// -----------------------------------------------------------------------------
 // Return true only when the queried row exactly matches an installed NEVRA in
 // the cached installed snapshot.
+// -----------------------------------------------------------------------------
 bool
 dnf_backend_is_package_installed_exact(const PackageRow &row)
 {
   return dnf_backend_installed_snapshot_contains(row.nevra);
 }
 
+// -----------------------------------------------------------------------------
 // Classify a package row as available, upgradeable, exact-installed,
 // local-only, or installed-newer-than-repo. Exact-installed rows prefer the row
 // provenance annotation; available rows fall back to the installed name+arch
 // cache so upgrade-state badges can be shown without duplicate visible rows.
+// -----------------------------------------------------------------------------
 PackageInstallState
 dnf_backend_get_package_install_state(const PackageRow &row)
 {
@@ -205,8 +225,10 @@ dnf_backend_get_package_install_state(const PackageRow &row)
   return PackageInstallState::INSTALLED_NEWER_THAN_REPO;
 }
 
+// -----------------------------------------------------------------------------
 // Return the default package table sort priority for one install state. Lower
 // values sort first and keep installed rows ahead of repo-only rows.
+// -----------------------------------------------------------------------------
 int
 dnf_backend_get_install_state_sort_rank(PackageInstallState state)
 {
@@ -225,8 +247,10 @@ dnf_backend_get_install_state_sort_rank(PackageInstallState state)
   }
 }
 
+// -----------------------------------------------------------------------------
 // Return true only when the exact installed NEVRA is also available from the
 // current package sources and can therefore be reinstalled through libdnf5.
+// -----------------------------------------------------------------------------
 bool
 dnf_backend_can_reinstall_package(const PackageRow &row)
 {
@@ -243,8 +267,10 @@ dnf_backend_can_reinstall_package(const PackageRow &row)
   return !query.empty();
 }
 
+// -----------------------------------------------------------------------------
 // Check the cached self-protection snapshot collected from the owner of the
 // running GUI executable during the latest installed-package refresh.
+// -----------------------------------------------------------------------------
 bool
 dnf_backend_is_package_self_protected(const PackageRow &row)
 {
@@ -252,8 +278,10 @@ dnf_backend_is_package_self_protected(const PackageRow &row)
   return g_self_protected_package_names.count(row.name) > 0;
 }
 
+// -----------------------------------------------------------------------------
 // Resolve one queued transaction spec back to the installed rpmdb so apply-time
 // validation can reject self-removal even if the UI state is stale or bypassed.
+// -----------------------------------------------------------------------------
 bool
 dnf_backend_is_self_protected_transaction_spec(const std::string &spec)
 {
@@ -282,8 +310,10 @@ dnf_backend_is_self_protected_transaction_spec(const std::string &spec)
 }
 
 #ifdef DNFUI_BUILD_TESTS
+// -----------------------------------------------------------------------------
 // Clear the installed-package snapshot for tests that seed exact NEVRA state
 // without querying the host rpmdb.
+// -----------------------------------------------------------------------------
 void
 dnf_backend_testonly_clear_installed_snapshot()
 {
@@ -293,8 +323,10 @@ dnf_backend_testonly_clear_installed_snapshot()
   g_self_protected_package_names.clear();
 }
 
+// -----------------------------------------------------------------------------
 // Replace the installed-package snapshot for tests that need deterministic
 // install-state classification without depending on host package state.
+// -----------------------------------------------------------------------------
 void
 dnf_backend_testonly_replace_installed_snapshot(const std::set<std::string> &nevras)
 {

@@ -39,6 +39,9 @@ struct StartupWarmupData {
   GCancellable *startup_cancellable = nullptr;
 };
 
+// -----------------------------------------------------------------------------
+// base_repo_state_trace_name
+// -----------------------------------------------------------------------------
 static const char *
 base_repo_state_trace_name(BaseRepoState state)
 {
@@ -79,6 +82,9 @@ setup_periodic_tasks(void)
   g_timeout_add_seconds(300, on_periodic_installed_refresh_tick, nullptr);
 }
 
+// -----------------------------------------------------------------------------
+// on_periodic_installed_refresh_tick
+// -----------------------------------------------------------------------------
 static gboolean
 on_periodic_installed_refresh_tick(gpointer)
 {
@@ -105,6 +111,9 @@ start_installed_refresh_task(void)
   g_object_unref(task);
 }
 
+// -----------------------------------------------------------------------------
+// on_installed_refresh_task
+// -----------------------------------------------------------------------------
 static void
 on_installed_refresh_task(GTask *task, gpointer, gpointer, GCancellable *)
 {
@@ -118,6 +127,9 @@ on_installed_refresh_task(GTask *task, gpointer, gpointer, GCancellable *)
   }
 }
 
+// -----------------------------------------------------------------------------
+// on_installed_refresh_task_finished
+// -----------------------------------------------------------------------------
 static void
 on_installed_refresh_task_finished(GObject *, GAsyncResult *result, gpointer)
 {
@@ -150,6 +162,9 @@ startup_warmup_data_free(gpointer data)
   delete warmup;
 }
 
+// -----------------------------------------------------------------------------
+// start_backend_warmup_idle
+// -----------------------------------------------------------------------------
 static gboolean
 start_backend_warmup_idle(gpointer user_data)
 {

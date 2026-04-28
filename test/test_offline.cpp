@@ -27,6 +27,9 @@ namespace {
 
 // Save one environment variable and restore its previous state on scope exit.
 struct ScopedEnvironmentOverride {
+  // -----------------------------------------------------------------------------
+  // ScopedEnvironmentOverride
+  // -----------------------------------------------------------------------------
   explicit ScopedEnvironmentOverride(const char *variable_name)
       : name(variable_name ? variable_name : "")
   {
@@ -37,6 +40,9 @@ struct ScopedEnvironmentOverride {
     }
   }
 
+  // -----------------------------------------------------------------------------
+  // ~ScopedEnvironmentOverride
+  // -----------------------------------------------------------------------------
   ~ScopedEnvironmentOverride()
   {
     if (had_value) {
@@ -51,7 +57,9 @@ struct ScopedEnvironmentOverride {
   std::string value;
 };
 
+// -----------------------------------------------------------------------------
 // Return true when the private test bus reports that the service name is owned.
+// -----------------------------------------------------------------------------
 static bool
 wait_for_bus_name_owner(GDBusConnection *connection, const char *service_name, int timeout_ms)
 {
