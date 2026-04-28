@@ -35,7 +35,7 @@ struct PreviewClientResult {
 // Save one environment variable and restore its previous state on scope exit.
 struct ScopedEnvironmentOverride {
   // -----------------------------------------------------------------------------
-  // ScopedEnvironmentOverride
+  // Save the original environment variable value.
   // -----------------------------------------------------------------------------
   explicit ScopedEnvironmentOverride(const char *variable_name)
       : name(variable_name ? variable_name : "")
@@ -48,7 +48,7 @@ struct ScopedEnvironmentOverride {
   }
 
   // -----------------------------------------------------------------------------
-  // ~ScopedEnvironmentOverride
+  // Restore the original environment variable value.
   // -----------------------------------------------------------------------------
   ~ScopedEnvironmentOverride()
   {

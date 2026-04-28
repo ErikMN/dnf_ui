@@ -148,7 +148,7 @@ create_scrolled_text_view(const char *text, GtkWrapMode wrap_mode, GtkTextBuffer
 static void
 setup_shortcuts(GtkWidget *window, GtkWidget *entry)
 {
-  // Keyboard shortcuts: Ctrl+Q and Ctrl+W to close window
+  // Keyboard shortcuts for closing the window and focusing search.
   GtkEventController *shortcuts = GTK_EVENT_CONTROLLER(gtk_shortcut_controller_new());
   gtk_widget_add_controller(window, shortcuts);
 
@@ -157,17 +157,17 @@ setup_shortcuts(GtkWidget *window, GtkWidget *entry)
     return TRUE;
   };
 
-  // Ctrl+Q
+  // Close with Ctrl+Q.
   GtkShortcut *close_shortcut_q = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_q, GDK_CONTROL_MASK),
                                                    gtk_callback_action_new(shortcut_callback, NULL, NULL));
   gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), close_shortcut_q);
 
-  // Ctrl+W
+  // Close with Ctrl+W.
   GtkShortcut *close_shortcut_w = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_w, GDK_CONTROL_MASK),
                                                    gtk_callback_action_new(shortcut_callback, NULL, NULL));
   gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), close_shortcut_w);
 
-  // Ctrl+F: focus search bar
+  // Focus search with Ctrl+F.
   GtkShortcut *focus_search = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_f, GDK_CONTROL_MASK),
                                                gtk_callback_action_new(
                                                    +[](GtkWidget *, GVariant *, gpointer user_data) -> gboolean {
@@ -274,7 +274,7 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_buttons), refresh_button);
   ui->refresh_button = refresh_button;
 
-  // --- Transaction buttons row (Install / Reinstall / Remove / Apply) ---
+  // Transaction buttons row for marking and applying package actions.
   GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_root), hbox_tx_buttons);
 
@@ -314,7 +314,7 @@ build_main_ui(AppWidgets *ui)
   gtk_widget_set_vexpand(outer_paned, TRUE);
   gtk_box_append(GTK_BOX(vbox_root), outer_paned);
 
-  // --- Inner paned (packages top / details bottom) ---
+  // Inner paned area with packages above details.
   GtkWidget *inner_paned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
   gtk_box_append(GTK_BOX(vbox_main), inner_paned);
   gtk_widget_set_vexpand(inner_paned, TRUE);
@@ -468,7 +468,7 @@ static void
 setup_css(SearchWidgets *widgets)
 {
   GtkCssProvider *css = gtk_css_provider_new();
-  // TODO: Use external CSS?
+  // The few custom style rules are kept next to the widgets they style.
   gtk_css_provider_load_from_string(css,
                                     "label.status-bar { padding: 4px; border-radius: 4px; } "
                                     ".bottom-bar { padding: 5px; border-top: 1px solid #666; } "

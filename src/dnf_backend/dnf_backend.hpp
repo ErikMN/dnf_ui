@@ -2,13 +2,13 @@
 // Public libdnf5 backend facade
 //
 // This header is the app-facing contract for the libdnf5 integration. It keeps
-// libdnf5 types out of the GTK/controller layer by exposing small value models
+// libdnf5 types out of the GTK controller layer by exposing small value models
 // and string-based transaction specs, while the implementation owns Base access,
-// rpmdb/repository queries, EVR comparison, cache publication, and transaction
+// rpmdb and repository queries, EVR comparison, cache publication, and transaction
 // resolution.
 //
 // Callers should depend only on the types and functions declared here. Helpers
-// under src/dnf_backend/dnf_internal.hpp are private implementation details for
+// under the internal backend header are private implementation details for
 // the backend translation units and may change whenever the backend internals
 // are reorganized.
 #pragma once
@@ -28,9 +28,9 @@
 // Keeps the full NEVRA for internal selection and transactions while exposing
 // friendlier fields for list and column-based views. The repo candidate relation
 // describes how the installed row compares to the newest visible repo-backed
-// candidate for the same name+arch tuple:
+// candidate for the same name and architecture tuple:
 //   UNKNOWN: repo provenance was not checked or could not be resolved
-//   NONE: no visible repo candidate exists for that name+arch tuple
+//   NONE: no visible repo candidate exists for that name and architecture tuple
 //   SAME: installed and visible repo candidate resolve to the same EVR
 //   NEWER: the visible repo candidate is newer than the installed row
 //   OLDER: the installed row is newer than the visible repo candidate
@@ -203,7 +203,7 @@ bool dnf_backend_can_reinstall_package(const PackageRow &row);
 bool dnf_backend_is_package_self_protected(const PackageRow &row);
 
 // -----------------------------------------------------------------------------
-// Return true when one installed remove/reinstall spec targets the running GUI
+// Return true when one installed remove or reinstall spec targets the running GUI
 // package and must be rejected before the transaction is previewed or applied.
 // -----------------------------------------------------------------------------
 bool dnf_backend_is_self_protected_transaction_spec(const std::string &spec);
@@ -211,7 +211,7 @@ bool dnf_backend_is_self_protected_transaction_spec(const std::string &spec);
 // -----------------------------------------------------------------------------
 // Query all installed packages. This path remains local-first and should still
 // work when repository metadata is unavailable; repo provenance is annotated
-// only as a best-effort extra when possible.
+// only as an optional extra when possible.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow> dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable);
 
@@ -279,7 +279,7 @@ void dnf_backend_testonly_clear_installed_snapshot();
 // -----------------------------------------------------------------------------
 void dnf_backend_testonly_replace_installed_snapshot(const std::set<std::string> &nevras);
 // -----------------------------------------------------------------------------
-// Test-only hook: force the best-effort repo annotation path to fail and return
+// Test-only hook: force the optional repo annotation path to fail and return
 // whether all rows kept UNKNOWN repo-candidate relation afterwards.
 // -----------------------------------------------------------------------------
 bool dnf_backend_testonly_annotation_fallback_leaves_rows_unknown(std::vector<PackageRow> &rows);

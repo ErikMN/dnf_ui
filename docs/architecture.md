@@ -1,325 +1,200 @@
 # DNF UI Architecture
 
-This document is a short map of the application.
+This is the overview document for DNF UI.
 
-Its purpose is to help you answer these questions quickly:
+Use it as the first map when reading the code. The deeper documents are:
 
-- Where does the app start
-- Which part of the UI owns what
-- Where package data comes from
-- When the transaction service is involved
-- Where tests live
+- [UI internals](ui.md)
+- [Backend internals](backend.md)
+- [Transaction service internals](transactions.md)
+- [Testing](testing.md)
 
-This is not a full design document.
-It is a practical guide for reading and maintaining the code.
+## Purpose
 
-## Top level picture
+DNF UI is a GTK 4 package manager frontend for Fedora.
 
-DNF UI has four main parts:
+The main application stays unprivileged. It searches packages, shows package
+details, lets the user mark package actions, and shows a review step. Package
+apply work is sent to a small D-Bus transaction service, where Polkit can
+authorize the privileged step.
 
-- App startup and main window setup
+## Key Terms
+
+- GTK is the user interface toolkit used to build the window.
+- libdnf5 is the Fedora package management library used for package queries and
+  transactions.
+- Base is the libdnf5 object that holds loaded repository and installed package
+  state.
+- rpmdb is the local database of packages installed on the system.
+- NEVRA means name, epoch, version, release, and architecture. It identifies one
+  exact package build.
+- EVR means epoch, version, and release. The backend uses it when comparing
+  package versions.
+- D-Bus is the local message bus used by the GUI and transaction service to
+  call each other.
+- Polkit is the authorization service used before privileged package apply work.
+- GTask is the GLib helper used to run slow work away from the GTK thread and
+  return results safely.
+
+## Main Parts
+
+The application is split into five main areas:
+
+- Startup and main window setup
 - UI controllers
 - libdnf5 backend
-- Transaction service and GUI client
+- Shared transaction request model
+- D-Bus transaction service and GUI client
 
 ```mermaid
 flowchart TD
-    A[main.cpp] --> B[app.cpp]
-    B --> C[ui/main_window.cpp]
-    C --> D[UI controllers]
-    D --> E[dnf_backend]
-    D --> F[transaction_service_client.cpp]
-    F --> G[service/transaction_service.cpp]
-    G --> E
+    Main[main.cpp] --> App[app.cpp]
+    App --> Window[ui/main_window.cpp]
+    Window --> Controllers[UI controllers]
+    Controllers --> Backend[dnf_backend]
+    Controllers --> Client[transaction_service_client.cpp]
+    Client --> Service[service/transaction_service.cpp]
+    Service --> Backend
 ```
 
-## Startup flow
+## Startup
 
-The app starts in a small chain of files:
+Startup follows a short path:
 
-- [src/main.cpp](../src/main.cpp)
-- [src/app.cpp](../src/app.cpp)
-- [src/ui/main_window.cpp](../src/ui/main_window.cpp)
+- [src/main.cpp](../src/main.cpp) calls `app_run_dnfui`
+- [src/app.cpp](../src/app.cpp) creates the GTK application and handles activation
+- [src/ui/main_window.cpp](../src/ui/main_window.cpp) builds the main window and wires signals
 
-What each file does:
+After the window is created, `app.cpp` also starts two background tasks:
 
-- `main.cpp` starts the GTK application
-- `app.cpp` owns application activation and background startup work
-- `main_window.cpp` builds the main window, shared widget state, and signal wiring
+- backend warm up, so the first package query is faster
+- periodic installed-package snapshot refresh
 
 ```mermaid
 flowchart TD
-    A[main.cpp] --> B[app_run_dnfui]
-    B --> C[GTK activate]
-    C --> D[main_window_create]
-    C --> E[setup_periodic_tasks]
-    C --> F[start backend warm up]
-    D --> G[window shown]
+    Main[main.cpp] --> Run[app_run_dnfui]
+    Run --> Activate[GTK activate]
+    Activate --> Window[main_window_create]
+    Activate --> Warmup[backend warm up]
+    Activate --> Refresh[periodic installed refresh]
 ```
 
-## Main window and UI ownership
+## UI Structure
 
-The UI code is grouped by responsibility under `src/ui`.
+The main window is built once and the controller files own behavior.
 
-The important idea is:
+- [src/ui/main_window.cpp](../src/ui/main_window.cpp) builds the window, creates shared widget state, and connects signals.
+- [src/ui/widgets.hpp](../src/ui/widgets.hpp) groups the widget pointers and shared UI state.
+- [src/ui/widgets.cpp](../src/ui/widgets.cpp) owns repository refresh callbacks and task helpers shared by controllers.
+- [src/ui/main_menu.cpp](../src/ui/main_menu.cpp) owns top menu actions.
+- [src/ui/package_query_controller.cpp](../src/ui/package_query_controller.cpp) owns search, browsing, list cancellation, history, and package-list refresh.
+- [src/ui/package_info_controller.cpp](../src/ui/package_info_controller.cpp) owns selection handling and details loading.
+- [src/ui/package_table_view.cpp](../src/ui/package_table_view.cpp) owns the package table.
+- [src/ui/pending_transaction_controller.cpp](../src/ui/pending_transaction_controller.cpp) owns marking actions, preview, apply, and post-apply refresh.
+- [src/ui/transaction_progress.cpp](../src/ui/transaction_progress.cpp) owns the review and progress dialogs.
 
-- `main_window.cpp` builds the window and wires signals
-- controller files own behavior for one part of the window
-- helper files support the controllers and widgets
-
-### Main UI modules
-
-- [src/ui/main_window.cpp](../src/ui/main_window.cpp)
-  Builds the main window and shared `SearchWidgets` state.
-
-- [src/ui/main_menu.cpp](../src/ui/main_menu.cpp)
-  Owns top menu actions such as About, Quit, and panel visibility.
-
-- [src/ui/package_query_controller.cpp](../src/ui/package_query_controller.cpp)
-  Owns search, browse, installed-list loading, request cancellation, history, and list refresh.
-
-- [src/ui/package_info_controller.cpp](../src/ui/package_info_controller.cpp)
-  Owns the info pane for the selected package.
-
-- [src/ui/pending_transaction_controller.cpp](../src/ui/pending_transaction_controller.cpp)
-  Owns marked package actions, preview requests, apply requests, and refresh after apply.
-
-- [src/ui/transaction_progress.cpp](../src/ui/transaction_progress.cpp)
-  Owns the transaction progress dialog shown during apply.
-
-- [src/ui/package_table_view.cpp](../src/ui/package_table_view.cpp)
-  Owns the package list view widget behavior.
-
-- [src/ui/package_table_context_menu.cpp](../src/ui/package_table_context_menu.cpp)
-  Owns right-click actions for package rows.
-
-### UI flow
+The UI controller pattern follows this shape:
 
 ```mermaid
 flowchart TD
-    A[User action] --> B[UI controller]
-    B --> C[Update widget state]
-    B --> D[Call backend]
-    B --> E[Call transaction service client]
-    D --> F[Package rows or package details]
-    E --> G[Preview or apply result]
-    F --> H[Refresh UI]
-    G --> H
+    User[User action] --> Signal[GTK signal]
+    Signal --> Controller[Controller callback]
+    Controller --> State[Update shared UI state]
+    Controller --> Work[Start backend or service work]
+    Work --> Finish[Completion callback on GTK thread]
+    Finish --> UI[Refresh visible widgets]
 ```
 
-## Shared widget state
+## Backend Structure
 
-The main shared UI state lives in:
+The UI does not use libdnf5 types directly.
 
-- [src/ui/widgets.hpp](../src/ui/widgets.hpp)
+The public backend API is [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp).
+It exposes small value types such as `PackageRow`, `PackageInstallState`, and
+`TransactionPreview`.
 
-This file is important because it shows:
+The backend implementation is split by responsibility:
 
-- the GTK widgets the controllers share
-- query state
-- transaction state
-- window state
+- [src/base_manager.cpp](../src/base_manager.cpp) owns the shared libdnf5 `Base`.
+- [src/dnf_backend/dnf_query.cpp](../src/dnf_backend/dnf_query.cpp) builds package rows for search, browse, and installed-list views.
+- [src/dnf_backend/dnf_details.cpp](../src/dnf_backend/dnf_details.cpp) formats package details, files, dependencies, and changelog text.
+- [src/dnf_backend/dnf_state.cpp](../src/dnf_backend/dnf_state.cpp) owns installed-package snapshot state and package status classification.
+- [src/dnf_backend/dnf_transaction.cpp](../src/dnf_backend/dnf_transaction.cpp) resolves previews and applies transactions.
 
-When you are unsure who owns a piece of UI state, start there.
+Most query and details calls take read access to the shared Base. Transaction
+preview and apply take write access because libdnf5 transaction work changes
+Base state while it is being resolved or run.
 
-## Backend ownership
+## Package List Model
 
-The backend hides libdnf5 details from the UI.
+The main list shows one row for each package name and architecture pair.
 
-The public backend contract lives in:
+When repository metadata is available, repository candidates are shown. Installed
+packages that do not have a visible repository candidate are added as local-only
+rows. Installed packages can also be shown as upgradeable or newer than the
+repository candidate.
 
-- [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp)
+The installed snapshot in [src/dnf_backend/dnf_state.cpp](../src/dnf_backend/dnf_state.cpp)
+is important because it lets the UI answer:
 
-The backend is built around a shared `BaseManager`:
+- whether an exact NEVRA is installed
+- whether a row is available, installed, local-only, or upgradeable
+- whether a package owns the running GUI executable and must be protected from removal inside the app
 
-- [src/base_manager.cpp](../src/base_manager.cpp)
+## Transaction Boundary
 
-`BaseManager` owns the shared libdnf5 `Base` and protects access to it.
+Search, browsing, and details stay inside the GUI process.
 
-### Main backend modules
+Preview and apply go through the transaction service:
 
-- [src/dnf_backend/dnf_query.cpp](../src/dnf_backend/dnf_query.cpp)
-  Search, browse, and installed-package row queries.
-
-- [src/dnf_backend/dnf_details.cpp](../src/dnf_backend/dnf_details.cpp)
-  Package details, files, changelog, and dependency text.
-
-- [src/dnf_backend/dnf_state.cpp](../src/dnf_backend/dnf_state.cpp)
-  Installed snapshot, package state classification, install reason, and protected package state.
-
-- [src/dnf_backend/dnf_transaction.cpp](../src/dnf_backend/dnf_transaction.cpp)
-  Transaction preview and apply helpers.
-
-### Backend flow
+- GUI client: [src/transaction_service_client.cpp](../src/transaction_service_client.cpp)
+- service runtime: [src/service/transaction_service.cpp](../src/service/transaction_service.cpp)
+- shared D-Bus names: [src/service/transaction_service_dbus.hpp](../src/service/transaction_service_dbus.hpp)
+- shared request model: [src/transaction_request.hpp](../src/transaction_request.hpp)
 
 ```mermaid
 flowchart TD
-    A[UI controller] --> B[dnf_backend.hpp API]
-    B --> C[BaseManager acquire_read]
-    C --> D[dnf_query or dnf_details or dnf_transaction]
-    D --> E[Package rows, details, or transaction preview]
-    E --> F[UI controller updates the window]
+    Pending[Pending transaction controller] --> Request[TransactionRequest]
+    Request --> Client[GUI D-Bus client]
+    Client --> Service[Transaction service]
+    Service --> Preview[Resolve preview]
+    Preview --> Confirm[GUI confirmation dialog]
+    Confirm --> Apply[Apply request]
+    Apply --> Auth[Polkit authorization]
+    Auth --> Run[Run transaction]
+    Run --> Refresh[GUI refreshes package state]
 ```
 
-## Installed snapshot and package state
+The service creates one D-Bus request object for each transaction request. The
+GUI reads preview and final result state from that object and releases it when it
+is no longer needed.
 
-A lot of UI correctness depends on the installed snapshot.
+## Packaging
 
-The main code for that is in:
+Service install files live under [packaging](../packaging).
 
-- [src/dnf_backend/dnf_state.cpp](../src/dnf_backend/dnf_state.cpp)
-
-This code answers questions like:
-
-- Is this exact package installed
-- Is it local only
-- Is it upgradeable
-- Is the installed version newer than the repo version
-- Why was it installed
-
-The periodic snapshot refresh is started in:
-
-- [src/app.cpp](../src/app.cpp)
-
-That refresh now runs in a background task so it does not block the GTK thread.
-
-## Transaction service boundary
-
-Package search and package details stay inside the GUI process.
-
-Transaction preview and apply go through a small D-Bus service:
-
-- GUI side: [src/transaction_service_client.cpp](../src/transaction_service_client.cpp)
-- service side: [src/service/transaction_service.cpp](../src/service/transaction_service.cpp)
-
-Shared D-Bus names live in:
-
-- [src/service/transaction_service_dbus.hpp](../src/service/transaction_service_dbus.hpp)
-
-### Why the service exists
-
-The GUI stays unprivileged.
-The service handles the privileged transaction step and Polkit authorization.
-
-### Service flow
-
-```mermaid
-flowchart TD
-    A[Pending transaction controller] --> B[transaction_service_client.cpp]
-    B --> C[StartTransaction on D-Bus]
-    C --> D[service preview worker]
-    D --> E[Preview ready or preview failed]
-    E --> F[GUI shows confirmation]
-    F --> G[Apply on D-Bus]
-    G --> H[Polkit authorization]
-    H --> I[service apply worker]
-    I --> J[Apply succeeded or apply failed]
-    J --> K[GUI refreshes package state]
-```
-
-### Service lifecycle in simple terms
-
-One transaction request normally goes through this shape:
-
-```mermaid
-flowchart TD
-    A[StartTransaction] --> B[preview-running]
-    B --> C[preview-ready]
-    B --> D[preview-failed]
-    B --> E[cancelled]
-    C --> F[Apply]
-    F --> G[apply-running]
-    G --> H[apply-succeeded]
-    G --> I[apply-failed]
-    C --> J[Release]
-    D --> J
-    E --> J
-    H --> J
-    I --> J
-```
-
-Important rules:
-
-- the service owns the request object
-- the GUI reads result state through the client helper
-- the GUI should release finished requests it no longer needs
-- if the service disappears while the GUI is waiting, the client now returns an error instead of hanging
-
-## Packaging and service install files
-
-Service packaging files live under `packaging`.
-
-The important ones are:
+The important files are:
 
 - [packaging/com.fedora.Dnfui.Transaction1.service](../packaging/com.fedora.Dnfui.Transaction1.service)
 - [packaging/com.fedora.Dnfui.Transaction1.conf](../packaging/com.fedora.Dnfui.Transaction1.conf)
 - [packaging/com.fedora.dnfui.policy](../packaging/com.fedora.dnfui.policy)
 - [packaging/dnfui-service.service](../packaging/dnfui-service.service)
 
-Meson owns the real build and install logic.
-The `Makefile` is a task runner for common developer commands.
+Meson owns the real build and install rules. The `Makefile` is a task runner for
+common developer commands.
 
-## Tests
+## Reading Order
 
-The test coverage is split between unit-style tests and service smoke tests.
-
-### Catch2 tests
-
-These live under `test`:
-
-- [test/test_backend.cpp](../test/test_backend.cpp)
-- [test/test_search.cpp](../test/test_search.cpp)
-- [test/test_transaction_preview.cpp](../test/test_transaction_preview.cpp)
-- [test/test_transaction_request.cpp](../test/test_transaction_request.cpp)
-- [test/test_transaction_service_client.cpp](../test/test_transaction_service_client.cpp)
-
-These protect:
-
-- backend query behavior
-- transaction preview behavior
-- transaction request validation
-- GUI-side transaction client behavior
-
-### Shell smoke tests
-
-These live under `utils` and `docker`:
-
-- [utils/test_transaction_service_preview.sh](../utils/test_transaction_service_preview.sh)
-- [utils/test_transaction_service_cancel.sh](../utils/test_transaction_service_cancel.sh)
-- [utils/test_transaction_service_apply.sh](../utils/test_transaction_service_apply.sh)
-- [utils/test_transaction_service_preview_failure.sh](../utils/test_transaction_service_preview_failure.sh)
-- [utils/test_transaction_service_system_bus.sh](../utils/test_transaction_service_system_bus.sh)
-
-These protect:
-
-- session bus preview flow
-- session bus cancel flow
-- session bus apply flow
-- preview worker failure handling
-- system bus authorization and install flow
-- disconnect cleanup
-
-## Where to start when reading the code
-
-If you want to re-learn the app quickly, this is a good order:
+A practical reading order for new contributors:
 
 1. [src/main.cpp](../src/main.cpp)
 2. [src/app.cpp](../src/app.cpp)
 3. [src/ui/main_window.cpp](../src/ui/main_window.cpp)
-4. [src/ui/package_query_controller.cpp](../src/ui/package_query_controller.cpp)
-5. [src/ui/pending_transaction_controller.cpp](../src/ui/pending_transaction_controller.cpp)
-6. [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp)
-7. [src/base_manager.cpp](../src/base_manager.cpp)
-8. [src/transaction_service_client.cpp](../src/transaction_service_client.cpp)
-9. [src/service/transaction_service.cpp](../src/service/transaction_service.cpp)
-10. [test/test_transaction_service_client.cpp](../test/test_transaction_service_client.cpp)
-
-## What this document is not
-
-This document does not try to explain every file.
-
-Its job is simpler:
-
-- give you a map
-- show the main flows
-- help you find the right place to read next
+4. [src/ui/widgets.hpp](../src/ui/widgets.hpp)
+5. [src/ui/package_query_controller.cpp](../src/ui/package_query_controller.cpp)
+6. [src/ui/pending_transaction_controller.cpp](../src/ui/pending_transaction_controller.cpp)
+7. [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp)
+8. [src/base_manager.cpp](../src/base_manager.cpp)
+9. [src/dnf_backend/dnf_query.cpp](../src/dnf_backend/dnf_query.cpp)
+10. [src/transaction_service_client.cpp](../src/transaction_service_client.cpp)
+11. [src/service/transaction_service.cpp](../src/service/transaction_service.cpp)

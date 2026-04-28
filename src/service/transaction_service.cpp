@@ -74,7 +74,7 @@ run_test_preview_wait_hook_if_requested()
 }
 #else
 // -----------------------------------------------------------------------------
-// throw_if_test_preview_exception_requested
+// Do nothing when preview failure injection is not compiled in.
 // -----------------------------------------------------------------------------
 static void
 throw_if_test_preview_exception_requested()
@@ -82,7 +82,7 @@ throw_if_test_preview_exception_requested()
 }
 
 // -----------------------------------------------------------------------------
-// run_test_preview_wait_hook_if_requested
+// Do nothing when preview delay injection is not compiled in.
 // -----------------------------------------------------------------------------
 static void
 run_test_preview_wait_hook_if_requested()
@@ -468,10 +468,9 @@ complete_apply_request(TransactionSession *session, GDBusMethodInvocation *invoc
 }
 
 // -----------------------------------------------------------------------------
-// Context passed to async polkit authorization callback.
-// Stores object path and service pointer to safely locate the session after
-// the async operation completes, handling the case where the service or session
-// may have been destroyed during shutdown.
+// Context passed to the polkit authorization callback.
+// Stores the object path and service pointer so the callback can look up the
+// session after authorization finishes or ignore the result during shutdown.
 // -----------------------------------------------------------------------------
 struct AuthorizationCallbackContext {
   TransactionService *service = nullptr;
@@ -479,10 +478,10 @@ struct AuthorizationCallbackContext {
 };
 
 // -----------------------------------------------------------------------------
-// Async callback invoked when polkit authorization completes.
-// Checks the authorization result and either proceeds with apply or returns an error.
-// Validates that the service and session still exist before accessing them to handle
-// shutdown race conditions where the callback fires after cleanup has started.
+// Finish the polkit authorization check for Apply.
+// The service and session are looked up again because the client may have
+// released the request or the service may have started shutdown while
+// authorization was still running.
 // -----------------------------------------------------------------------------
 static void
 on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointer user_data)
@@ -492,14 +491,14 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
     return;
   }
 
-  // Check if service is shutting down before accessing the transaction map.
+  // Ignore the result after service shutdown has started.
   if (context->service->shutting_down.load()) {
     DNFUI_TRACE("Transaction service authorization callback ignored during shutdown path=%s",
                 context->object_path.c_str());
     return;
   }
 
-  // Verify the session still exists (may have been released during authorization).
+  // The request may have been released while authorization was running.
   auto it = context->service->transactions.find(context->object_path);
   if (it == context->service->transactions.end()) {
     DNFUI_TRACE("Transaction service authorization callback session not found path=%s", context->object_path.c_str());
@@ -519,7 +518,7 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
     preview_ready = session->stage == TransactionStage::PREVIEW_READY && session->finished.load() && session->success;
   }
 
-  // Verify the session is still in a valid state for apply (user may have cancelled)
+  // The request must still be ready for apply after authorization completes.
   if (!preview_ready) {
     g_dbus_method_invocation_return_error(
         invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction state changed during authorization.");
@@ -560,10 +559,9 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
 }
 
 // -----------------------------------------------------------------------------
-// Start asynchronous authorization for an Apply request.
-// On session bus: returns true immediately (authorization skipped for testing).
-// On system bus: initiates async polkit check, returns true (callback handles result).
-// Returns false only if initialization fails (error_out is set).
+// Start authorization for an Apply request.
+// The session bus skips polkit for development and tests. The system bus starts
+// a polkit check and lets the callback reply to the D-Bus method call.
 // -----------------------------------------------------------------------------
 static bool
 start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation *invocation, std::string &error_out)
@@ -611,7 +609,7 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
     session->pending_apply_invocation = G_DBUS_METHOD_INVOCATION(g_object_ref(invocation));
   }
 
-  // Create callback context with service pointer and object path for safe lookup.
+  // Pass enough data for the callback to find the request again.
   auto *callback_context = new AuthorizationCallbackContext();
   callback_context->service = session->service;
   callback_context->object_path = session->object_path;
@@ -629,7 +627,7 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
   g_object_unref(subject);
   g_object_unref(authority);
 
-  // Async authorization started successfully: callback will reply to invocation.
+  // Authorization started successfully. The callback will reply to the caller.
   return true;
 }
 
@@ -637,7 +635,7 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
 // Transaction execution
 // -----------------------------------------------------------------------------
 // Return true when the transaction may need available-repo metadata instead of
-// just the local rpmdb.
+// the local rpmdb alone.
 // -----------------------------------------------------------------------------
 static bool
 transaction_request_needs_available_repos(const TransactionRequest &request)
@@ -682,7 +680,7 @@ run_transaction_preview(TransactionSession *session)
       DNFUI_TRACE(
           "Transaction service preview refresh failed path=%s error=%s", session->object_path.c_str(), e.what());
       queue_transaction_progress(session,
-                                 "Backend refresh failed; retrying preview with the last known-good package state.");
+                                 "Backend refresh failed; retrying preview with currently available package state.");
       if (!transaction_request_needs_available_repos(session->request)) {
         BaseManager::instance().ensure_system_only_initialized_if_needed();
       }
@@ -749,7 +747,7 @@ start_transaction_preview(gpointer user_data)
 struct ApplyGuard {
   std::atomic<bool> &flag;
   // -----------------------------------------------------------------------------
-  // ~ApplyGuard
+  // Clear the apply-running flag when the apply worker exits.
   // -----------------------------------------------------------------------------
   ~ApplyGuard()
   {
@@ -1091,9 +1089,7 @@ static const GDBusInterfaceVTable kTransactionVTable = {
 // -----------------------------------------------------------------------------
 // Client disconnect handling
 // -----------------------------------------------------------------------------
-// Callback invoked when a client that owns transaction sessions disconnects
-// from the bus. Automatically releases all sessions owned by that client to
-// prevent orphaned sessions from accumulating when clients crash or are killed.
+// Release transaction requests when their owning client disconnects.
 // -----------------------------------------------------------------------------
 static void
 on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer user_data)
@@ -1107,7 +1103,7 @@ on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer
 
   DNFUI_TRACE("Transaction service client disconnected name=%s", name);
 
-  // Find and release all sessions owned by this client.
+  // Collect matching paths before releasing sessions from the map.
   std::vector<std::string> orphaned_paths;
   for (const auto &[path, session] : service->transactions) {
     if (session->owner_name == name) {
@@ -1144,7 +1140,7 @@ create_transaction_session(TransactionService *service,
   session->object_path =
       std::string(kManagerObjectPath) + "/requests/" + std::to_string(service->next_transaction_id++);
 
-  // Get the client's unique bus name and watch it for disconnect:
+  // Watch the client's unique bus name so abandoned requests can be released.
   const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
   if (!sender || !*sender) {
     error_out = "Could not determine the client bus name.";
@@ -1166,10 +1162,9 @@ create_transaction_session(TransactionService *service,
     return nullptr;
   }
 
-  // Watch for client disconnect to auto-release orphaned sessions.
-  // NOTE: Only enable on system bus where clients are persistent desktop applications.
-  // Skip on session bus where test scripts use separate connections per call.
-  // Also skip if SERVICE_TEST_DISABLE_AUTO_RELEASE is set (for system bus testing with gdbus call).
+  // Watch for client disconnects on the system bus.
+  // Session bus tests often use a fresh connection per call, so they opt out.
+  // SERVICE_TEST_DISABLE_AUTO_RELEASE also opts out during manual service tests.
   const char *disable_auto_release = g_getenv("SERVICE_TEST_DISABLE_AUTO_RELEASE");
   if (service->bus_type == G_BUS_TYPE_SYSTEM && (!disable_auto_release || g_strcmp0(disable_auto_release, "1") != 0)) {
     session->owner_watch_id = g_bus_watch_name_on_connection(
@@ -1238,7 +1233,7 @@ static const GDBusInterfaceVTable kManagerVTable = {
 };
 
 // -----------------------------------------------------------------------------
-// Main loop and bus ownership callbacks
+// Main loop and bus callbacks
 // -----------------------------------------------------------------------------
 // Stop the service main loop when the process receives a quit signal.
 // -----------------------------------------------------------------------------
@@ -1286,7 +1281,7 @@ on_bus_acquired(GDBusConnection *connection, const gchar *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Stop the service if its owned D-Bus name is lost.
+// Stop the service if it loses its D-Bus name.
 // -----------------------------------------------------------------------------
 static void
 on_name_lost(GDBusConnection *, const gchar *, gpointer user_data)
@@ -1301,9 +1296,8 @@ on_name_lost(GDBusConnection *, const gchar *, gpointer user_data)
 // -----------------------------------------------------------------------------
 // Service cleanup
 // -----------------------------------------------------------------------------
-// Unregister service objects and release all owned GLib resources.
-// Cancels any pending async authorization operations by replying with errors
-// before destroying sessions to prevent use-after-free in async callbacks.
+// Unregister service objects and release GLib resources.
+// Pending authorization requests are answered before sessions are destroyed.
 // -----------------------------------------------------------------------------
 static void
 cleanup_service(TransactionService &service)
@@ -1346,8 +1340,9 @@ cleanup_service(TransactionService &service)
     }
   }
 
-  // Detached worker threads and async authorization callbacks still use raw service or session pointers.
-  // During shutdown, keep that state allocated until process exit instead of freeing it during teardown.
+  // Detached worker threads and authorization callbacks still use raw service
+  // or session pointers. During shutdown, keep that state allocated until
+  // process exit instead of freeing it during teardown.
   if (keep_alive_until_exit) {
     service.keep_alive_until_exit = true;
   } else {

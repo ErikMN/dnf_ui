@@ -42,7 +42,7 @@ class BaseWriteGuard {
 };
 
 // -----------------------------------------------------------------------------
-// Read access bundle (Base reference + guard + generation snapshot)
+// Read access bundle with Base reference, lock guard, and generation snapshot.
 // -----------------------------------------------------------------------------
 struct BaseRead {
   libdnf5::Base &base;
@@ -61,8 +61,7 @@ enum class BaseRepoState {
 };
 
 // -----------------------------------------------------------------------------
-// BaseManager
-// Provides cached access to a libdnf5::Base instance with safe locking
+// Shared access point for the cached libdnf5 Base instance.
 // -----------------------------------------------------------------------------
 class BaseManager {
   public:

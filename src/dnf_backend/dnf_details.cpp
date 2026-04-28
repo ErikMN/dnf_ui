@@ -148,7 +148,7 @@ dnf_backend_get_package_info(const std::string &pkg_nevra)
 
 // -----------------------------------------------------------------------------
 // Return newline-separated file paths for an installed package. Large file
-// lists can overwhelm the GTK clipboard/socket path, so callers can pass a
+// lists can overwhelm GTK clipboard transfer, so callers can pass a
 // positive max_files_for_display to append a truncation notice after that many
 // visible entries. Passing 0 returns the full list.
 // -----------------------------------------------------------------------------

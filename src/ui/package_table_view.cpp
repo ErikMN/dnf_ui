@@ -1,6 +1,6 @@
 // -----------------------------------------------------------------------------
 // src/ui/package_table_view.cpp
-// Synaptic-style package table view
+// Package table view
 // Builds the GTK4 ColumnView, maintains sortable package-row wrappers, and
 // keeps package selection wired into the details notebook controller.
 // -----------------------------------------------------------------------------
@@ -28,7 +28,7 @@ enum class PackageColumnKind {
 };
 
 // -----------------------------------------------------------------------------
-// package_row_quark
+// Return the private key used to store package rows on GTK objects.
 // -----------------------------------------------------------------------------
 static GQuark
 package_row_quark()
@@ -166,7 +166,7 @@ struct ColumnSorterData {
 };
 
 // -----------------------------------------------------------------------------
-// column_sorter_data_free
+// Free data owned by one package table column sorter.
 // -----------------------------------------------------------------------------
 static void
 column_sorter_data_free(gpointer p)
@@ -338,7 +338,7 @@ select_package_table_row(GtkColumnView *view, const std::string &nevra)
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Build one text column for the package table
+// Build one text column for the package table.
 // -----------------------------------------------------------------------------
 static GtkColumnViewColumn *
 create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind kind, int fixed_width, bool expand)
@@ -515,7 +515,7 @@ restore_package_view_sort_state(GtkColumnView *view, PackageColumnKind kind, Gtk
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Retrieve the selected package row from the current package table
+// Return the selected package row from the current package table.
 // -----------------------------------------------------------------------------
 bool
 package_table_get_selected_package_row(SearchWidgets *widgets, PackageRow &out_pkg)

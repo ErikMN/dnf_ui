@@ -1,4 +1,3 @@
-// src/ui/package_table_context_menu.hpp
 // Package table context menu helpers
 //
 // Owns the right-click transaction menu shown for one package table row.

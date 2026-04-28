@@ -456,8 +456,7 @@ wait_for_transaction_stage(GDBusConnection *connection,
     return false;
   }
 
-  // Populate result directly from the signal payload when the signal drove the
-  // exit, avoiding an extra GetResult round-trip.
+  // Fill the result from the final state signal and avoid a second GetResult call.
   if (wait_state.received) {
     result_out.stage = wait_state.stage;
     result_out.finished = true;
@@ -710,7 +709,7 @@ transaction_service_client_release_request(const std::string &transaction_path)
 
 #ifdef DNFUI_BUILD_TESTS
 // -----------------------------------------------------------------------------
-// transaction_service_client_reset_for_tests
+// Close the cached service connection between tests.
 // -----------------------------------------------------------------------------
 void
 transaction_service_client_reset_for_tests()

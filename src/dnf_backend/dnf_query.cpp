@@ -39,7 +39,7 @@ remember_newest_row(std::map<std::string, PackageRow> &rows_by_name_arch, const 
 
 // -----------------------------------------------------------------------------
 // Fold UTF-8 package search text before comparing it against libdnf5 metadata
-// fields. This keeps manual name/description matching aligned with GTK's
+// fields. This keeps manual name and description matching aligned with GTK's
 // case-insensitive text handling for non-ASCII package summaries.
 // -----------------------------------------------------------------------------
 static std::string
@@ -53,7 +53,7 @@ utf8_casefold_copy(const std::string &text)
 
 // -----------------------------------------------------------------------------
 // Return true when one package matches the active search term using the same
-// name/description flag semantics as the main UI search controls.
+// name and description flag semantics as the main UI search controls.
 // -----------------------------------------------------------------------------
 static bool
 package_matches_search(const libdnf5::rpm::Package &pkg,
@@ -78,8 +78,8 @@ package_matches_search(const libdnf5::rpm::Package &pkg,
 }
 
 // -----------------------------------------------------------------------------
-// Collect the newest visible repo candidate for each name+arch tuple. When a
-// search term is provided, apply the same name/description filtering as the
+// Collect the newest visible repo candidate for each name and architecture tuple. When a
+// search term is provided, apply the same name and description filtering as the
 // main search flow before deduplicating the results.
 // -----------------------------------------------------------------------------
 std::map<std::string, PackageRow>
@@ -124,7 +124,7 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
 }
 
 // -----------------------------------------------------------------------------
-// Collect installed package rows and the corresponding exact-NEVRA/name+arch
+// Collect installed package rows and the corresponding exact NEVRA and name and architecture
 // caches in one pass. When a search term is provided, filter the installed list
 // with the same search semantics used for repo-backed rows.
 // -----------------------------------------------------------------------------
@@ -163,7 +163,7 @@ collect_installed_rows(libdnf5::Base &base,
 
 // -----------------------------------------------------------------------------
 // Compare one installed row against the newest visible repo candidate for the
-// same name+arch tuple and annotate the row with the resolved relationship.
+// same name and architecture tuple and annotate the row with the resolved relationship.
 // -----------------------------------------------------------------------------
 void
 annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
@@ -215,7 +215,7 @@ annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow>
 
 // -----------------------------------------------------------------------------
 // Build the merged package view used by search and browse: start with the
-// visible repo-backed candidates, then add installed-only rows for name+arch
+// visible repo-backed candidates, then add installed-only rows for name and architecture
 // tuples that are missing from enabled repositories. If an installed package is
 // newer than the repo candidate, keep the installed row so the UI can surface
 // that state directly.
@@ -348,7 +348,7 @@ dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
 
 // -----------------------------------------------------------------------------
 // Return installed package rows that exactly match one NEVRA. Repo provenance is
-// annotated on a best-effort basis so pending-action navigation can still show
+// annotated when repository data is available so pending-action navigation can still show
 // local-only or newer-than-repo status when possible.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow>
@@ -366,7 +366,7 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
   }
 
   // Scope the annotation query to the package name so we load only the one
-  // relevant name+arch entry instead of the entire available package set.
+  // relevant name and architecture entry instead of the entire available package set.
   const std::string annotation_pattern = packages.empty() ? "" : packages[0].name;
   annotate_installed_rows_with_repo_candidates_best_effort(
       packages, nullptr, [&base, &annotation_pattern](GCancellable *annotation_cancellable) {

@@ -36,7 +36,7 @@ on_menu_clear_list(GSimpleAction *, GVariant *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// on_menu_clear_cache
+// Clear cached package search results from the menu.
 // -----------------------------------------------------------------------------
 static void
 on_menu_clear_cache(GSimpleAction *, GVariant *, gpointer user_data)
@@ -51,7 +51,7 @@ on_menu_clear_cache(GSimpleAction *, GVariant *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// on_menu_quit
+// Close the main window from the menu.
 // -----------------------------------------------------------------------------
 static void
 on_menu_quit(GSimpleAction *, GVariant *, gpointer user_data)
@@ -65,7 +65,7 @@ on_menu_quit(GSimpleAction *, GVariant *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// on_menu_about
+// Show the application About dialog.
 // -----------------------------------------------------------------------------
 static void
 on_menu_about(GSimpleAction *, GVariant *, gpointer user_data)
@@ -101,7 +101,7 @@ on_menu_about(GSimpleAction *, GVariant *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// on_menu_show_history_changed
+// Show or hide the history panel from the menu.
 // -----------------------------------------------------------------------------
 static void
 on_menu_show_history_changed(GSimpleAction *action, GVariant *value, gpointer user_data)
@@ -117,7 +117,7 @@ on_menu_show_history_changed(GSimpleAction *action, GVariant *value, gpointer us
 }
 
 // -----------------------------------------------------------------------------
-// on_menu_show_info_changed
+// Show or hide the package info panel from the menu.
 // -----------------------------------------------------------------------------
 static void
 on_menu_show_info_changed(GSimpleAction *action, GVariant *value, gpointer user_data)

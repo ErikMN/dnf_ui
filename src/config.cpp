@@ -1,11 +1,12 @@
 // -----------------------------------------------------------------------------
 // src/config.cpp
-// Config helpers for saving/restoring user settings
-// Handles persistent UI state (window size, pane divider positions, etc.)
+// Config helpers for saving and restoring user settings
+// Handles persistent UI state such as window size and pane divider positions.
 // The configuration is stored as key=value pairs in:
-//   ~/.config/dnfui.conf
+//   dnfui.conf in the user config directory
 //
-// TODO: Consider switching to GKeyFile or JSON for more structured data
+// The current key value file covers the saved window settings.
+// If settings become more structured later, GKeyFile is the likely next format.
 // -----------------------------------------------------------------------------
 #include "config.hpp"
 #include <algorithm>
@@ -22,7 +23,7 @@ constexpr int MIN_WINDOW_WIDTH = 600;
 constexpr int MIN_WINDOW_HEIGHT = 400;
 
 // -----------------------------------------------------------------------------
-// config_file_path
+// Return the user config file path.
 // -----------------------------------------------------------------------------
 std::filesystem::path
 config_file_path()
@@ -36,7 +37,7 @@ config_file_path()
 }
 
 // -----------------------------------------------------------------------------
-// config_try_parse_int
+// Parse one integer config value when it exists.
 // -----------------------------------------------------------------------------
 bool
 config_try_parse_int(const std::map<std::string, std::string> &config, const char *key, int &value_out)
@@ -62,7 +63,7 @@ config_try_parse_int(const std::map<std::string, std::string> &config, const cha
 } // namespace
 
 // -----------------------------------------------------------------------------
-// config_load_map
+// Load config values from disk.
 // -----------------------------------------------------------------------------
 std::map<std::string, std::string>
 config_load_map()
@@ -96,7 +97,7 @@ config_load_map()
 }
 
 // -----------------------------------------------------------------------------
-// config_save_map
+// Save config values to disk.
 // -----------------------------------------------------------------------------
 void
 config_save_map(const std::map<std::string, std::string> &config)
@@ -118,7 +119,7 @@ config_save_map(const std::map<std::string, std::string> &config)
 }
 
 // -----------------------------------------------------------------------------
-// config_load_paned_position
+// Load the saved divider position.
 // -----------------------------------------------------------------------------
 int
 config_load_paned_position()
@@ -133,7 +134,7 @@ config_load_paned_position()
 }
 
 // -----------------------------------------------------------------------------
-// config_save_paned_position
+// Save the current divider position.
 // -----------------------------------------------------------------------------
 void
 config_save_paned_position(GtkPaned *paned)
@@ -144,7 +145,7 @@ config_save_paned_position(GtkPaned *paned)
 }
 
 // -----------------------------------------------------------------------------
-// config_load_window_geometry
+// Load the saved window size.
 // -----------------------------------------------------------------------------
 void
 config_load_window_geometry(GtkWindow *window)
@@ -167,7 +168,7 @@ config_load_window_geometry(GtkWindow *window)
 }
 
 // -----------------------------------------------------------------------------
-// config_save_window_geometry
+// Save the current window size.
 // -----------------------------------------------------------------------------
 void
 config_save_window_geometry(GtkWindow *window)

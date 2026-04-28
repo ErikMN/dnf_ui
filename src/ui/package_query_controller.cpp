@@ -1,9 +1,8 @@
 // -----------------------------------------------------------------------------
 // src/ui/package_query_controller.cpp
-// Signal callbacks and async package query controller
-// Handles search, list, clear, and history actions plus the shared Stop-button
+// Signal callbacks and package query controller
+// Handles search, list, clear, and history actions plus the shared Stop button
 // state for background package queries.
-// https://dnf5.readthedocs.io/en/latest/
 // -----------------------------------------------------------------------------
 #include "widgets.hpp"
 
@@ -19,7 +18,7 @@
 
 // -----------------------------------------------------------------------------
 // Clear cached search results.
-// Used both by the Clear Cache button and after successful Base rebuilds.
+// Used by the Clear Cache button, repository refresh, and transaction refresh.
 // -----------------------------------------------------------------------------
 void
 package_query_clear_search_cache()
@@ -28,21 +27,21 @@ package_query_clear_search_cache()
 }
 
 // -----------------------------------------------------------------------------
-// Task payload helpers for background package queries
+// Data passed to one background search task.
 // -----------------------------------------------------------------------------
 struct SearchTaskData {
   char *term;
   char *cache_key;
   uint64_t request_id;
-  // Snapshot of BaseManager generation at dispatch time.
-  // Used to drop stale results if the backend Base is rebuilt while this task runs.
+  // BaseManager generation recorded when the task starts.
+  // Used to drop outdated results if the backend Base is rebuilt before the task ends.
   uint64_t generation;
   bool search_in_description;
   bool exact_match;
 };
 
 // -----------------------------------------------------------------------------
-// search_task_data_free
+// Free data owned by one background search task.
 // -----------------------------------------------------------------------------
 static void
 search_task_data_free(gpointer p)
@@ -58,8 +57,8 @@ search_task_data_free(gpointer p)
 
 // -----------------------------------------------------------------------------
 // Record which main query flow produced the currently displayed table.
-// Transaction/repository rebuilds use this to rerun the same query and replace
-// stale rows with fresh backend data.
+// Transaction and repository rebuilds use this to rerun the same query and
+// replace outdated rows with fresh backend data.
 // -----------------------------------------------------------------------------
 static void
 set_displayed_query_kind(SearchWidgets *widgets, DisplayedPackageQueryKind kind)
@@ -94,7 +93,7 @@ set_displayed_search_query(SearchWidgets *widgets, const SearchTaskData &task_da
 // -----------------------------------------------------------------------------
 // Complete one rebuild-triggered refresh. When the old selection survived the
 // refreshed query result, leave the details pane intact; otherwise clear it so
-// stale package info is not shown for rows that disappeared.
+// outdated package info is not shown for rows that disappeared.
 // -----------------------------------------------------------------------------
 static void
 finish_results_refresh(SearchWidgets *widgets)
@@ -116,18 +115,16 @@ finish_results_refresh(SearchWidgets *widgets)
   widgets->query_state.reload_selected_nevra.clear();
 }
 
-// Task data for package-list operations started from the main action buttons.
-// We snapshot the BaseManager generation at dispatch time so the UI can ignore
-// results produced against an older Base after a rebuild or transaction.
-// request_id keeps the active Stop button state matched to the task that
-// currently owns it.
+// Data passed to one background package list task.
+// The generation lets completion ignore results from an older backend Base.
+// The request id keeps the Stop button matched to the task that controls it.
 struct PackageListTaskData {
   uint64_t request_id;
   uint64_t generation;
 };
 
 // -----------------------------------------------------------------------------
-// Return true when the shared package-list request state currently owns a running task.
+// Return true when a package list task is currently running.
 // -----------------------------------------------------------------------------
 static bool
 has_active_package_list_request(const SearchWidgets *widgets)
@@ -137,7 +134,7 @@ has_active_package_list_request(const SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Return the button that owns the Stop state for the active package list request.
+// Return the button that currently works as Stop.
 // -----------------------------------------------------------------------------
 static GtkButton *
 package_list_stop_button(SearchWidgets *widgets, PackageListRequestKind kind)
@@ -178,7 +175,7 @@ package_list_cancelled_status(PackageListRequestKind kind)
 }
 
 // -----------------------------------------------------------------------------
-// Track the active background package list request and switch the owning button to Stop.
+// Record the active package list task and switch its button to Stop.
 // -----------------------------------------------------------------------------
 static void
 begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t request_id, PackageListRequestKind kind)
@@ -233,7 +230,7 @@ restore_package_list_controls(SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Restore the shared package list UI when the active background request is done.
+// Restore the package list controls when the active task is done.
 // -----------------------------------------------------------------------------
 static void
 end_package_list_request(SearchWidgets *widgets, uint64_t request_id, PackageListRequestKind kind)
@@ -273,36 +270,28 @@ cancel_active_package_list_request(SearchWidgets *widgets)
   // can keep their progress indication visible.
   widgets_spinner_release(widgets->query.spinner);
 
-  // Fully release request ownership so the UI and internal request state stay aligned.
+  // Clear the active request after its controls have been restored.
   end_package_list_request(widgets, request_id, kind);
 
   ui_helpers_set_status(widgets->query.status_label, package_list_cancelled_status(kind), "gray");
 }
 
 // -----------------------------------------------------------------------------
-// Async Operations
-// GTK4 uses GTask for running expensive libdnf5 operations in worker threads
-// without freezing the UI. These functions handle installed and available
-// package queries off the main loop.
+// Background package query tasks
+// GTK runs the window on the main thread. GTask lets package queries run on a
+// worker thread so the window stays responsive.
 // -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
-// Async: Installed packages (non-blocking)
-// Executes a background query using libdnf5 to fetch the list of installed
-// packages. Runs in a worker thread via GTask to avoid blocking the GTK UI.
-// Returns a std::vector<PackageRow> containing structured package metadata.
-// -----------------------------------------------------------------------------
-
-// -----------------------------------------------------------------------------
-// on_list_task
+// Query installed packages on a worker thread.
 // -----------------------------------------------------------------------------
 static void
 on_list_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
   try {
-    // Query all installed packages
+    // Query all installed packages.
     auto *results = new std::vector<PackageRow>(dnf_backend_get_installed_package_rows_interruptible(cancellable));
-    // Ensure results are freed if never propagated (stale/cancel path).
+    // Let GTask free results if completion is skipped or cancelled.
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
@@ -310,10 +299,7 @@ on_list_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 }
 
 // -----------------------------------------------------------------------------
-// Async completion handler: Installed package listing
-// Runs on the GTK main thread after on_list_task() finishes. Retrieves the
-// result vector from the GTask, repopulates the package list UI, and updates
-// the status message accordingly.
+// Finish installed package listing on the GTK thread.
 // -----------------------------------------------------------------------------
 static void
 on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
@@ -333,8 +319,8 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
     return;
   }
 
-  // Drop stale results if the backend Base changed while the worker was running.
-  // This prevents rendering a list that no longer matches the current repo/system state.
+  // Drop outdated results if the backend Base changed while the worker was running.
+  // This prevents showing rows that no longer match the current repository state.
   if (td && td->generation != BaseManager::instance().current_generation()) {
     widgets_spinner_release(widgets->query.spinner);
     end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
@@ -344,7 +330,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   GError *error = nullptr;
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
-  // Stop spinner (ref-counted)
+  // Release this task's spinner slot.
   widgets_spinner_release(widgets->query.spinner);
 
   if (td) {
@@ -354,7 +340,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   if (packages) {
     set_displayed_query_kind(widgets, DisplayedPackageQueryKind::LIST_INSTALLED);
 
-    // Populate the package table and update status
+    // Fill the package table and update status.
     if (widgets->query_state.preserve_selection_on_reload) {
       widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
     } else {
@@ -377,10 +363,8 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Async: Browse packages (non-blocking)
-// Executes a background query using libdnf5 to fetch the merged package view:
-// repo candidates plus installed-only local RPMs. Runs in a worker thread via
-// GTask to avoid blocking the GTK UI.
+// Query the merged package list on a worker thread.
+// The result includes repository candidates and installed-only local RPMs.
 // -----------------------------------------------------------------------------
 static void
 on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
@@ -394,10 +378,8 @@ on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellabl
 }
 
 // -----------------------------------------------------------------------------
-// Async completion handler: Merged package listing
-// Runs on the GTK main thread after on_list_available_task() finishes.
-// Retrieves the result vector from the GTask, refreshes installed highlighting,
-// and repopulates the package list UI.
+// Finish merged package listing on the GTK thread.
+// Refresh the installed snapshot before updating package status in the table.
 // -----------------------------------------------------------------------------
 static void
 on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
@@ -426,7 +408,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   GError *error = nullptr;
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
-  // Stop spinner (ref-counted)
+  // Release this task's spinner slot.
   widgets_spinner_release(widgets->query.spinner);
 
   if (td) {
@@ -460,10 +442,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
 }
 
 // -----------------------------------------------------------------------------
-// Async: Search merged package view (non-blocking)
-// Executes a background libdnf5 query to find matching repo candidates and
-// installed-only local RPMs. Runs off the GTK main thread via GTask to keep the
-// UI responsive. Returns a std::vector<PackageRow> of matching package metadata.
+// Search the merged package list on a worker thread.
 // -----------------------------------------------------------------------------
 static void
 on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancellable)
@@ -477,7 +456,7 @@ on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancella
     DNFUI_TRACE("Search task done request=%llu results=%zu",
                 td ? static_cast<unsigned long long>(td->request_id) : 0,
                 results->size());
-    // Ensure results are freed if never propagated (stale/cancel path).
+    // Let GTask free results if completion is skipped or cancelled.
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
     DNFUI_TRACE(
@@ -487,8 +466,7 @@ on_search_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancella
 }
 
 // -----------------------------------------------------------------------------
-// Called when background search finishes
-// Updates UI, caches results, and repopulates the listbox
+// Finish a package search on the GTK thread.
 // -----------------------------------------------------------------------------
 static void
 on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
@@ -514,7 +492,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   GError *error = nullptr;
   std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
 
-  // Stop spinner (ref-counted)
+  // Release this task's spinner slot.
   widgets_spinner_release(widgets->query.spinner);
 
   if (td) {
@@ -522,7 +500,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (packages) {
-    // Cache results for faster re-display next time.
+    // Save rows so the same search can be shown faster next time.
     // Search results are only reusable while the backend Base generation stays
     // the same, otherwise repo state may have changed underneath the cache.
     if (td && td->cache_key) {
@@ -535,7 +513,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 
     dnf_backend_refresh_installed_nevras();
 
-    // Fill the package table and display result count
+    // Fill the package table and display the result count.
     if (widgets->query_state.preserve_selection_on_reload) {
       widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
     } else {
@@ -558,7 +536,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Add new search term to search history if not already present
+// Add a new search term to history if it is not already present.
 // -----------------------------------------------------------------------------
 static void
 add_to_history(SearchWidgets *widgets, const std::string &term)
@@ -567,14 +545,14 @@ add_to_history(SearchWidgets *widgets, const std::string &term)
     return;
   }
 
-  // Prevent duplicates in history
+  // Prevent duplicate history entries.
   for (const auto &s : widgets->query_state.history) {
     if (s == term) {
       return;
     }
   }
 
-  // Append new term to internal list and UI widget
+  // Append the new term to internal state and the visible history list.
   widgets->query_state.history.push_back(term);
   GtkWidget *row = gtk_label_new(term.c_str());
   gtk_label_set_xalign(GTK_LABEL(row), 0.0);
@@ -582,7 +560,7 @@ add_to_history(SearchWidgets *widgets, const std::string &term)
 }
 
 // -----------------------------------------------------------------------------
-// Perform search operation (cached or live)
+// Run a search from cache or start a background search task.
 // -----------------------------------------------------------------------------
 static void
 perform_search(SearchWidgets *widgets, const std::string &term)
@@ -591,7 +569,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
     return;
   }
 
-  // Ensure cache key reflects current checkboxes even when triggered from history
+  // Include the current checkboxes in the cache key even for history searches.
   dnf_backend_set_search_options({
       .search_in_description =
           static_cast<bool>(gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox))),
@@ -605,14 +583,14 @@ perform_search(SearchWidgets *widgets, const std::string &term)
     widgets->results.selected_nevra.clear();
   }
 
-  // Check cache first.
+  // Look up saved rows before starting a new backend query.
   // Reuse only results produced from the current Base generation so refreshes
   // and transaction rebuilds cannot surface outdated package metadata.
   const std::string key = package_query_cache_key_for(term);
   const uint64_t generation = BaseManager::instance().current_generation();
   std::vector<PackageRow> cached_packages;
   if (package_query_cache_lookup(key, generation, cached_packages)) {
-    // Use cached results and skip background thread.
+    // Show saved rows and skip the worker thread.
     SearchTaskData cached_td {};
     cached_td.term = const_cast<char *>(term.c_str());
     cached_td.search_in_description = search_options.search_in_description;
@@ -629,7 +607,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
     return;
   }
 
-  // Otherwise perform real background search
+  // No cache match, so start a worker thread search.
   widgets_spinner_acquire(widgets->query.spinner);
 
   SearchTaskData *td = static_cast<SearchTaskData *>(g_malloc0(sizeof *td));
@@ -641,8 +619,7 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   td->exact_match = search_options.exact_match;
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  // The shared request helper owns disabling the search controls and flipping
-  // the initiating Search button to Stop.
+  // Disable the search controls and make the Search button stop this task.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::SEARCH);
   GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_search_task_finished);
   g_task_set_task_data(task, td, search_task_data_free);
@@ -652,9 +629,8 @@ perform_search(SearchWidgets *widgets, const std::string &term)
 }
 
 // -----------------------------------------------------------------------------
-// UI callback: List Installed button
-// Starts async listing of all installed packages
-// The same button changes to Stop while the worker task is running.
+// Handle the List Installed button.
+// The same button changes to Stop while its worker task is running.
 // -----------------------------------------------------------------------------
 void
 package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
@@ -669,18 +645,17 @@ package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
 
   ui_helpers_set_status(widgets->query.status_label, "Listing installed packages...", "blue");
 
-  // Show spinner (ref-counted)
+  // Show the spinner for this task.
   widgets_spinner_acquire(widgets->query.spinner);
 
-  // Run query asynchronously
+  // Start the installed package query on a worker thread.
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  // Store generation snapshot so completion can reject stale results.
+  // Store the generation so completion can reject outdated results.
   PackageListTaskData *td = new PackageListTaskData;
   td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
-  // The shared request helper owns disabling the entry and flipping the
-  // initiating button from List Installed to Stop.
+  // Disable the query controls and make List Installed stop this task.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_INSTALLED);
   GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_list_task_finished);
   g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
@@ -691,8 +666,8 @@ package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// UI callback: List Packages button
-// Starts async listing of the merged package view.
+// Handle the List Packages button.
+// Starts background listing of the merged package view.
 // The same button changes to Stop while the worker task is running.
 // -----------------------------------------------------------------------------
 void
@@ -708,7 +683,7 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
 
   ui_helpers_set_status(widgets->query.status_label, "Listing packages...", "blue");
 
-  // Show spinner (ref-counted)
+  // Show the spinner for this task.
   widgets_spinner_acquire(widgets->query.spinner);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
@@ -716,8 +691,7 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
   td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
 
-  // The shared request helper owns disabling the entry and flipping the
-  // initiating button from List Packages to Stop.
+  // Disable the query controls and make List Packages stop this task.
   begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
   GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_list_available_task_finished);
   g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
@@ -728,8 +702,8 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// UI callback: Search button (or pressing Enter in entry field)
-// Reads options, caches query, and triggers background search
+// Handle the Search button or Enter in the search field.
+// Reads options, checks the cache, and starts background search when needed.
 // The same button acts as Stop while a search worker task is running.
 // -----------------------------------------------------------------------------
 void
@@ -750,13 +724,13 @@ package_query_on_search_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  // Save search term and start lookup
+  // Save the search term and start lookup.
   add_to_history(widgets, pattern);
   perform_search(widgets, pattern);
 }
 
 // -----------------------------------------------------------------------------
-// UI callback: Selecting a search term from the history list
+// Handle selecting a search term from the history list.
 // -----------------------------------------------------------------------------
 void
 package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
@@ -772,8 +746,8 @@ package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer
 }
 
 // -----------------------------------------------------------------------------
-// UI callback: Clear List button
-// Clears all displayed results, details and file info
+// Handle the Clear List button.
+// Clears displayed package rows and resets the details panel.
 // -----------------------------------------------------------------------------
 void
 package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
@@ -789,7 +763,7 @@ package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
   widgets->results.selected_nevra.clear();
   package_table_fill_package_view(widgets, {});
 
-  // Reset UI labels and actions
+  // Reset status labels and package actions.
   ui_helpers_set_status(widgets->query.status_label, "Ready.", "gray");
   package_info_reset_details_view(widgets);
   ui_helpers_update_action_button_labels(widgets, "");

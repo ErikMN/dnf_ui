@@ -15,7 +15,8 @@
 #include <cstring>
 
 // Task data for package-info operation.
-// Snapshot generation at dispatch time so we can drop stale results after Base rebuild.
+// Snapshot generation at dispatch time so outdated results can be dropped after
+// a Base rebuild.
 struct InfoTaskData {
   char *nevra;
   uint64_t generation;
@@ -30,7 +31,7 @@ struct InfoTaskResult {
 };
 
 // -----------------------------------------------------------------------------
-// info_task_data_free
+// Free data owned by one package-info task.
 // -----------------------------------------------------------------------------
 static void
 info_task_data_free(gpointer p)
@@ -125,8 +126,8 @@ update_selected_package_actions(SearchWidgets *widgets, const PackageRow &select
   // Install stays available for repo candidates. Remove remains tied to the
   // exact installed row, and reinstall is only enabled when the same NEVRA is
   // still available from a repository.
-  // Gate destructive actions on the exact installed row so merged browse/search
-  // results do not enable remove/reinstall for a merely related candidate.
+  // Gate destructive actions on the exact installed row so merged browse and
+  // search results do not enable remove or reinstall for a merely related candidate.
   bool installed_exact = dnf_backend_is_package_installed_exact(selected);
   // Self-protected packages stay viewable, but the running app must not remove
   // or reinstall the RPM that owns its current executable.
@@ -140,7 +141,7 @@ update_selected_package_actions(SearchWidgets *widgets, const PackageRow &select
 }
 
 // -----------------------------------------------------------------------------
-// Async worker: load the package notebook text in the background.
+// Load package notebook text on a worker thread.
 // -----------------------------------------------------------------------------
 static void
 on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancellable)
@@ -168,7 +169,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
 
     try {
       DNFUI_TRACE("Package info files load start nevra=%s", td ? td->nevra : "");
-      // NOTE: Limit displayed files to prevent X11 clipboard socket overflow on copy:
+      // Limit displayed files so very large file lists can still be copied.
       result->files = g_strdup(dnf_backend_get_installed_package_files(td->nevra, 1500).c_str());
       DNFUI_TRACE("Package info files loaded nevra=%s bytes=%zu",
                   td ? td->nevra : "",
@@ -221,7 +222,7 @@ on_package_info_task(GTask *task, gpointer, gpointer task_data, GCancellable *ca
 }
 
 // -----------------------------------------------------------------------------
-// Async completion handler: update the details notebook for the selected package.
+// Update the details notebook after package text has loaded.
 // -----------------------------------------------------------------------------
 static void
 on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)

@@ -3,7 +3,6 @@
 // Repository refresh and shared widget helpers
 // Handles refresh callbacks and helper code shared by the split widget
 // controller modules.
-// https://dnf5.readthedocs.io/en/latest/
 // -----------------------------------------------------------------------------
 #include "widgets.hpp"
 #include "base_manager.hpp"
@@ -31,7 +30,7 @@ widgets_make_task_cancellable_for(GtkWidget *w)
 }
 
 // -----------------------------------------------------------------------------
-// hold_search_widgets_for_task
+// Keep the shared widget state alive while a task can still use it.
 // -----------------------------------------------------------------------------
 static void
 hold_search_widgets_for_task(GTask *task, SearchWidgets *widgets)
@@ -58,7 +57,7 @@ widgets_task_new_for_search_widgets(SearchWidgets *widgets, GCancellable *c, GAs
 }
 
 // -----------------------------------------------------------------------------
-// widgets_task_should_skip_completion
+// Return true when a task result should not update the window.
 // -----------------------------------------------------------------------------
 bool
 widgets_task_should_skip_completion(GTask *task, SearchWidgets *widgets)
@@ -72,7 +71,7 @@ widgets_task_should_skip_completion(GTask *task, SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Spinner ref-count helpers (prevents one task from hiding spinner used by another)
+// Count active spinner users so one task cannot hide another task's spinner.
 // -----------------------------------------------------------------------------
 static GQuark
 spinner_quark()
@@ -86,7 +85,7 @@ spinner_quark()
 }
 
 // -----------------------------------------------------------------------------
-// widgets_spinner_acquire
+// Show the spinner for one active task.
 // -----------------------------------------------------------------------------
 void
 widgets_spinner_acquire(GtkSpinner *spinner)
@@ -107,7 +106,7 @@ widgets_spinner_acquire(GtkSpinner *spinner)
 }
 
 // -----------------------------------------------------------------------------
-// widgets_spinner_release
+// Release one active task's spinner slot.
 // -----------------------------------------------------------------------------
 void
 widgets_spinner_release(GtkSpinner *spinner)
@@ -131,8 +130,7 @@ widgets_spinner_release(GtkSpinner *spinner)
 }
 
 // -----------------------------------------------------------------------------
-// Async: Refresh repositories (non-blocking)
-// Runs BaseManager::rebuild() in a worker thread so GTK stays responsive
+// Refresh repositories on a worker thread so the window stays responsive.
 // -----------------------------------------------------------------------------
 void
 widgets_on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *)
@@ -149,7 +147,7 @@ widgets_on_rebuild_task(GTask *task, gpointer, gpointer, GCancellable *)
 }
 
 // -----------------------------------------------------------------------------
-// Async completion handler: Refresh repositories
+// Finish repository refresh on the GTK thread.
 // -----------------------------------------------------------------------------
 void
 widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
@@ -162,7 +160,7 @@ widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
 
   GError *error = nullptr;
   // When rebuild succeeds, this returns the heap value from widgets_on_rebuild_task().
-  // This handler owns that pointer and must delete it after use.
+  // This handler receives that pointer and deletes it after use.
   BaseRepoState *refresh_state = static_cast<BaseRepoState *>(g_task_propagate_pointer(task, &error));
 
   // Refresh temporarily disables the main Search button while the rebuild runs.
@@ -194,17 +192,16 @@ widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
 }
 
 // -----------------------------------------------------------------------------
-// UI callback: Refresh repositories button
-// Starts an asynchronous Base rebuild through the shared widget controller layer
-// so application setup code does not depend on widget-internal task helpers.
+// Handle the Refresh Repositories button.
+// Starts a Base rebuild through the shared widget controller layer.
 // -----------------------------------------------------------------------------
 void
 widgets_on_refresh_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
 
-  // Once a rebuild starts, stop serving cached search results immediately so
-  // the UI does not reuse rows from repo state that is actively changing.
+  // Once a rebuild starts, stop serving cached search results so the UI does
+  // not reuse rows from repository state that is changing.
   package_query_clear_search_cache();
   ui_helpers_set_status(widgets->query.status_label, "Refreshing repositories...", "blue");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);

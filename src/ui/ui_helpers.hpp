@@ -1,4 +1,7 @@
 // src/ui/ui_helpers.hpp
+// Shared UI helper functions
+//
+// Provides small helpers for action buttons and status messages.
 #pragma once
 
 #include <string>

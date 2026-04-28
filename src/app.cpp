@@ -1,6 +1,8 @@
 // -----------------------------------------------------------------------------
 // src/app.cpp
-// GTK Application setup and activation
+// GTK application setup
+// Creates the GTK application, window, periodic refresh task, and backend warm
+// up task used during startup.
 // -----------------------------------------------------------------------------
 #include "app.hpp"
 
@@ -40,7 +42,7 @@ struct StartupWarmupData {
 };
 
 // -----------------------------------------------------------------------------
-// base_repo_state_trace_name
+// Return the text used in trace logs for one repository state.
 // -----------------------------------------------------------------------------
 static const char *
 base_repo_state_trace_name(BaseRepoState state)
@@ -83,7 +85,7 @@ setup_periodic_tasks(void)
 }
 
 // -----------------------------------------------------------------------------
-// on_periodic_installed_refresh_tick
+// Start one periodic installed-package refresh tick.
 // -----------------------------------------------------------------------------
 static gboolean
 on_periodic_installed_refresh_tick(gpointer)
@@ -112,7 +114,7 @@ start_installed_refresh_task(void)
 }
 
 // -----------------------------------------------------------------------------
-// on_installed_refresh_task
+// Refresh installed-package state on a worker thread.
 // -----------------------------------------------------------------------------
 static void
 on_installed_refresh_task(GTask *task, gpointer, gpointer, GCancellable *)
@@ -128,7 +130,7 @@ on_installed_refresh_task(GTask *task, gpointer, gpointer, GCancellable *)
 }
 
 // -----------------------------------------------------------------------------
-// on_installed_refresh_task_finished
+// Finish one installed-package refresh tick on the GTK thread.
 // -----------------------------------------------------------------------------
 static void
 on_installed_refresh_task_finished(GObject *, GAsyncResult *result, gpointer)
@@ -163,7 +165,7 @@ startup_warmup_data_free(gpointer data)
 }
 
 // -----------------------------------------------------------------------------
-// start_backend_warmup_idle
+// Start backend warm up from the GTK idle queue.
 // -----------------------------------------------------------------------------
 static gboolean
 start_backend_warmup_idle(gpointer user_data)

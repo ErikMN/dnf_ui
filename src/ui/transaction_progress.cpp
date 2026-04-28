@@ -42,7 +42,7 @@ struct ProgressAppendData {
 };
 
 // -----------------------------------------------------------------------------
-// progress_append_data_free
+// Free data owned by one queued progress message.
 // -----------------------------------------------------------------------------
 static void
 progress_append_data_free(ProgressAppendData *data)
@@ -300,7 +300,7 @@ struct SummaryDialogApplyData {
 };
 
 // -----------------------------------------------------------------------------
-// summary_dialog_apply_data_free
+// Free data owned by the transaction summary dialog callback.
 // -----------------------------------------------------------------------------
 static void
 summary_dialog_apply_data_free(gpointer p)

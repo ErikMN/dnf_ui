@@ -37,7 +37,7 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
 }
 
 // -----------------------------------------------------------------------------
-// pending_transaction_build_request
+// Convert marked UI actions into a transaction request.
 // -----------------------------------------------------------------------------
 void
 pending_transaction_build_request(const std::vector<PendingAction> &actions, TransactionRequest &request)
@@ -55,7 +55,7 @@ pending_transaction_validate_request(const TransactionRequest &request, std::str
 {
   for (const auto &spec : request.remove) {
     // Re-check remove specs at apply time so self-protection still holds even
-    // if stale UI state or future code paths bypass button sensitivity.
+    // if outdated UI state or future code paths bypass button sensitivity.
     if (dnf_backend_is_self_protected_transaction_spec(spec)) {
       error_out = "DNF UI cannot remove the package that owns the running application. Close DNF UI and remove it from "
                   "another tool.";

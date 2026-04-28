@@ -46,7 +46,7 @@ struct PackageQueryState {
   // or available-package listing.
   PackageListRequestKind current_package_list_request_kind = PackageListRequestKind::NONE;
   // Remembers the last query-backed result view so rebuilds can repopulate the
-  // visible table instead of leaving stale rows on screen after a transaction.
+  // visible table instead of leaving outdated rows on screen after a transaction.
   DisplayedPackageQueryState displayed_query;
   // Temporary selection snapshot used only while a rebuild-triggered query is
   // reloading. This lets the refreshed view keep the previously selected row

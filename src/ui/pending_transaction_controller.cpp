@@ -1,9 +1,8 @@
 // -----------------------------------------------------------------------------
 // src/ui/pending_transaction_controller.cpp
 // Pending transaction and apply controller
-// Handles mark/review/apply actions and the async follow-up refresh after
+// Handles mark, review, and apply actions and the background refresh after
 // transactions complete.
-// https://dnf5.readthedocs.io/en/latest/
 // -----------------------------------------------------------------------------
 #include "widgets.hpp"
 
@@ -18,13 +17,13 @@
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
 
-// Task payload for the async apply transaction worker.
+// Data passed to the transaction apply worker.
 struct ApplyTaskData {
   std::string transaction_path;
   TransactionProgressWindow *progress_window;
 };
 
-// Task payload for the async transaction-preview worker.
+// Data passed to the transaction preview worker.
 struct PreviewTaskData {
   TransactionRequest request;
   TransactionPreview preview;
@@ -40,7 +39,7 @@ struct PendingJumpButtonData {
 static void update_apply_button(SearchWidgets *widgets);
 
 // -----------------------------------------------------------------------------
-// apply_task_data_free
+// Free data owned by one apply task.
 // -----------------------------------------------------------------------------
 static void
 apply_task_data_free(gpointer p)
@@ -50,13 +49,13 @@ apply_task_data_free(gpointer p)
     return;
   }
 
-  // Drop the apply-task reference kept while background progress callbacks may still queue UI updates.
+  // Drop the apply task reference kept while progress callbacks may still queue UI updates.
   transaction_progress_release(d->progress_window);
   delete d;
 }
 
 // -----------------------------------------------------------------------------
-// preview_task_data_free
+// Free data owned by one preview task.
 // -----------------------------------------------------------------------------
 static void
 preview_task_data_free(gpointer p)
@@ -66,7 +65,7 @@ preview_task_data_free(gpointer p)
 }
 
 // -----------------------------------------------------------------------------
-// pending_jump_button_data_free
+// Free data owned by one pending action jump button.
 // -----------------------------------------------------------------------------
 static void
 pending_jump_button_data_free(gpointer p)
@@ -76,7 +75,7 @@ pending_jump_button_data_free(gpointer p)
 }
 
 // -----------------------------------------------------------------------------
-// invalidate_service_preview
+// Release any prepared service preview because the pending actions changed.
 // -----------------------------------------------------------------------------
 static void
 invalidate_service_preview(SearchWidgets *widgets)
@@ -104,7 +103,7 @@ self_protected_transaction_message(const PackageRow &pkg)
 }
 
 // -----------------------------------------------------------------------------
-// pending_transaction_preview_busy_message
+// Return the status text shown while a preview request is running.
 // -----------------------------------------------------------------------------
 static const char *
 pending_transaction_preview_busy_message()
@@ -113,7 +112,7 @@ pending_transaction_preview_busy_message()
 }
 
 // -----------------------------------------------------------------------------
-// pending_transaction_preview_is_busy
+// Return true when a preview request is running.
 // -----------------------------------------------------------------------------
 static bool
 pending_transaction_preview_is_busy(SearchWidgets *widgets)
@@ -122,7 +121,7 @@ pending_transaction_preview_is_busy(SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// set_preview_request_busy_state
+// Enable or disable controls while a preview request is running.
 // -----------------------------------------------------------------------------
 static void
 set_preview_request_busy_state(SearchWidgets *widgets, bool busy)
@@ -147,7 +146,7 @@ set_preview_request_busy_state(SearchWidgets *widgets, bool busy)
 }
 
 // -----------------------------------------------------------------------------
-// Show the selected pending action in the main package list so it can be reviewed or changed.
+// Show the selected pending action in the main package list.
 // -----------------------------------------------------------------------------
 static void
 show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
@@ -173,7 +172,7 @@ show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
     return;
   }
 
-  // This temporary one-package review replaces the main query-backed table, so
+  // This temporary one-package review replaces the main query table, so
   // post-transaction refreshes should rebuild it from the selected NEVRA
   // instead of replaying an older search or list view.
   widgets->query_state.displayed_query = DisplayedPackageQueryState();
@@ -182,7 +181,7 @@ show_pending_action_package(SearchWidgets *widgets, const PendingAction &action)
 }
 
 // -----------------------------------------------------------------------------
-// Update Apply button enabled state based on pending actions
+// Enable the Apply button only when actions are pending.
 // -----------------------------------------------------------------------------
 static void
 update_apply_button(SearchWidgets *widgets)
@@ -204,17 +203,17 @@ update_apply_button(SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Refresh Pending Actions tab
+// Rebuild the Pending Actions tab from the current pending actions.
 // -----------------------------------------------------------------------------
 static void
 refresh_pending_tab(SearchWidgets *widgets)
 {
-  // Clear existing rows
+  // Remove existing rows.
   while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(widgets->transaction.pending_list, 0)) {
     gtk_list_box_remove(widgets->transaction.pending_list, GTK_WIDGET(row));
   }
 
-  // Re-add actions
+  // Add one row for each pending action.
   for (const auto &a : widgets->transaction.actions) {
     std::string prefix;
     switch (a.type) {
@@ -261,7 +260,7 @@ refresh_pending_tab(SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Remove a pending action
+// Remove one pending action by package ID.
 // -----------------------------------------------------------------------------
 static bool
 remove_pending_action(SearchWidgets *widgets, const std::string &nevra)
@@ -276,7 +275,7 @@ remove_pending_action(SearchWidgets *widgets, const std::string &nevra)
 }
 
 // -----------------------------------------------------------------------------
-// Find pending action type for a package
+// Return the pending action type for one package ID.
 // -----------------------------------------------------------------------------
 static bool
 get_pending_action_type(SearchWidgets *widgets, const std::string &nevra, PendingAction::Type &out_type)
@@ -291,7 +290,7 @@ get_pending_action_type(SearchWidgets *widgets, const std::string &nevra, Pendin
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Rebuild base asynchronously and refresh installed highlights afterwards
+// Finish the post-transaction repository rebuild.
 // -----------------------------------------------------------------------------
 static void
 rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
@@ -322,7 +321,7 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// rebuild_after_tx_async
+// Rebuild repository data after a transaction completes.
 // -----------------------------------------------------------------------------
 static void
 rebuild_after_tx_async(SearchWidgets *widgets)
@@ -339,7 +338,7 @@ rebuild_after_tx_async(SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Start the async apply flow after the user confirms the transaction summary.
+// Start applying the transaction after the user confirms the summary.
 // -----------------------------------------------------------------------------
 static void
 start_apply_transaction(SearchWidgets *widgets)
@@ -377,20 +376,20 @@ start_apply_transaction(SearchWidgets *widgets)
         GError *error = nullptr;
         gboolean success = g_task_propagate_boolean(task, &error);
 
-        // Stop spinner (ref-counted)
+        // Release this task's spinner slot.
         widgets_spinner_release(widgets->query.spinner);
 
         transaction_progress_finish(td ? td->progress_window : nullptr, success, "");
 
         if (success) {
           invalidate_service_preview(widgets);
-          // Clear pending queue and refresh tab
+          // Clear pending actions and refresh the tab.
           widgets->transaction.actions.clear();
           refresh_pending_tab(widgets);
 
           ui_helpers_set_status(widgets->query.status_label, "Transaction successful.", "green");
 
-          // Rebuild base and refresh installed highlighting asynchronously
+          // Rebuild repository data and refresh package state in the background.
           rebuild_after_tx_async(widgets);
         } else {
           invalidate_service_preview(widgets);
@@ -429,7 +428,7 @@ start_apply_transaction(SearchWidgets *widgets)
 }
 
 // -----------------------------------------------------------------------------
-// Async: Install selected package
+// Handle marking the selected package for install.
 // -----------------------------------------------------------------------------
 void
 pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
@@ -440,14 +439,14 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  // Determine the selected package from the current package table.
+  // Read the selected package from the current package table.
   PackageRow pkg;
   if (!package_table_get_selected_package_row(widgets, pkg)) {
     ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
     return;
   }
 
-  // Toggle pending install
+  // Add or remove the pending install action.
   PendingAction::Type existing_type;
   bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
   if (has_existing && existing_type == PendingAction::INSTALL) {
@@ -455,7 +454,7 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
     refresh_pending_tab(widgets);
     ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
   } else {
-    // If it was pending REMOVE (or anything else), replace it with INSTALL
+    // Replace any other pending action with install.
     remove_pending_action(widgets, pkg.nevra);
     widgets->transaction.actions.push_back({ PendingAction::INSTALL, pkg.nevra });
     refresh_pending_tab(widgets);
@@ -469,7 +468,7 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Async: Remove selected package
+// Handle marking the selected package for removal.
 // -----------------------------------------------------------------------------
 void
 pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
@@ -480,21 +479,21 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  // Determine the selected package from the current package table.
+  // Read the selected package from the current package table.
   PackageRow pkg;
   if (!package_table_get_selected_package_row(widgets, pkg)) {
     ui_helpers_set_status(widgets->query.status_label, "No package selected.", "gray");
     return;
   }
 
-  // Only block self-removal for the exact installed row browse/search may also
-  // contain related non-installed candidates for the same package name.
+  // Only block self-removal for the exact installed row. Search results may
+  // also contain related non-installed candidates for the same package name.
   if (dnf_backend_is_package_installed_exact(pkg) && dnf_backend_is_package_self_protected(pkg)) {
     ui_helpers_set_status(widgets->query.status_label, self_protected_transaction_message(pkg).c_str(), "red");
     return;
   }
 
-  // Toggle pending remove
+  // Add or remove the pending remove action.
   PendingAction::Type existing_type;
   bool has_existing = get_pending_action_type(widgets, pkg.nevra, existing_type);
   if (has_existing && existing_type == PendingAction::REMOVE) {
@@ -502,7 +501,7 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
     refresh_pending_tab(widgets);
     ui_helpers_set_status(widgets->query.status_label, ("Unmarked: " + pkg.name).c_str(), "gray");
   } else {
-    // If it was pending INSTALL (or anything else), replace it with REMOVE
+    // Replace any other pending action with remove.
     remove_pending_action(widgets, pkg.nevra);
     widgets->transaction.actions.push_back({ PendingAction::REMOVE, pkg.nevra });
     refresh_pending_tab(widgets);
@@ -516,7 +515,7 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Async: Reinstall selected package
+// Handle marking the selected package for reinstall.
 // -----------------------------------------------------------------------------
 void
 pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
@@ -559,7 +558,7 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Clears all pending install, remove, and reinstall actions without applying them
+// Clear all pending package actions without applying them.
 // -----------------------------------------------------------------------------
 void
 pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_data)
@@ -589,7 +588,7 @@ pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_d
 }
 
 // -----------------------------------------------------------------------------
-// Resolve pending actions through the transaction service and confirm them
+// Prepare a transaction preview and ask the user to confirm it.
 // -----------------------------------------------------------------------------
 void
 pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)

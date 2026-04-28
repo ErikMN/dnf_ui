@@ -1,0 +1,167 @@
+# Transaction Service Internals
+
+This document explains how package preview and apply work.
+
+## Boundary
+
+The GUI process stays unprivileged.
+
+Package search and details happen in the GUI process. Transaction preview and
+apply go through the D-Bus service.
+
+Important files:
+
+- [src/ui/pending_transaction_controller.cpp](../src/ui/pending_transaction_controller.cpp)
+- [src/ui/pending_transaction_request.cpp](../src/ui/pending_transaction_request.cpp)
+- [src/transaction_request.hpp](../src/transaction_request.hpp)
+- [src/transaction_service_client.cpp](../src/transaction_service_client.cpp)
+- [src/service/transaction_service.cpp](../src/service/transaction_service.cpp)
+- [src/service/transaction_service_introspection.cpp](../src/service/transaction_service_introspection.cpp)
+
+## Request Model
+
+`TransactionRequest` is shared by the GUI and the service.
+
+It contains three explicit user action lists:
+
+- install
+- remove
+- reinstall
+
+Dependency changes are not stored in the request. They are resolved later when
+the backend builds the preview.
+
+The GUI builds this request from pending actions in
+[src/ui/pending_transaction_request.cpp](../src/ui/pending_transaction_request.cpp).
+
+## GUI Flow
+
+When the user clicks Apply:
+
+1. The pending controller validates the pending actions.
+2. The controller builds a `TransactionRequest`.
+3. The GUI client calls `StartTransaction` on the service.
+4. The service creates a request object and starts preview work.
+5. The GUI waits for the preview result.
+6. The GUI shows a summary dialog.
+7. If the user confirms, the GUI calls `Apply` on the request object.
+8. The service authorizes and runs the transaction.
+9. The GUI refreshes package state and releases the request object.
+
+```mermaid
+flowchart TD
+    Mark[Marked actions] --> Request[TransactionRequest]
+    Request --> Start[StartTransaction]
+    Start --> Preview[Preview worker]
+    Preview --> Dialog[Summary dialog]
+    Dialog --> Apply[Apply method]
+    Apply --> Auth[Polkit authorization]
+    Auth --> Run[Apply worker]
+    Run --> Refresh[Refresh GUI package state]
+    Refresh --> Release[Release request object]
+```
+
+## D-Bus Objects
+
+The service exposes one manager object and one request object per transaction.
+
+The manager object has:
+
+- `StartTransaction`
+
+Each request object has:
+
+- `Cancel`
+- `Apply`
+- `Release`
+- `GetPreview`
+- `GetResult`
+- `Progress` signal
+- `Finished` signal
+
+The exact D-Bus shape is declared in
+[src/service/transaction_service_introspection.cpp](../src/service/transaction_service_introspection.cpp).
+
+Shared names live in
+[src/service/transaction_service_dbus.hpp](../src/service/transaction_service_dbus.hpp).
+
+## Request Lifecycle
+
+One transaction request normally moves through these states:
+
+```mermaid
+flowchart TD
+    Start[StartTransaction] --> PreviewRunning[preview running]
+    PreviewRunning --> PreviewReady[preview ready]
+    PreviewRunning --> PreviewFailed[preview failed]
+    PreviewRunning --> Cancelled[cancelled]
+    PreviewReady --> Apply[Apply]
+    PreviewReady --> Cancelled
+    Apply --> ApplyRunning[apply running]
+    ApplyRunning --> ApplySucceeded[apply succeeded]
+    ApplyRunning --> ApplyFailed[apply failed]
+    PreviewReady --> Release[Release]
+    PreviewFailed --> Release
+    Cancelled --> Release
+    ApplySucceeded --> Release
+    ApplyFailed --> Release
+```
+
+The GUI client also handles service disappearance while waiting for a result and
+returns an error instead of waiting forever.
+
+## Preview
+
+Preview starts when the service creates a request object.
+
+Before resolving the preview, the service refreshes backend state:
+
+- install and reinstall requests need repository metadata
+- remove-only requests can use installed-package state only
+
+If refresh fails, the service continues with the package state it can still
+load. Remove-only requests can proceed from the local installed package
+database without repository metadata.
+
+The preview result is stored on the request object. The GUI reads structured
+preview arrays with `GetPreview` and human-readable summary text through the
+final state details.
+
+## Apply
+
+Apply can start only after preview succeeds.
+
+On the system bus, the service asks Polkit to authorize the apply step. On the
+session bus, authorization is skipped so development and Docker tests can run
+without a system service.
+
+After authorization succeeds, the service runs backend apply work on a worker
+thread. Progress lines are emitted through the request object's `Progress`
+signal. Final state is emitted through `Finished`.
+
+Only one apply operation is allowed at a time inside the service.
+
+## Cancellation and Release
+
+Preview can be cancelled before apply starts.
+
+Apply is not cancelled once package work is running.
+
+`Release` is a client cleanup call. It is allowed only after work has reached a
+final state and no authorization request is waiting for a Polkit answer.
+
+On the system bus, the service watches the client's bus name. If the client
+disconnects, the service starts internal cleanup for that client's transaction
+objects so abandoned requests do not accumulate. If this happens before package
+apply work starts, the service marks the request cancelled and stops before
+package work begins.
+
+## After Apply
+
+After successful apply, both the service and GUI refresh package state:
+
+- the service refreshes its Base so future previews use current package state
+- the GUI clears query cache, refreshes installed state, and reloads the current view
+
+This keeps visible package rows aligned with the packages that are now
+installed, removed, or changed.

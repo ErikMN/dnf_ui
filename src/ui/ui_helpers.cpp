@@ -16,7 +16,7 @@ constexpr const char *ICON_BUTTON_LABEL_KEY = "dnfui-icon-button-label";
 } // namespace
 
 // -----------------------------------------------------------------------------
-// ui_helpers_create_icon_button
+// Create a button containing an icon and label.
 // -----------------------------------------------------------------------------
 GtkWidget *
 ui_helpers_create_icon_button(const char *icon_name, const char *label)
@@ -28,7 +28,7 @@ ui_helpers_create_icon_button(const char *icon_name, const char *label)
 }
 
 // -----------------------------------------------------------------------------
-// ui_helpers_set_icon_button
+// Update the icon and label shown in an existing action button.
 // -----------------------------------------------------------------------------
 void
 ui_helpers_set_icon_button(GtkButton *button, const char *icon_name, const char *label)
@@ -65,7 +65,7 @@ ui_helpers_set_icon_button(GtkButton *button, const char *icon_name, const char 
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Update status label with color
+// Update the status label with a background color.
 // -----------------------------------------------------------------------------
 void
 ui_helpers_set_status(GtkLabel *label, const std::string &text, const std::string &color)
@@ -90,7 +90,7 @@ ui_helpers_set_status(GtkLabel *label, const std::string &text, const std::strin
 }
 
 // -----------------------------------------------------------------------------
-// Helper: Update transaction action button labels based on pending actions
+// Update transaction action button labels based on pending actions.
 // -----------------------------------------------------------------------------
 void
 ui_helpers_update_action_button_labels(SearchWidgets *widgets, const std::string &pkg)

@@ -2,8 +2,8 @@
 // src/dnf_backend/dnf_internal.hpp
 // Internal libdnf5 backend implementation helpers
 //
-// The public backend contract lives in src/dnf_backend/dnf_backend.hpp. This header is
-// shared only by the backend implementation units under src/dnf_backend/ so the
+// The public backend contract lives in the backend facade header. This header is
+// shared only by the backend implementation units so the
 // app-facing API can stay small while query, details, state-cache, and
 // transaction code remain in separate files.
 // -----------------------------------------------------------------------------
@@ -25,7 +25,7 @@
 namespace dnf_backend_internal {
 
 // Installed package scan result published into the shared UI cache only after a
-// full uncancelled scan. Keeping rows, exact NEVRAs, and name+arch lookup
+// full uncancelled scan. Keeping rows, exact NEVRAs, and name and architecture lookup
 // together avoids partial cache updates.
 struct InstalledQueryResult {
   std::vector<PackageRow> rows;
@@ -48,9 +48,9 @@ make_package_row(const libdnf5::rpm::Package &pkg,
 bool package_query_cancelled(GCancellable *cancellable);
 
 // -----------------------------------------------------------------------------
-// Collect query rows keyed by package name+arch. These helpers intentionally
-// require a caller-owned Base reference so the caller controls the Base lock
-// lifetime across related libdnf5 queries.
+// Collect query rows keyed by package name and architecture. These helpers intentionally
+// require a caller-supplied Base reference so the caller controls the Base lock
+// while related libdnf5 queries run.
 // -----------------------------------------------------------------------------
 std::map<std::string, PackageRow> collect_available_rows_by_name_arch(libdnf5::Base &base,
                                                                       GCancellable *cancellable,
@@ -65,7 +65,7 @@ InstalledQueryResult collect_installed_rows(libdnf5::Base &base,
                                             const std::string *pattern = nullptr);
 
 // -----------------------------------------------------------------------------
-// Repo-candidate annotation and browse/search merge helpers shared by query and
+// Repo-candidate annotation and browse and search merge helpers shared by query and
 // test-only fallback paths.
 // -----------------------------------------------------------------------------
 void annotate_installed_row_with_repo_candidate(PackageRow &installed_row,

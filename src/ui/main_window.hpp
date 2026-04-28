@@ -2,7 +2,7 @@
 // Main application window
 //
 // Owns construction and wiring of the primary GTK window while keeping
-// application lifecycle setup in app.cpp.
+// application lifecycle setup in the application module.
 #pragma once
 
 #include <gtk/gtk.h>

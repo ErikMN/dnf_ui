@@ -9,9 +9,9 @@
 #include <map>
 #include <mutex>
 
-// Cache one visible result set per search term and flag combination.
+// Cache one visible result set per search term and search option combination.
 // Entries are tied to the BaseManager generation that produced them so a Base
-// rebuild cannot serve stale package metadata back into the UI.
+// rebuild cannot serve outdated package metadata back into the UI.
 struct CachedSearchResults {
   uint64_t generation;
   std::vector<PackageRow> packages;
@@ -21,7 +21,7 @@ static std::map<std::string, CachedSearchResults> g_search_cache;
 static std::mutex g_cache_mutex; // Protects g_search_cache
 
 // -----------------------------------------------------------------------------
-// Helper: Build a unique cache key based on search flags and term
+// Build a unique cache key from search options and the search term.
 // -----------------------------------------------------------------------------
 std::string
 package_query_cache_key_for(const std::string &term)
@@ -36,7 +36,7 @@ package_query_cache_key_for(const std::string &term)
 
 // -----------------------------------------------------------------------------
 // Clear cached search results.
-// Used both by the Clear Cache button and after successful Base rebuilds.
+// Used by the Clear Cache button, repository refresh, and transaction refresh.
 // -----------------------------------------------------------------------------
 void
 package_query_cache_clear()
@@ -46,7 +46,7 @@ package_query_cache_clear()
 }
 
 // -----------------------------------------------------------------------------
-// Check cache first.
+// Look up cached rows before starting a new backend query.
 // Reuse only results produced from the current Base generation so refreshes
 // and transaction rebuilds cannot surface outdated package metadata.
 // -----------------------------------------------------------------------------
@@ -69,7 +69,7 @@ package_query_cache_lookup(const std::string &key, uint64_t generation, std::vec
 }
 
 // -----------------------------------------------------------------------------
-// Cache results for faster re-display next time.
+// Save rows so the same search can be shown faster next time.
 // Search results are only reusable while the backend Base generation stays
 // the same, otherwise repo state may have changed underneath the cache.
 // -----------------------------------------------------------------------------

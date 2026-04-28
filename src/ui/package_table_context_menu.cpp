@@ -43,7 +43,7 @@ append_context_menu_action(GtkBox *box,
 }
 
 // -----------------------------------------------------------------------------
-// package_table_show_context_menu
+// Show right-click actions for one package table row.
 // -----------------------------------------------------------------------------
 void
 package_table_show_context_menu(GtkWidget *anchor,
@@ -76,7 +76,7 @@ package_table_show_context_menu(GtkWidget *anchor,
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   gtk_popover_set_child(GTK_POPOVER(popover), box);
 
-  // Match the main action buttons: remove/reinstall are only valid for the
+  // Match the main action buttons: remove and reinstall are only valid for the
   // exact installed NEVRA represented by this row.
   bool installed_exact = dnf_backend_is_package_installed_exact(row);
   // Keep the running app visible in the table, but block context-menu actions

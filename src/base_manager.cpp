@@ -1,8 +1,8 @@
 // -----------------------------------------------------------------------------
 // src/base_manager.cpp
-// BaseManager: Provides cached access to a libdnf5::Base instance
-// - Ensures thread-safe creation and reuse of libdnf5 Base objects
-// - Supports manual rebuilds when repositories are refreshed
+// Shared libdnf5 Base manager
+// Creates, reuses, and rebuilds Base objects while protecting access from
+// worker threads.
 // -----------------------------------------------------------------------------
 #include "base_manager.hpp"
 #include "debug_trace.hpp"
@@ -150,7 +150,7 @@ build_base_with_offline_fallback()
 }
 
 // -----------------------------------------------------------------------------
-// Singleton: BaseManager instance accessor
+// Return the single BaseManager used by the process.
 // -----------------------------------------------------------------------------
 BaseManager &
 BaseManager::instance()
@@ -160,7 +160,7 @@ BaseManager::instance()
 }
 
 // -----------------------------------------------------------------------------
-// BaseManager::current_repo_state
+// Return the repository state of the current Base.
 // -----------------------------------------------------------------------------
 BaseRepoState
 BaseManager::current_repo_state() const
@@ -170,12 +170,12 @@ BaseManager::current_repo_state() const
 }
 
 // -----------------------------------------------------------------------------
-// Thread-safe read accessor
+// Return read access to the current Base.
 // -----------------------------------------------------------------------------
 BaseRead
 BaseManager::acquire_read()
 {
-  // Fast path: Base already exists
+  // Use the existing Base when it is already available.
   {
     std::shared_lock<std::shared_mutex> shared(base_mutex);
     if (base_ptr) {
@@ -183,7 +183,7 @@ BaseManager::acquire_read()
     }
   }
 
-  // Initialize under exclusive lock
+  // Build the Base while holding the write lock.
   {
     std::unique_lock<std::shared_mutex> unique(base_mutex);
     if (!base_ptr) {
@@ -195,17 +195,17 @@ BaseManager::acquire_read()
     }
   }
 
-  // Re-acquire shared lock for the returned guard
+  // Take the read lock again for the returned guard.
   std::shared_lock<std::shared_mutex> shared(base_mutex);
   if (!base_ptr) {
-    // base_ptr should not become null while we hold the mutex
+    // The Base should not disappear while this lock is held.
     throw std::runtime_error("DNF backend not initialized (Base is null).");
   }
   return { *base_ptr, BaseGuard(std::move(shared)), generation.load(std::memory_order_relaxed) };
 }
 
 // -----------------------------------------------------------------------------
-// Thread-safe write accessor (exclusive)
+// Return write access to the current Base.
 // -----------------------------------------------------------------------------
 std::pair<libdnf5::Base &, BaseWriteGuard>
 BaseManager::acquire_write()
@@ -223,12 +223,12 @@ BaseManager::acquire_write()
 }
 
 // -----------------------------------------------------------------------------
-// Force rebuild of cached Base (used when user requests "Refresh Repositories")
+// Rebuild the cached Base after repository refresh or transaction work.
 // -----------------------------------------------------------------------------
 BaseRepoState
 BaseManager::rebuild()
 {
-  // Lock to ensure only one rebuild runs at a time
+  // Allow only one Base rebuild at a time.
   std::unique_lock lock(base_mutex);
 
   // Build the replacement first so a refresh failure does not discard the last
@@ -284,7 +284,7 @@ BaseManager::ensure_system_only_initialized_if_needed()
 }
 
 // -----------------------------------------------------------------------------
-// BaseManager::build_initialized_system_only_base
+// Build a Base that reads only the local installed package database.
 // -----------------------------------------------------------------------------
 std::shared_ptr<libdnf5::Base>
 BaseManager::build_initialized_system_only_base()
@@ -293,8 +293,7 @@ BaseManager::build_initialized_system_only_base()
 }
 
 // -----------------------------------------------------------------------------
-// Internal helper: ensure_base_initialized()
-// Called under unique_lock to create the shared Base when it does not exist.
+// Create the shared Base while the caller holds the write lock.
 // -----------------------------------------------------------------------------
 void
 BaseManager::ensure_base_initialized()
@@ -308,7 +307,7 @@ BaseManager::ensure_base_initialized()
 
 #ifdef DNFUI_BUILD_TESTS
 // -----------------------------------------------------------------------------
-// BaseManager::reset_for_tests
+// Clear cached Base state between tests.
 // -----------------------------------------------------------------------------
 void
 BaseManager::reset_for_tests()

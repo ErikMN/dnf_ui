@@ -84,7 +84,7 @@ collect_self_protected_package_names(libdnf5::Base &base)
 // -----------------------------------------------------------------------------
 // Publish installed-package state only after callers have finished all libdnf
 // Base reads. Holding the Base lock while taking g_installed_mutex would make
-// future UI/cache callers vulnerable to lock-order deadlocks.
+// future UI cache callers vulnerable to lock-order deadlocks.
 // -----------------------------------------------------------------------------
 void
 publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string> protected_names)
@@ -186,7 +186,7 @@ dnf_backend_is_package_installed_exact(const PackageRow &row)
 // -----------------------------------------------------------------------------
 // Classify a package row as available, upgradeable, exact-installed,
 // local-only, or installed-newer-than-repo. Exact-installed rows prefer the row
-// provenance annotation; available rows fall back to the installed name+arch
+// provenance annotation; available rows fall back to the installed name and architecture
 // cache so upgrade-state badges can be shown without duplicate visible rows.
 // -----------------------------------------------------------------------------
 PackageInstallState
@@ -196,7 +196,7 @@ dnf_backend_get_package_install_state(const PackageRow &row)
   if (g_installed_nevras.count(row.nevra) > 0) {
     switch (row.repo_candidate_relation) {
     case PackageRepoCandidateRelation::UNKNOWN:
-      // Annotation was not run or failed (best-effort path). The package is
+      // Annotation was not run or failed. The package is
       // known-installed but we cannot distinguish LOCAL_ONLY from INSTALLED
       // without a successful repo query. Fall back to INSTALLED so the UI
       // does not misrepresent the package state.
@@ -255,7 +255,7 @@ bool
 dnf_backend_can_reinstall_package(const PackageRow &row)
 {
   // Reinstall is valid only for the exact installed NEVRA that the user is
-  // looking at, not for an older/newer visible candidate with the same name.
+  // looking at, not for an older or newer visible candidate with the same name.
   if (!dnf_backend_is_package_installed_exact(row)) {
     return false;
   }
@@ -280,7 +280,7 @@ dnf_backend_is_package_self_protected(const PackageRow &row)
 
 // -----------------------------------------------------------------------------
 // Resolve one queued transaction spec back to the installed rpmdb so apply-time
-// validation can reject self-removal even if the UI state is stale or bypassed.
+// validation can reject self-removal even if the UI state is outdated or bypassed.
 // -----------------------------------------------------------------------------
 bool
 dnf_backend_is_self_protected_transaction_spec(const std::string &spec)

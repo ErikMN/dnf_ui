@@ -138,7 +138,7 @@ transaction_package_label(const libdnf5::base::TransactionPackage &item)
 class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks {
   public:
   // -----------------------------------------------------------------------------
-  // StreamingDownloadCallbacks
+  // Store the callback used to report download progress.
   // -----------------------------------------------------------------------------
   explicit StreamingDownloadCallbacks(TransactionProgressCallback progress_cb)
       : progress_cb(std::move(progress_cb))
@@ -146,7 +146,7 @@ class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks
   }
 
   // -----------------------------------------------------------------------------
-  // add_new_download
+  // Start progress reporting for one package download.
   // -----------------------------------------------------------------------------
   void *add_new_download(void *, const char *description, double) override
   {
@@ -157,7 +157,7 @@ class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks
   }
 
   // -----------------------------------------------------------------------------
-  // progress
+  // Report package download progress in ten percent steps.
   // -----------------------------------------------------------------------------
   int progress(void *user_cb_data, double total_to_download, double downloaded) override
   {
@@ -180,7 +180,7 @@ class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks
   }
 
   // -----------------------------------------------------------------------------
-  // end
+  // Finish progress reporting for one package download.
   // -----------------------------------------------------------------------------
   int end(void *user_cb_data, TransferStatus status, const char *msg) override
   {
@@ -217,7 +217,7 @@ class StreamingDownloadCallbacks final : public libdnf5::repo::DownloadCallbacks
 class DownloadCallbacksReset {
   public:
   // -----------------------------------------------------------------------------
-  // DownloadCallbacksReset
+  // Remember which Base needs its download callbacks cleared.
   // -----------------------------------------------------------------------------
   explicit DownloadCallbacksReset(libdnf5::Base &base)
       : base(base)
@@ -225,7 +225,7 @@ class DownloadCallbacksReset {
   }
 
   // -----------------------------------------------------------------------------
-  // ~DownloadCallbacksReset
+  // Clear download callbacks when transaction apply finishes.
   // -----------------------------------------------------------------------------
   ~DownloadCallbacksReset()
   {
