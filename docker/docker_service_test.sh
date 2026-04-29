@@ -16,6 +16,10 @@ color_print() {
 
 IMAGE_NAME="dnfui-dev"
 CONTAINER_NAME="dnfui-service-test"
+DOCKER_TTY_ARGS=()
+if [ "${DOCKER_USE_TTY:-1}" != "0" ]; then
+  DOCKER_TTY_ARGS=(-it)
+fi
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -30,7 +34,7 @@ fi
 
 color_print "$FMT_GREEN" "*** Running transaction service test inside container... ***"
 
-docker run --rm -it \
+docker run --rm "${DOCKER_TTY_ARGS[@]}" \
   --name "$CONTAINER_NAME" \
   --init \
   -w /workspace \

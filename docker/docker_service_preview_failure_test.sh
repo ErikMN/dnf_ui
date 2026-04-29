@@ -15,6 +15,10 @@ color_print() {
 
 IMAGE_NAME="dnfui-dev"
 CONTAINER_NAME="dnfui-service-preview-failure-test"
+DOCKER_TTY_ARGS=()
+if [ "${DOCKER_USE_TTY:-1}" != "0" ]; then
+  DOCKER_TTY_ARGS=(-it)
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -27,7 +31,7 @@ fi
 
 color_print "$FMT_GREEN" "*** Running transaction service preview failure test inside container... ***"
 
-docker run --rm -it \
+docker run --rm "${DOCKER_TTY_ARGS[@]}" \
   --name "$CONTAINER_NAME" \
   --init \
   -w /workspace \

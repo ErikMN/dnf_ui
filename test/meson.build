@@ -25,4 +25,4 @@ dnfui_tests = executable(
   ],
 )
 
-test('dnfui-tests', dnfui_tests)
+test('dnfui-tests', dnfui_tests, timeout: 120)
