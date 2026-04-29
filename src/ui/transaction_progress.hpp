@@ -1,8 +1,10 @@
+// -----------------------------------------------------------------------------
 // src/ui/transaction_progress.hpp
 // Transaction progress window helpers
 //
 // Creates the apply progress dialog and keeps it alive while service progress
 // callbacks are still pending.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include <cstddef>

@@ -1,8 +1,10 @@
+// -----------------------------------------------------------------------------
 // pending_transaction_request.hpp
 // Pending transaction request helpers
 //
 // Converts the marked package actions into the request sent to the transaction
 // service and performs request-level safety checks before preview.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include "pending_transaction_state.hpp"

@@ -1,8 +1,10 @@
+// -----------------------------------------------------------------------------
 // src/ui/package_query_cache.hpp
 // Package query result cache
 //
 // Owns cached search result storage so the package query controller does not
 // need to manage cache keys, generations, or locking directly.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include "dnf_backend/dnf_backend.hpp"

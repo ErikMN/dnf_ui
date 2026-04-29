@@ -1,7 +1,9 @@
+// -----------------------------------------------------------------------------
 // src/ui/package_info_controller.hpp
 // Package details controller entry points
 //
 // Handles package selection, details loading, and action-button sensitivity.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include "dnf_backend/dnf_backend.hpp"

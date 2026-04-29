@@ -1,8 +1,10 @@
+// -----------------------------------------------------------------------------
 // src/ui/widgets.hpp
 // Shared GTK widget state
 //
 // Groups pointers to the main window controls so split controller modules can
 // cooperate without owning each other's widgets.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include <string>

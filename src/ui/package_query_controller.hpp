@@ -1,8 +1,10 @@
+// -----------------------------------------------------------------------------
 // src/ui/package_query_controller.hpp
 // Public package query controller entry points
 //
 // Owns the GTK callbacks and refresh hooks for search, package listing,
 // query history, and package-query cache invalidation.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include <gtk/gtk.h>

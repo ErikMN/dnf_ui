@@ -43,10 +43,12 @@ enum class PackageRepoCandidateRelation {
   OLDER,
 };
 
+// -----------------------------------------------------------------------------
 // Backend-owned install reason for installed packages.
 // This keeps package provenance visible to the UI without exposing libdnf5
 // enums directly through the presentation model. Available-only rows keep
 // UNKNOWN because the install reason is meaningful only for installed packages.
+// -----------------------------------------------------------------------------
 enum class PackageInstallReason {
   UNKNOWN,
   DEPENDENCY,
@@ -113,10 +115,12 @@ struct PackageRow {
   }
 };
 
+// -----------------------------------------------------------------------------
 // Backend-owned install state so the UI can reason about package actions
 // without depending on libdnf5 headers or EVR comparison details.
 // These values are presentation-oriented and may depend on repo provenance
 // being known for the visible row.
+// -----------------------------------------------------------------------------
 enum class PackageInstallState {
   AVAILABLE,
   UPGRADEABLE,
@@ -137,9 +141,11 @@ struct TransactionPreview {
 
 using TransactionProgressCallback = std::function<void(const std::string &)>;
 
+// -----------------------------------------------------------------------------
 // Search flags used by backend search queries. The UI can update them from the
 // search controls, and each backend worker copies a snapshot before scanning so
 // one query remains internally consistent.
+// -----------------------------------------------------------------------------
 struct DnfBackendSearchOptions {
   bool search_in_description = false;
   bool exact_match = false;

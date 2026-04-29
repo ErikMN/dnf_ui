@@ -748,6 +748,7 @@ validate_transaction_request_for_service(const TransactionRequest &request, std:
   return true;
 }
 
+// -----------------------------------------------------------------------------
 // Return true when the transaction may need available-repo metadata instead of
 // the local rpmdb alone.
 // -----------------------------------------------------------------------------

@@ -1,8 +1,10 @@
+// -----------------------------------------------------------------------------
 // src/ui/package_table_view.hpp
 // Public package table view entry points
 //
 // Owns the package table population, current row selection lookup, and visible
 // status refresh used after pending transaction changes.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include "dnf_backend/dnf_backend.hpp"

@@ -24,6 +24,7 @@
 // Any new queued callback or long-lived background handoff of this pointer must
 // retain it before the handoff and release it after that work is done so delayed
 // callbacks never read freed state.
+// -----------------------------------------------------------------------------
 struct TransactionProgressWindow {
   std::atomic<unsigned> ref_count { 1 };
   GtkWindow *window = nullptr;

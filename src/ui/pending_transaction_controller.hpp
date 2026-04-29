@@ -1,8 +1,10 @@
+// -----------------------------------------------------------------------------
 // src/ui/pending_transaction_controller.hpp
 // Public pending transaction controller entry points
 //
 // Owns the GTK callbacks for marking packages, clearing pending actions, and
 // applying the prepared transaction through the transaction service.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include <gtk/gtk.h>

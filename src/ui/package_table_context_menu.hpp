@@ -1,6 +1,8 @@
+// -----------------------------------------------------------------------------
 // Package table context menu helpers
 //
 // Owns the right-click transaction menu shown for one package table row.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include "dnf_backend/dnf_backend.hpp"

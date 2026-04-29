@@ -1,7 +1,9 @@
+// -----------------------------------------------------------------------------
 // src/ui/widgets_internal.hpp
 // Internal shared widget helpers
 //
 // Provides task lifetime and spinner helpers used by UI controllers.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include <gtk/gtk.h>

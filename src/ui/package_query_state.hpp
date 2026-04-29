@@ -1,8 +1,10 @@
+// -----------------------------------------------------------------------------
 // src/ui/package_query_state.hpp
 // Package query state model
 //
 // Keeps the non-widget state for search, package listing, cancellation, and
 // reload handling separate from the top-level widget pointer bag.
+// -----------------------------------------------------------------------------
 #pragma once
 
 #include <cstdint>
