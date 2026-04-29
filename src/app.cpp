@@ -32,7 +32,9 @@ static gboolean start_backend_warmup_idle(gpointer user_data);
 static void start_backend_warmup_task(SearchWidgets *widgets);
 static void on_backend_warmup_task(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable);
 static void on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gpointer user_data);
+#ifdef DNFUI_DEBUG_TRACE
 static const char *base_repo_state_trace_name(BaseRepoState state);
+#endif
 
 static std::atomic<bool> g_installed_refresh_running { false };
 
@@ -44,6 +46,7 @@ struct StartupWarmupData {
 // -----------------------------------------------------------------------------
 // Return the text used in trace logs for one repository state.
 // -----------------------------------------------------------------------------
+#ifdef DNFUI_DEBUG_TRACE
 static const char *
 base_repo_state_trace_name(BaseRepoState state)
 {
@@ -58,6 +61,7 @@ base_repo_state_trace_name(BaseRepoState state)
     return "unknown";
   }
 }
+#endif
 
 // -----------------------------------------------------------------------------
 // Run GTK application and return process exit status
