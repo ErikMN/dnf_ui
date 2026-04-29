@@ -75,6 +75,28 @@ TEST_CASE("Transaction request validation rejects an empty reinstall package spe
   REQUIRE(error == "Transaction request contains an empty reinstall package spec.");
 }
 
+TEST_CASE("Transaction request validation rejects too many package actions")
+{
+  TransactionRequest request;
+  std::string error;
+
+  request.install.assign(kTransactionRequestMaxItems + 1, "example-install-spec");
+
+  REQUIRE_FALSE(request.validate(error));
+  REQUIRE(error == "Transaction request contains too many package actions.");
+}
+
+TEST_CASE("Transaction request validation rejects package specs that are too long")
+{
+  TransactionRequest request;
+  std::string error;
+
+  request.install.push_back(std::string(kTransactionRequestMaxSpecLength + 1, 'x'));
+
+  REQUIRE_FALSE(request.validate(error));
+  REQUIRE(error == "Transaction request contains a package spec that is too long.");
+}
+
 TEST_CASE("Transaction request validation accepts mixed non empty package specs")
 {
   TransactionRequest request;

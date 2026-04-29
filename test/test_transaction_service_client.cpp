@@ -7,6 +7,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "dnf_backend/dnf_backend.hpp"
+#include "service/transaction_service_dbus.hpp"
 #include "transaction_request.hpp"
 #include "transaction_service_client.hpp"
 
@@ -24,6 +25,8 @@
 #endif
 
 namespace {
+
+constexpr size_t kExpectedMaxLiveRequestsPerClient = 8;
 
 struct PreviewClientResult {
   bool ok = false;
@@ -119,6 +122,57 @@ wait_for_file(const std::string &path, int timeout_ms)
   return false;
 }
 
+// -----------------------------------------------------------------------------
+// Call StartTransaction directly so service-side request errors can be inspected.
+// -----------------------------------------------------------------------------
+static bool
+call_start_transaction(GDBusConnection *connection,
+                       const char *install_spec,
+                       std::string &transaction_path_out,
+                       std::string &error_out)
+{
+  transaction_path_out.clear();
+  error_out.clear();
+
+  GVariantBuilder install_builder;
+  GVariantBuilder remove_builder;
+  GVariantBuilder reinstall_builder;
+  g_variant_builder_init(&install_builder, G_VARIANT_TYPE("as"));
+  g_variant_builder_init(&remove_builder, G_VARIANT_TYPE("as"));
+  g_variant_builder_init(&reinstall_builder, G_VARIANT_TYPE("as"));
+
+  if (install_spec && *install_spec) {
+    g_variant_builder_add(&install_builder, "s", install_spec);
+  }
+
+  GError *error = nullptr;
+  GVariant *reply =
+      g_dbus_connection_call_sync(connection,
+                                  kTransactionServiceName,
+                                  kTransactionServiceManagerPath,
+                                  kTransactionServiceManagerInterface,
+                                  "StartTransaction",
+                                  g_variant_new("(asasas)", &install_builder, &remove_builder, &reinstall_builder),
+                                  G_VARIANT_TYPE("(o)"),
+                                  G_DBUS_CALL_FLAGS_NONE,
+                                  -1,
+                                  nullptr,
+                                  &error);
+  if (!reply) {
+    error_out = error && error->message ? error->message : "";
+    g_clear_error(&error);
+    return false;
+  }
+
+  const char *transaction_path = nullptr;
+  g_variant_get(reply, "(&o)", &transaction_path);
+  if (transaction_path) {
+    transaction_path_out = transaction_path;
+  }
+  g_variant_unref(reply);
+  return true;
+}
+
 } // namespace
 
 TEST_CASE("Transaction service client reports an error when the service disappears while waiting")
@@ -204,6 +258,67 @@ TEST_CASE("Transaction service client reports an error when the service disappea
   g_remove(started_file.c_str());
   g_rmdir(temp_dir);
   g_free(temp_dir);
+  g_test_dbus_down(test_bus);
+  g_object_unref(test_bus);
+}
+
+TEST_CASE("Transaction service rejects too many active requests from one client")
+{
+  REQUIRE(std::string(DNFUI_TEST_SERVICE_BIN).size() > 0);
+
+  GTestDBus *test_bus = g_test_dbus_new(G_TEST_DBUS_NONE);
+  REQUIRE(test_bus != nullptr);
+  g_test_dbus_up(test_bus);
+
+  ScopedEnvironmentOverride session_bus_address_env("DBUS_SESSION_BUS_ADDRESS");
+  ScopedEnvironmentOverride transaction_bus_env("DNFUI_TRANSACTION_BUS");
+
+  const char *bus_address = g_test_dbus_get_bus_address(test_bus);
+  REQUIRE(bus_address != nullptr);
+  REQUIRE(g_setenv("DBUS_SESSION_BUS_ADDRESS", bus_address, TRUE));
+  REQUIRE(g_setenv("DNFUI_TRANSACTION_BUS", "session", TRUE));
+
+  GError *error = nullptr;
+  GSubprocessLauncher *launcher = g_subprocess_launcher_new(
+      static_cast<GSubprocessFlags>(G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE));
+  REQUIRE(launcher != nullptr);
+  g_subprocess_launcher_setenv(launcher, "DBUS_SESSION_BUS_ADDRESS", bus_address, TRUE);
+  g_subprocess_launcher_setenv(launcher, "DNFUI_TEST_PREVIEW_DELAY_MS", "10000", TRUE);
+
+  const char *service_argv[] = {
+    DNFUI_TEST_SERVICE_BIN,
+    "--session",
+    nullptr,
+  };
+  GSubprocess *service = g_subprocess_launcher_spawnv(launcher, service_argv, &error);
+  std::string error_text = error && error->message ? error->message : "";
+  INFO(error_text);
+  REQUIRE(service != nullptr);
+  g_object_unref(launcher);
+
+  GDBusConnection *connection = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error);
+  error_text = error && error->message ? error->message : "";
+  INFO(error_text);
+  REQUIRE(connection != nullptr);
+  REQUIRE(wait_for_bus_name_owner(connection, kTransactionServiceName, 5000));
+
+  for (size_t i = 0; i < kExpectedMaxLiveRequestsPerClient; i++) {
+    std::string transaction_path;
+    std::string start_error;
+
+    REQUIRE(call_start_transaction(connection, "bash", transaction_path, start_error));
+    REQUIRE_FALSE(transaction_path.empty());
+  }
+
+  std::string rejected_path;
+  std::string rejected_error;
+  REQUIRE_FALSE(call_start_transaction(connection, "bash", rejected_path, rejected_error));
+  REQUIRE(rejected_error.find("This client has too many active transaction requests.") != std::string::npos);
+
+  transaction_service_client_reset_for_tests();
+  g_object_unref(connection);
+  g_subprocess_force_exit(service);
+  g_object_unref(service);
   g_test_dbus_down(test_bus);
   g_object_unref(test_bus);
 }

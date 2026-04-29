@@ -62,10 +62,16 @@ Run the normal Docker Catch2 test set:
 make dockertest
 ```
 
-Run every Docker-backed test target:
+Run the main Docker-backed service and Catch2 test matrix:
 
 ```sh
 make dockertests
+```
+
+Run the offline cached metadata smoke tests separately:
+
+```sh
+make dockerofflinetest
 ```
 
 Run the session bus service preview smoke test:

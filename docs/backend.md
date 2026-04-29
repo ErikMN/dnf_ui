@@ -91,13 +91,15 @@ executable from inside the app.
 
 The backend finds the current executable path and asks libdnf5 which installed
 package owns it. The UI disables destructive actions for that exact installed
-row, and request validation checks again before preview or apply.
+row. The transaction service checks remove and reinstall requests again before
+it creates a preview request object.
 
 The relevant functions are:
 
 - `dnf_backend_is_package_self_protected`
 - `dnf_backend_is_self_protected_transaction_spec`
 - `pending_transaction_validate_request`
+- `validate_transaction_request_for_service`
 
 ## Package Details
 

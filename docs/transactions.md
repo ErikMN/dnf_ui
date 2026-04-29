@@ -114,6 +114,10 @@ returns an error instead of waiting forever.
 
 Preview starts when the service creates a request object.
 
+Before the service creates a request object, it validates the shared request
+shape, rejects oversized requests, and rejects remove or reinstall requests for
+the package that owns the running DNF UI executable.
+
 Before resolving the preview, the service refreshes backend state:
 
 - install and reinstall requests need repository metadata
@@ -126,6 +130,9 @@ database without repository metadata.
 The preview result is stored on the request object. The GUI reads structured
 preview arrays with `GetPreview` and human-readable summary text through the
 final state details.
+
+The service also limits active request objects and concurrently running preview
+workers so one client cannot create an unbounded amount of backend work.
 
 ## Apply
 

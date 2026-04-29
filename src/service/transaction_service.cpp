@@ -100,6 +100,9 @@ constexpr const char *kManagerObjectPath = kTransactionServiceManagerPath;
 constexpr const char *kManagerInterface = kTransactionServiceManagerInterface;
 constexpr const char *kTransactionInterface = kTransactionServiceRequestInterface;
 constexpr const char *kApplyActionId = "com.fedora.dnfui.apply-transactions";
+constexpr size_t kMaxLiveTransactionSessions = 32;
+constexpr size_t kMaxLiveTransactionSessionsPerClient = 8;
+constexpr unsigned kMaxPreviewWorkers = 2;
 
 // -----------------------------------------------------------------------------
 // Transaction service runtime state
@@ -149,6 +152,7 @@ struct TransactionService {
   std::atomic<bool> shutting_down { false };
   bool keep_alive_until_exit = false;
   std::map<std::string, std::unique_ptr<TransactionSession>> transactions;
+  std::atomic<unsigned> preview_workers { 0 };
 };
 
 // -----------------------------------------------------------------------------
@@ -179,6 +183,8 @@ static void complete_apply_request(TransactionSession *session, GDBusMethodInvoc
 // -----------------------------------------------------------------------------
 static gboolean start_transaction_preview(gpointer user_data);
 static gboolean start_transaction_apply(gpointer user_data);
+static bool validate_transaction_request_for_service(const TransactionRequest &request, std::string &error_out);
+static bool get_invocation_sender(GDBusMethodInvocation *invocation, std::string &sender_out, std::string &error_out);
 static bool transaction_apply_should_stop_before_work(TransactionSession *session, std::string &details_out);
 static bool transaction_request_needs_available_repos(const TransactionRequest &request);
 
@@ -200,6 +206,80 @@ struct QueuedFinishedResult {
 struct QueuedSessionRelease {
   TransactionService *service = nullptr;
   std::string object_path;
+};
+
+// -----------------------------------------------------------------------------
+// Return true when request object limits are already reached.
+// -----------------------------------------------------------------------------
+static bool
+service_request_limit_reached(TransactionService *service, const std::string &owner_name, std::string &error_out)
+{
+  if (!service) {
+    error_out = "Transaction service is not ready.";
+    return true;
+  }
+
+  if (service->transactions.size() >= kMaxLiveTransactionSessions) {
+    error_out = "The transaction service has too many active requests.";
+    return true;
+  }
+
+  size_t owner_count = 0;
+  for (const auto &[path, session] : service->transactions) {
+    (void)path;
+    if (session && session->owner_name == owner_name) {
+      owner_count++;
+    }
+  }
+
+  if (owner_count >= kMaxLiveTransactionSessionsPerClient) {
+    error_out = "This client has too many active transaction requests.";
+    return true;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Try to reserve one preview worker slot.
+// -----------------------------------------------------------------------------
+static bool
+try_acquire_preview_worker(TransactionService *service)
+{
+  if (!service) {
+    return false;
+  }
+
+  unsigned current = service->preview_workers.load();
+  while (current < kMaxPreviewWorkers) {
+    if (service->preview_workers.compare_exchange_weak(current, current + 1)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Release one previously reserved preview worker slot.
+// -----------------------------------------------------------------------------
+static void
+release_preview_worker(TransactionService *service)
+{
+  if (!service) {
+    return;
+  }
+
+  service->preview_workers.fetch_sub(1);
+}
+
+struct PreviewWorkerGuard {
+  TransactionService *service = nullptr;
+
+  ~PreviewWorkerGuard()
+  {
+    release_preview_worker(service);
+  }
 };
 
 // -----------------------------------------------------------------------------
@@ -634,6 +714,40 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
 // -----------------------------------------------------------------------------
 // Transaction execution
 // -----------------------------------------------------------------------------
+// Reject requests that passed shared validation but are unsafe for the service to run.
+// -----------------------------------------------------------------------------
+static bool
+validate_transaction_request_for_service(const TransactionRequest &request, std::string &error_out)
+{
+  if (request.remove.empty() && request.reinstall.empty()) {
+    return true;
+  }
+
+  try {
+    BaseManager::instance().ensure_system_only_initialized_if_needed();
+    dnf_backend_refresh_installed_nevras();
+  } catch (const std::exception &e) {
+    error_out = "Unable to validate protected installed packages: " + std::string(e.what());
+    return false;
+  }
+
+  for (const auto &spec : request.remove) {
+    if (dnf_backend_is_self_protected_transaction_spec(spec)) {
+      error_out = "DNF UI cannot remove the package that owns the running application.";
+      return false;
+    }
+  }
+
+  for (const auto &spec : request.reinstall) {
+    if (dnf_backend_is_self_protected_transaction_spec(spec)) {
+      error_out = "DNF UI cannot reinstall the package that owns the running application while it is running.";
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // Return true when the transaction may need available-repo metadata instead of
 // the local rpmdb alone.
 // -----------------------------------------------------------------------------
@@ -727,14 +841,23 @@ static gboolean
 start_transaction_preview(gpointer user_data)
 {
   TransactionSession *session = static_cast<TransactionSession *>(user_data);
-  if (!session || session->finished.load()) {
+  if (!session || !session->service || session->finished.load()) {
+    return G_SOURCE_REMOVE;
+  }
+
+  if (!try_acquire_preview_worker(session->service)) {
+    queue_transaction_finished(
+        session, TransactionStage::PREVIEW_FAILED, false, "Too many transaction previews are already running.");
     return G_SOURCE_REMOVE;
   }
 
   GThread *thread = g_thread_new(
       "dnf-ui-preview",
       +[](gpointer data) -> gpointer {
-        run_transaction_preview(static_cast<TransactionSession *>(data));
+        TransactionSession *session = static_cast<TransactionSession *>(data);
+        PreviewWorkerGuard guard { session ? session->service : nullptr };
+
+        run_transaction_preview(session);
         return nullptr;
       },
       session);
@@ -1118,6 +1241,23 @@ on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer
 }
 
 // -----------------------------------------------------------------------------
+// Read the unique bus name of the caller that invoked StartTransaction.
+// -----------------------------------------------------------------------------
+static bool
+get_invocation_sender(GDBusMethodInvocation *invocation, std::string &sender_out, std::string &error_out)
+{
+  sender_out.clear();
+  const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
+  if (!sender || !*sender) {
+    error_out = "Could not determine the client bus name.";
+    return false;
+  }
+
+  sender_out = sender;
+  return true;
+}
+
+// -----------------------------------------------------------------------------
 // Create and register one new transaction request object on the bus.
 // Watches the client's unique bus name to auto-release the session if the
 // client disconnects without calling Release.
@@ -1125,7 +1265,7 @@ on_client_name_vanished(GDBusConnection *connection, const gchar *name, gpointer
 static TransactionSession *
 create_transaction_session(TransactionService *service,
                            const TransactionRequest &request,
-                           GDBusMethodInvocation *invocation,
+                           const std::string &owner_name,
                            std::string &error_out)
 {
   error_out.clear();
@@ -1139,14 +1279,11 @@ create_transaction_session(TransactionService *service,
   session->request = request;
   session->object_path =
       std::string(kManagerObjectPath) + "/requests/" + std::to_string(service->next_transaction_id++);
+  session->owner_name = owner_name;
 
-  // Watch the client's unique bus name so abandoned requests can be released.
-  const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
-  if (!sender || !*sender) {
-    error_out = "Could not determine the client bus name.";
+  if (service_request_limit_reached(service, session->owner_name, error_out)) {
     return nullptr;
   }
-  session->owner_name = sender;
 
   GError *error = nullptr;
   session->registration_id = g_dbus_connection_register_object(service->connection,
@@ -1167,8 +1304,13 @@ create_transaction_session(TransactionService *service,
   // SERVICE_TEST_DISABLE_AUTO_RELEASE also opts out during manual service tests.
   const char *disable_auto_release = g_getenv("SERVICE_TEST_DISABLE_AUTO_RELEASE");
   if (service->bus_type == G_BUS_TYPE_SYSTEM && (!disable_auto_release || g_strcmp0(disable_auto_release, "1") != 0)) {
-    session->owner_watch_id = g_bus_watch_name_on_connection(
-        service->connection, sender, G_BUS_NAME_WATCHER_FLAGS_NONE, nullptr, on_client_name_vanished, service, nullptr);
+    session->owner_watch_id = g_bus_watch_name_on_connection(service->connection,
+                                                             session->owner_name.c_str(),
+                                                             G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                                             nullptr,
+                                                             on_client_name_vanished,
+                                                             service,
+                                                             nullptr);
   }
 
   TransactionSession *raw = session.get();
@@ -1204,7 +1346,24 @@ on_manager_method_call(GDBusConnection *,
 
   TransactionRequest request = transaction_service_request_from_variant(parameters);
   std::string error_out;
+
+  std::string owner_name;
+  if (!get_invocation_sender(invocation, owner_name, error_out)) {
+    g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", error_out.c_str());
+    return;
+  }
+
   if (!request.validate(error_out)) {
+    g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS, "%s", error_out.c_str());
+    return;
+  }
+
+  if (service_request_limit_reached(service, owner_name, error_out)) {
+    g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", error_out.c_str());
+    return;
+  }
+
+  if (!validate_transaction_request_for_service(request, error_out)) {
     g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS, "%s", error_out.c_str());
     return;
   }
@@ -1214,7 +1373,7 @@ on_manager_method_call(GDBusConnection *,
               request.remove.size(),
               request.reinstall.size());
 
-  TransactionSession *session = create_transaction_session(service, request, invocation, error_out);
+  TransactionSession *session = create_transaction_session(service, request, owner_name, error_out);
   if (!session) {
     g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", error_out.c_str());
     return;

@@ -6,8 +6,12 @@
 // -----------------------------------------------------------------------------
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <vector>
+
+constexpr size_t kTransactionRequestMaxItems = 256;
+constexpr size_t kTransactionRequestMaxSpecLength = 4096;
 
 // -----------------------------------------------------------------------------
 // Transaction request shared by the GUI and privileged transaction service
@@ -37,7 +41,7 @@ struct TransactionRequest {
   }
 
   // -----------------------------------------------------------------------------
-  // Reject empty requests and empty package specs before they reach the service.
+  // Reject empty or oversized requests before they reach the service.
   // -----------------------------------------------------------------------------
   bool validate(std::string &error_out) const
   {
@@ -48,10 +52,19 @@ struct TransactionRequest {
       return false;
     }
 
+    if (item_count() > kTransactionRequestMaxItems) {
+      error_out = "Transaction request contains too many package actions.";
+      return false;
+    }
+
     auto validate_specs = [&](const std::vector<std::string> &specs, const char *kind) {
       for (const auto &spec : specs) {
         if (spec.empty()) {
           error_out = std::string("Transaction request contains an empty ") + kind + " package spec.";
+          return false;
+        }
+        if (spec.size() > kTransactionRequestMaxSpecLength) {
+          error_out = std::string("Transaction request contains a package spec that is too long.");
           return false;
         }
       }

@@ -279,7 +279,7 @@ dnf_backend_is_package_self_protected(const PackageRow &row)
 }
 
 // -----------------------------------------------------------------------------
-// Resolve one queued transaction spec back to the installed rpmdb so apply-time
+// Resolve one queued transaction spec back to the installed rpmdb so request
 // validation can reject self-removal even if the UI state is outdated or bypassed.
 // -----------------------------------------------------------------------------
 bool
@@ -301,6 +301,16 @@ dnf_backend_is_self_protected_transaction_spec(const std::string &spec)
   query.filter_nevra(spec);
 
   for (const auto &pkg : query) {
+    if (protected_names.count(pkg.get_name()) > 0) {
+      return true;
+    }
+  }
+
+  libdnf5::rpm::PackageQuery name_query(base);
+  name_query.filter_installed();
+  name_query.filter_name(spec, libdnf5::sack::QueryCmp::EQ);
+
+  for (const auto &pkg : name_query) {
     if (protected_names.count(pkg.get_name()) > 0) {
       return true;
     }
