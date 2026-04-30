@@ -30,6 +30,7 @@ Key files:
 - [test/unit/test_search.cpp](../test/unit/test_search.cpp)
 - [test/unit/test_transaction_preview.cpp](../test/unit/test_transaction_preview.cpp)
 - [test/unit/test_transaction_request.cpp](../test/unit/test_transaction_request.cpp)
+- [test/unit/test_transaction_service_preview_formatter.cpp](../test/unit/test_transaction_service_preview_formatter.cpp)
 - [test/unit/test_transaction_service_client.cpp](../test/unit/test_transaction_service_client.cpp)
 - [test/unit/test_offline.cpp](../test/unit/test_offline.cpp)
 

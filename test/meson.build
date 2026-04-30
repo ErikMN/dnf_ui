@@ -10,9 +10,13 @@ dnfui_tests = executable(
     'unit/test_offline.cpp',
     'unit/test_search.cpp',
     'unit/test_transaction_service_client.cpp',
+    'unit/test_transaction_service_preview_formatter.cpp',
     'unit/test_transaction_preview.cpp',
     'unit/test_transaction_request.cpp',
-  ) + backend_sources + files('../src/transaction_service_client.cpp'),
+  ) + backend_sources + files(
+    '../src/service/transaction_service_preview_formatter.cpp',
+    '../src/transaction_service_client.cpp',
+  ),
   include_directories: src_inc,
   dependencies: [
     libdnf5_dep,
