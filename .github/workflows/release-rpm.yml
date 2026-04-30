@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - "*.*.*"
 
 permissions:
   contents: write
@@ -19,14 +19,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Validate release tag
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: ${GITHUB_REF_NAME}"
+            echo "Expected tag format: 0.1.0"
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Build RPM in Fedora
+        shell: bash
         run: |
           docker run --rm \
             -e HOST_UID="$(id -u)" \
             -e HOST_GID="$(id -g)" \
+            -e GITHUB_REF="${GITHUB_REF}" \
+            -e GITHUB_REF_NAME="${GITHUB_REF_NAME}" \
             -v "$PWD:/workspace" \
             -w /workspace \
             fedora:latest \
@@ -52,12 +65,22 @@ jobs:
                 systemd-devel \
                 systemd-rpm-macros
 
+              if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+                spec_version="$(rpmspec -q --qf "%{VERSION}\n" dnf-ui.spec | head -n1)"
+                if [ "${spec_version}" != "${GITHUB_REF_NAME}" ]; then
+                  echo "Spec version does not match release tag"
+                  echo "Spec version: ${spec_version}"
+                  echo "Release tag: ${GITHUB_REF_NAME}"
+                  exit 1
+                fi
+              fi
+
               git config --global --add safe.directory /workspace
               make rpm
 
               mkdir -p artifacts
-              cp -L dnf-ui-latest.rpm artifacts/
-              cp -L dnf-ui-latest.src.rpm artifacts/
+              cp "$(readlink -f dnf-ui-latest.rpm)" artifacts/
+              cp "$(readlink -f dnf-ui-latest.src.rpm)" artifacts/
             '
 
       - name: Upload workflow artifacts
