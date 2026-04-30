@@ -13,6 +13,15 @@ The project uses:
 The Catch2 tests are the fastest place to check backend and client behavior.
 The shell smoke tests exercise the transaction service through D-Bus.
 
+## Test Dependencies
+
+The test build needs:
+
+- `pkgconfig(gio-2.0)`
+- `pkgconfig(catch2-with-main)`
+
+On Fedora, `catch-devel` provides `pkgconfig(catch2-with-main)`.
+
 ## Catch2 Tests
 
 Key files:
@@ -55,6 +64,18 @@ These tests protect:
 - disconnect cleanup
 
 ## Common Commands
+
+Run the native test suite:
+
+```sh
+make test
+```
+
+Run the full native test matrix, including transaction service smoke tests:
+
+```sh
+SERVICE_TEST_INSTALL_SPEC=cowsay make nativetests
+```
 
 Run the normal Docker Catch2 test set:
 
@@ -102,8 +123,59 @@ make dockerservicesystemdisconnecttest
 make dockerservicesystemapplytest
 ```
 
+Run the Docker app target with networking disabled:
+
+```sh
+DOCKER_NETWORK_MODE=none make dockerrun
+```
+
 The Makefile is a task runner. Meson owns build configuration and test
 definitions.
+
+## Memory Checks
+
+Run a quick smoke test under Valgrind Memcheck:
+
+```sh
+make memcheck
+```
+
+Run the automated test binary under Valgrind Memcheck:
+
+```sh
+make memcheck-tests
+```
+
+`make memory-check` currently runs the full automated Memcheck target.
+
+Run the desktop app under Valgrind Memcheck:
+
+```sh
+make memcheck-app
+```
+
+Memcheck logs are written under `build/memcheck/`.
+
+The default Memcheck setup fails on definite and indirect leaks from this
+project. Reachable and possible leak noise from GLib, GTK, DNF, and related
+libraries is suppressed in `utils/valgrind-dnfui.supp`.
+
+Useful options:
+
+```sh
+MEMCHECK_SMOKE_FILTER="Transaction request validation rejects an empty request" make memcheck
+MEMCHECK_SMOKE_TIMEOUT=5m make memcheck
+MEMCHECK_TEST_FILTER="Search returns empty for impossible package name" make memcheck-tests
+MEMCHECK_TEST_TIMEOUT=10m make memcheck-tests
+MEMCHECK_TRACK_FDS=yes make memcheck-tests
+MEMCHECK_GEN_SUPPRESSIONS=yes make memcheck-tests
+```
+
+## Docker Notes
+
+- `make dockerrun` uses the session bus service path for convenience
+- Use the `dockerservicesystem*` targets to test the real system bus authorization flow
+- Use native Fedora to test the real desktop Polkit prompt
 
 ## What To Test After Changes
 
