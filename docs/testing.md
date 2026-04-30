@@ -27,6 +27,8 @@ On Fedora, `catch-devel` provides `pkgconfig(catch2-with-main)`.
 Key files:
 
 - [test/unit/test_backend.cpp](../test/unit/test_backend.cpp)
+- [test/unit/test_package_query_cache.cpp](../test/unit/test_package_query_cache.cpp)
+- [test/unit/test_pending_transaction_request.cpp](../test/unit/test_pending_transaction_request.cpp)
 - [test/unit/test_search.cpp](../test/unit/test_search.cpp)
 - [test/unit/test_transaction_preview.cpp](../test/unit/test_transaction_preview.cpp)
 - [test/unit/test_transaction_request.cpp](../test/unit/test_transaction_request.cpp)

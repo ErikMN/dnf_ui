@@ -8,6 +8,8 @@ dnfui_tests = executable(
   files(
     'unit/test_backend.cpp',
     'unit/test_offline.cpp',
+    'unit/test_package_query_cache.cpp',
+    'unit/test_pending_transaction_request.cpp',
     'unit/test_search.cpp',
     'unit/test_transaction_service_client.cpp',
     'unit/test_transaction_service_preview_formatter.cpp',
@@ -16,11 +18,14 @@ dnfui_tests = executable(
   ) + backend_sources + files(
     '../src/service/transaction_service_preview_formatter.cpp',
     '../src/transaction_service_client.cpp',
+    '../src/ui/package_query_cache.cpp',
+    '../src/ui/pending_transaction_request.cpp',
   ),
   include_directories: src_inc,
   dependencies: [
     libdnf5_dep,
     gio_dep,
+    gtk4_dep,
     catch2_dep,
   ],
   cpp_args: [
