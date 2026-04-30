@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// test/test_transaction_preview.cpp
+// test/unit/test_transaction_preview.cpp
 // Backend transaction preview tests
 // Covers the public preview API that prepares transaction summaries before the
 // service or GUI proceeds to the apply step.

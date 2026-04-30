@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// test/test_offline.cpp
+// test/unit/test_offline.cpp
 // Offline behavior tests
 // Covers cached repo search without network and remove-only transaction preview
 // behavior when remote repo refresh is unavailable.

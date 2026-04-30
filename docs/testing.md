@@ -6,8 +6,8 @@ This document explains the test layout and what each group protects.
 
 The project uses:
 
-- Catch2 tests under [test](../test)
-- shell smoke tests under [utils](../utils)
+- Catch2 tests under [test/unit](../test/unit)
+- shell smoke tests under [test/functional](../test/functional)
 - Docker helpers under [docker](../docker)
 
 The Catch2 tests are the fastest place to check backend and client behavior.
@@ -26,12 +26,12 @@ On Fedora, `catch-devel` provides `pkgconfig(catch2-with-main)`.
 
 Key files:
 
-- [test/test_backend.cpp](../test/test_backend.cpp)
-- [test/test_search.cpp](../test/test_search.cpp)
-- [test/test_transaction_preview.cpp](../test/test_transaction_preview.cpp)
-- [test/test_transaction_request.cpp](../test/test_transaction_request.cpp)
-- [test/test_transaction_service_client.cpp](../test/test_transaction_service_client.cpp)
-- [test/test_offline.cpp](../test/test_offline.cpp)
+- [test/unit/test_backend.cpp](../test/unit/test_backend.cpp)
+- [test/unit/test_search.cpp](../test/unit/test_search.cpp)
+- [test/unit/test_transaction_preview.cpp](../test/unit/test_transaction_preview.cpp)
+- [test/unit/test_transaction_request.cpp](../test/unit/test_transaction_request.cpp)
+- [test/unit/test_transaction_service_client.cpp](../test/unit/test_transaction_service_client.cpp)
+- [test/unit/test_offline.cpp](../test/unit/test_offline.cpp)
 
 These tests protect:
 
@@ -48,11 +48,11 @@ The service tests run the transaction service through D-Bus.
 
 Important scripts:
 
-- [utils/test_transaction_service_preview.sh](../utils/test_transaction_service_preview.sh)
-- [utils/test_transaction_service_cancel.sh](../utils/test_transaction_service_cancel.sh)
-- [utils/test_transaction_service_apply.sh](../utils/test_transaction_service_apply.sh)
-- [utils/test_transaction_service_preview_failure.sh](../utils/test_transaction_service_preview_failure.sh)
-- [utils/test_transaction_service_system_bus.sh](../utils/test_transaction_service_system_bus.sh)
+- [test/functional/test_transaction_service_preview.sh](../test/functional/test_transaction_service_preview.sh)
+- [test/functional/test_transaction_service_cancel.sh](../test/functional/test_transaction_service_cancel.sh)
+- [test/functional/test_transaction_service_apply.sh](../test/functional/test_transaction_service_apply.sh)
+- [test/functional/test_transaction_service_preview_failure.sh](../test/functional/test_transaction_service_preview_failure.sh)
+- [test/functional/test_transaction_service_system_bus.sh](../test/functional/test_transaction_service_system_bus.sh)
 
 These tests protect:
 

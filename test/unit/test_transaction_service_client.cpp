@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// test/test_transaction_service_client.cpp
+// test/unit/test_transaction_service_client.cpp
 // Transaction service client integration tests
 // Covers the GUI-side D-Bus client behavior around request lifecycle failures
 // that need a live service process and a private session bus.

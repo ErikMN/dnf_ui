@@ -236,32 +236,32 @@ serviceuninstall:
 # Session bus smoke test: preview flow from the locally built service binary
 .PHONY: servicetest
 servicetest: dnfui-service
-	@./utils/test_transaction_service_preview.sh
+	@./test/functional/test_transaction_service_preview.sh
 
 # Session bus smoke test: cancel flow from the locally built service binary
 .PHONY: servicecanceltest
 servicecanceltest: dnfui-service
-	@./utils/test_transaction_service_cancel.sh
+	@./test/functional/test_transaction_service_cancel.sh
 
 # Session bus smoke test: apply flow from the locally built service binary
 .PHONY: serviceapplytest
 serviceapplytest: dnfui-service
-	@./utils/test_transaction_service_apply.sh
+	@./test/functional/test_transaction_service_apply.sh
 
 # System bus smoke test against the natively installed service
 .PHONY: servicesystemtest
 servicesystemtest:
-	@./utils/test_transaction_service_system_bus.sh
+	@./test/functional/test_transaction_service_system_bus.sh
 
 # System bus smoke test: apply flow against the natively installed service
 .PHONY: servicesystemapplytest
 servicesystemapplytest:
-	@SERVICE_SYSTEM_APPLY=yes ./utils/test_transaction_service_system_bus.sh
+	@SERVICE_SYSTEM_APPLY=yes ./test/functional/test_transaction_service_system_bus.sh
 
 # System bus smoke test: disconnect flow against the natively installed service
 .PHONY: servicesystemdisconnecttest
 servicesystemdisconnecttest:
-	@SERVICE_SYSTEM_DISCONNECT=yes ./utils/test_transaction_service_system_bus.sh
+	@SERVICE_SYSTEM_DISCONNECT=yes ./test/functional/test_transaction_service_system_bus.sh
 
 # -----------------------------------------------------------------------------
 # Docker targets

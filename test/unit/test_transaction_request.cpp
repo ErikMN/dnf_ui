@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// test/test_transaction_request.cpp
+// test/unit/test_transaction_request.cpp
 // Shared transaction request contract tests
 // Exercises the small validation and counting rules used by both the GUI and
 // the transaction service before any D-Bus or libdnf work begins.
