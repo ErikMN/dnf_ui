@@ -45,6 +45,7 @@ esac
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/container_runtime.sh"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HOST_DIR="$PROJECT_ROOT"
 
@@ -58,7 +59,9 @@ if [ "$XDG_SESSION_TYPE" = "wayland" ] && [ -n "$WAYLAND_DISPLAY" ]; then
   )
 else
   color_print "$FMT_BLUE" "*** X11 detected ***"
-  xhost +local:docker >/dev/null 2>&1 || true
+  if [ "$CONTAINER_RUNTIME" = "docker" ]; then
+    xhost +local:docker >/dev/null 2>&1 || true
+  fi
   DISPLAY_OPTS=(
     -e DISPLAY="$DISPLAY"
     -v /tmp/.X11-unix:/tmp/.X11-unix
@@ -66,8 +69,8 @@ else
 fi
 
 # Ensure image exists:
-if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-  color_print "$FMT_RED" "*** Docker image missing. Run ./docker_setup.sh first. ***"
+if ! container_image_exists "$IMAGE_NAME"; then
+  color_print "$FMT_RED" "$(container_missing_image_message)"
   exit 1
 fi
 
@@ -97,7 +100,7 @@ esac
 
 # Run the build inside the container:
 color_print "$FMT_GREEN" "*** Running build inside container... ***"
-docker run --rm -it \
+"$CONTAINER_RUNTIME" run --rm -it \
   --name "$CONTAINER_NAME" \
   --init \
   "${DOCKER_NETWORK_OPTS[@]}" \

@@ -5,7 +5,8 @@ IMAGE_NAME="dnfui-dev"
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/container_runtime.sh"
 
-echo "*** Building (or updating) Docker image..."
-docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile" "$SCRIPT_DIR"
-echo "*** Docker image is up to date."
+echo "*** Building (or updating) $CONTAINER_RUNTIME image..."
+"$CONTAINER_RUNTIME" build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile" "$SCRIPT_DIR"
+echo "*** $CONTAINER_RUNTIME image is up to date."

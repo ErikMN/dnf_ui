@@ -197,10 +197,20 @@ MEMCHECK_GEN_SUPPRESSIONS=yes make memcheck-tests
 
 ### Docker
 
+Docker is the default container runtime. The container targets also support
+Podman by setting `CONTAINER_RUNTIME=podman`; the target names stay unchanged
+for compatibility.
+
 Build the development image:
 
 ```sh
 make dockersetup
+```
+
+Build the development image with Podman:
+
+```sh
+CONTAINER_RUNTIME=podman make dockersetup
 ```
 
 Run the application:
@@ -251,6 +261,12 @@ Run the full Docker-backed test matrix:
 
 ```sh
 make dockertests
+```
+
+Run the same matrix with Podman:
+
+```sh
+CONTAINER_RUNTIME=podman make dockertests
 ```
 
 Docker notes:

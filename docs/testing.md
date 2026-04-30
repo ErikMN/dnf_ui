@@ -62,6 +62,12 @@ Run the normal Docker Catch2 test set:
 make dockertest
 ```
 
+Use Podman for the same container test target:
+
+```sh
+CONTAINER_RUNTIME=podman make dockertest
+```
+
 Run the main Docker-backed service and Catch2 test matrix:
 
 ```sh

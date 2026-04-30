@@ -19,18 +19,19 @@ CONTAINER_NAME="dnfui-service-system-bus-disconnect-test"
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/container_runtime.sh"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HOST_DIR="$PROJECT_ROOT"
 
 # Ensure image exists:
-if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-  color_print "$FMT_RED" "*** Docker image missing. Run ./docker_setup.sh first. ***"
+if ! container_image_exists "$IMAGE_NAME"; then
+  color_print "$FMT_RED" "$(container_missing_image_message)"
   exit 1
 fi
 
 color_print "$FMT_GREEN" "*** Running transaction service system bus disconnect test inside container... ***"
 
-docker run --rm \
+"$CONTAINER_RUNTIME" run --rm \
   --name "$CONTAINER_NAME" \
   --init \
   -w /workspace \

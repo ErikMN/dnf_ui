@@ -7,12 +7,13 @@ DOCKER_NETWORK_MODE="${DOCKER_NETWORK_MODE:-}"
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/container_runtime.sh"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HOST_DIR="$PROJECT_ROOT"
 
 # Ensure image exists:
-if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-  echo "*** Docker image missing. Run ./docker_setup.sh first. ***"
+if ! container_image_exists "$IMAGE_NAME"; then
+  container_missing_image_message
   exit 1
 fi
 
@@ -22,7 +23,7 @@ if [ -n "$DOCKER_NETWORK_MODE" ]; then
 fi
 
 # Run an interactive shell inside the container:
-docker run --rm -it \
+"$CONTAINER_RUNTIME" run --rm -it \
   --name "$CONTAINER_NAME" \
   --init \
   "${docker_network_args[@]}" \

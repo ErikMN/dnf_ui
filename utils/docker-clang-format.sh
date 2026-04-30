@@ -4,7 +4,7 @@
 # Requires a .clang-format-docker.conf configuration file with:
 # SCAN_DIRS="" IGNORE_DIRS="" FILE_PATTERNS=""
 #
-# docker image ls project-clang-format
+# CONTAINER_RUNTIME=docker make indent
 #
 set -eu
 
@@ -16,14 +16,17 @@ IMAGE_TAG="${IMAGE_NAME}:${CLANG_VERSION}"
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 CONFIG_FILE="${CONFIG_FILE:-$PROJECT_ROOT/.clang-format-docker.conf}"
 
+# shellcheck disable=SC1091
+. "$PROJECT_ROOT/docker/container_runtime.sh"
+
 die() {
   printf "%s\n" "$1" >&2
   exit 1
 }
 
 check_docker() {
-  command -v docker >/dev/null 2>&1 ||
-    die "Docker is not installed. Please install Docker first."
+  command -v "$CONTAINER_RUNTIME" >/dev/null 2>&1 ||
+    die "$CONTAINER_RUNTIME is not installed. Please install it first."
 }
 
 load_config() {
@@ -40,13 +43,13 @@ load_config() {
 }
 
 ensure_image() {
-  if docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
+  if "$CONTAINER_RUNTIME" image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
     return
   fi
 
-  printf "Building clang-format Docker image version %s\n" "$CLANG_VERSION"
+  printf "Building clang-format container image version %s\n" "$CLANG_VERSION"
 
-  docker build -t "$IMAGE_TAG" - <<EOF
+  "$CONTAINER_RUNTIME" build -t "$IMAGE_TAG" - <<EOF
 FROM alpine:3.20
 RUN apk add --no-cache clang${CLANG_VERSION}-extra-tools
 WORKDIR /workspace
@@ -54,7 +57,20 @@ EOF
 }
 
 docker_run() {
-  docker run --rm \
+  if [ "$CONTAINER_RUNTIME" = "podman" ] && [ "$(id -u)" -ne 0 ]; then
+    "$CONTAINER_RUNTIME" run --rm \
+      --userns=keep-id \
+      --user "$(id -u):$(id -g)" \
+      --passwd \
+      --passwd-entry "clang-format:x:$(id -u):$(id -g):Clang Format:$PROJECT_ROOT:/bin/sh" \
+      -v "$PROJECT_ROOT:$PROJECT_ROOT" \
+      -w "$PROJECT_ROOT" \
+      "$IMAGE_TAG" \
+      "$@"
+    return
+  fi
+
+  "$CONTAINER_RUNTIME" run --rm \
     -u "$(id -u):$(id -g)" \
     -v "$PROJECT_ROOT:$PROJECT_ROOT" \
     -w "$PROJECT_ROOT" \

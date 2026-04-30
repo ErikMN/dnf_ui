@@ -21,23 +21,24 @@ CACHE_VOLUME_NAME="${CACHE_VOLUME_NAME:-dnfui-offline-cache}"
 OFFLINE_REPO_SPEC="${DNFUI_TEST_OFFLINE_REPO_SPEC:-cowsay}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/container_runtime.sh"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HOST_DIR="$PROJECT_ROOT"
 
-if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-  color_print "$FMT_RED" "*** Docker image missing. Run ./docker_setup.sh first. ***"
+if ! container_image_exists "$IMAGE_NAME"; then
+  color_print "$FMT_RED" "$(container_missing_image_message)"
   exit 1
 fi
 
 cleanup() {
-  docker volume rm -f "$CACHE_VOLUME_NAME" >/dev/null 2>&1 || true
+  "$CONTAINER_RUNTIME" volume rm -f "$CACHE_VOLUME_NAME" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-docker volume create "$CACHE_VOLUME_NAME" >/dev/null
+"$CONTAINER_RUNTIME" volume create "$CACHE_VOLUME_NAME" >/dev/null
 
-color_print "$FMT_GREEN" "*** Priming DNF cache online inside Docker... ***"
-docker run --rm \
+color_print "$FMT_GREEN" "*** Priming DNF cache online inside container... ***"
+"$CONTAINER_RUNTIME" run --rm \
   --name "${CONTAINER_NAME}-warm" \
   --init \
   -w /workspace \
@@ -51,9 +52,9 @@ docker run --rm \
   "$IMAGE_NAME" \
   bash -lc 'dnf5 makecache >/dev/null && dnf5 repoquery "$DNFUI_TEST_OFFLINE_REPO_SPEC" >/dev/null && ./utils/meson_build.sh service tests'
 
-color_print "$FMT_GREEN" "*** Running offline Docker tests with networking disabled... ***"
+color_print "$FMT_GREEN" "*** Running offline container tests with networking disabled... ***"
 color_print "$FMT_GREEN" "*** Cached repo package spec: $OFFLINE_REPO_SPEC ***"
-docker run --rm \
+"$CONTAINER_RUNTIME" run --rm \
   --name "${CONTAINER_NAME}-offline" \
   --network none \
   --init \

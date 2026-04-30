@@ -19,10 +19,46 @@ MODE="${1:-}"
 
 # Make this script work from any directory:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/container_runtime.sh"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HOST_DIR="$PROJECT_ROOT"
 HOST_UID="$(id -u)"
 HOST_GID="$(id -g)"
+CONTAINER_RUN_ARGS=()
+CONTAINER_BUILD_COMMAND='
+  set -e
+
+  if ! getent group "$HOST_GID" >/dev/null; then
+    groupadd -g "$HOST_GID" dnfui-builder
+  fi
+
+  BUILDER_GROUP="$(getent group "$HOST_GID" | cut -d: -f1)"
+
+  if ! getent passwd "$HOST_UID" >/dev/null; then
+    useradd -u "$HOST_UID" -g "$BUILDER_GROUP" -M -d "$HOME" -s /bin/bash dnfui-builder
+  fi
+
+  BUILDER_USER="$(getent passwd "$HOST_UID" | cut -d: -f1)"
+
+  mkdir -p "$HOME"
+  chown "$HOST_UID:$HOST_GID" "$HOME"
+
+  runuser -u "$BUILDER_USER" -- env HOME="$HOME" bash -lc "$BUILD_SCRIPT"
+'
+
+if [ "$CONTAINER_RUNTIME" = "podman" ] && [ "$HOST_UID" != "0" ]; then
+  CONTAINER_RUN_ARGS=(
+    --userns=keep-id
+    --user "$HOST_UID:$HOST_GID"
+    --passwd
+    --passwd-entry "dnfui-builder:x:$HOST_UID:$HOST_GID:DNF UI Builder:/tmp/dnfui-home:/bin/bash"
+  )
+  CONTAINER_BUILD_COMMAND='
+    set -e
+    mkdir -p "$HOME"
+    bash -lc "$BUILD_SCRIPT"
+  '
+fi
 
 case "$MODE" in
 srpm)
@@ -38,8 +74,8 @@ rpm)
 esac
 
 # Ensure image exists:
-if ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
-  color_print "$FMT_RED" "*** Docker image missing. Run ./docker_setup.sh first. ***"
+if ! container_image_exists "$IMAGE_NAME"; then
+  color_print "$FMT_RED" "$(container_missing_image_message)"
   exit 1
 fi
 
@@ -49,7 +85,8 @@ else
   color_print "$FMT_GREEN" "*** Building RPMs inside container... ***"
 fi
 
-docker run --rm \
+"$CONTAINER_RUNTIME" run --rm \
+  "${CONTAINER_RUN_ARGS[@]}" \
   --name "dnfui-$MODE-build" \
   --init \
   -w /workspace \
@@ -59,23 +96,4 @@ docker run --rm \
   -e BUILD_SCRIPT="$BUILD_SCRIPT" \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
-  bash -lc '
-    set -e
-
-    if ! getent group "$HOST_GID" >/dev/null; then
-      groupadd -g "$HOST_GID" dnfui-builder
-    fi
-
-    BUILDER_GROUP="$(getent group "$HOST_GID" | cut -d: -f1)"
-
-    if ! getent passwd "$HOST_UID" >/dev/null; then
-      useradd -u "$HOST_UID" -g "$BUILDER_GROUP" -M -d "$HOME" -s /bin/bash dnfui-builder
-    fi
-
-    BUILDER_USER="$(getent passwd "$HOST_UID" | cut -d: -f1)"
-
-    mkdir -p "$HOME"
-    chown "$HOST_UID:$HOST_GID" "$HOME"
-
-    runuser -u "$BUILDER_USER" -- env HOME="$HOME" bash -lc "$BUILD_SCRIPT"
-  '
+  bash -lc "$CONTAINER_BUILD_COMMAND"

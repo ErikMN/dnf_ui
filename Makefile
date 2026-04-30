@@ -3,6 +3,8 @@
 # -----------------------------------------------------------------------------
 
 MESON ?= meson
+CONTAINER_RUNTIME ?= docker
+export CONTAINER_RUNTIME
 
 include utils/transaction_service_paths.conf
 
