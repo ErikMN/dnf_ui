@@ -38,6 +38,7 @@ struct TransactionServiceConnectionCache {
   std::mutex mutex;
   GDBusConnection *connection = nullptr;
   GBusType bus_type = G_BUS_TYPE_SYSTEM;
+  std::string bus_address;
 };
 
 // -----------------------------------------------------------------------------
@@ -103,11 +104,14 @@ connect_transaction_service(std::string &error_out)
   error_out.clear();
 
   GBusType bus_type = get_transaction_service_bus_type();
+  const char *bus_address = bus_type == G_BUS_TYPE_SESSION ? g_getenv("DBUS_SESSION_BUS_ADDRESS") : nullptr;
+  std::string bus_address_key = bus_address ? bus_address : "";
   TransactionServiceConnectionCache &cache = get_transaction_service_connection_cache();
 
   {
     std::lock_guard<std::mutex> lock(cache.mutex);
-    if (cache.connection && cache.bus_type == bus_type && !g_dbus_connection_is_closed(cache.connection)) {
+    if (cache.connection && cache.bus_type == bus_type && cache.bus_address == bus_address_key &&
+        !g_dbus_connection_is_closed(cache.connection)) {
       DNFUI_TRACE("Transaction service client connect bus=%s cached",
                   bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
       return G_DBUS_CONNECTION(g_object_ref(cache.connection));
@@ -122,7 +126,18 @@ connect_transaction_service(std::string &error_out)
   DNFUI_TRACE("Transaction service client connect bus=%s", bus_type == G_BUS_TYPE_SESSION ? "session" : "system");
 
   GError *error = nullptr;
-  GDBusConnection *connection = g_bus_get_sync(bus_type, nullptr, &error);
+  GDBusConnection *connection = nullptr;
+  if (bus_type == G_BUS_TYPE_SESSION && bus_address && *bus_address) {
+    connection = g_dbus_connection_new_for_address_sync(
+        bus_address,
+        static_cast<GDBusConnectionFlags>(G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
+                                          G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION),
+        nullptr,
+        nullptr,
+        &error);
+  } else {
+    connection = g_bus_get_sync(bus_type, nullptr, &error);
+  }
   if (!connection) {
     error_out = error ? error->message : "Could not connect to the transaction service bus.";
     g_clear_error(&error);
@@ -134,13 +149,16 @@ connect_transaction_service(std::string &error_out)
     if (!cache.connection) {
       cache.connection = G_DBUS_CONNECTION(g_object_ref(connection));
       cache.bus_type = bus_type;
-    } else if (cache.bus_type == bus_type && !g_dbus_connection_is_closed(cache.connection)) {
+      cache.bus_address = bus_address_key;
+    } else if (cache.bus_type == bus_type && cache.bus_address == bus_address_key &&
+               !g_dbus_connection_is_closed(cache.connection)) {
       g_object_unref(connection);
       return G_DBUS_CONNECTION(g_object_ref(cache.connection));
     } else {
       g_object_unref(cache.connection);
       cache.connection = G_DBUS_CONNECTION(g_object_ref(connection));
       cache.bus_type = bus_type;
+      cache.bus_address = bus_address_key;
     }
   }
 
@@ -722,6 +740,7 @@ transaction_service_client_reset_for_tests()
 
   g_object_unref(cache.connection);
   cache.connection = nullptr;
+  cache.bus_address.clear();
 }
 #endif
 

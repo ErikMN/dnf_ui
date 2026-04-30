@@ -2,6 +2,8 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 
+#include <gio/gio.h>
+
 #include <cstdlib>
 #include <set>
 #include <string>
@@ -41,6 +43,21 @@ package_row_nevras(const std::vector<PackageRow> &rows)
   }
 
   return nevras;
+}
+
+// -----------------------------------------------------------------------------
+// Connect directly to a private test bus address.
+// -----------------------------------------------------------------------------
+inline GDBusConnection *
+connect_to_test_bus(const char *bus_address, GError **error)
+{
+  return g_dbus_connection_new_for_address_sync(
+      bus_address,
+      static_cast<GDBusConnectionFlags>(G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
+                                        G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION),
+      nullptr,
+      nullptr,
+      error);
 }
 
 struct ScopedEnvVar {

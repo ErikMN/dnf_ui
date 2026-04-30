@@ -162,7 +162,7 @@ TEST_CASE("Offline remove-only service preview stays local-first", "[offline]")
   REQUIRE(service != nullptr);
   g_object_unref(launcher);
 
-  GDBusConnection *connection = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error);
+  GDBusConnection *connection = connect_to_test_bus(bus_address, &error);
   error_text = error && error->message ? error->message : "";
   INFO(error_text);
   REQUIRE(connection != nullptr);

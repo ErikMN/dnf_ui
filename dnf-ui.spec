@@ -8,6 +8,7 @@ URL:            https://github.com/ErikMN/dnf_ui
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  appstream
+BuildRequires:  dbus-daemon
 BuildRequires:  desktop-file-utils
 BuildRequires:  gcc-c++
 BuildRequires:  meson

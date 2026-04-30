@@ -8,6 +8,7 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 #include "service/transaction_service_dbus.hpp"
+#include "test_utils.hpp"
 #include "transaction_request.hpp"
 #include "transaction_service_client.hpp"
 
@@ -221,7 +222,7 @@ TEST_CASE("Transaction service client reports an error when the service disappea
   REQUIRE(service != nullptr);
   g_object_unref(launcher);
 
-  GDBusConnection *connection = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error);
+  GDBusConnection *connection = connect_to_test_bus(bus_address, &error);
   error_text = error && error->message ? error->message : "";
   INFO(error_text);
   REQUIRE(connection != nullptr);
@@ -296,7 +297,7 @@ TEST_CASE("Transaction service rejects too many active requests from one client"
   REQUIRE(service != nullptr);
   g_object_unref(launcher);
 
-  GDBusConnection *connection = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error);
+  GDBusConnection *connection = connect_to_test_bus(bus_address, &error);
   error_text = error && error->message ? error->message : "";
   INFO(error_text);
   REQUIRE(connection != nullptr);

@@ -21,6 +21,8 @@ MODE="${1:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 HOST_DIR="$PROJECT_ROOT"
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
 
 case "$MODE" in
 srpm)
@@ -50,9 +52,30 @@ fi
 docker run --rm \
   --name "dnfui-$MODE-build" \
   --init \
-  --user "$(id -u):$(id -g)" \
   -w /workspace \
   -e HOME=/tmp/dnfui-home \
+  -e HOST_UID="$HOST_UID" \
+  -e HOST_GID="$HOST_GID" \
+  -e BUILD_SCRIPT="$BUILD_SCRIPT" \
   -v "$HOST_DIR:/workspace" \
   "$IMAGE_NAME" \
-  bash -lc 'mkdir -p "$HOME" && '"$BUILD_SCRIPT"
+  bash -lc '
+    set -e
+
+    if ! getent group "$HOST_GID" >/dev/null; then
+      groupadd -g "$HOST_GID" dnfui-builder
+    fi
+
+    BUILDER_GROUP="$(getent group "$HOST_GID" | cut -d: -f1)"
+
+    if ! getent passwd "$HOST_UID" >/dev/null; then
+      useradd -u "$HOST_UID" -g "$BUILDER_GROUP" -M -d "$HOME" -s /bin/bash dnfui-builder
+    fi
+
+    BUILDER_USER="$(getent passwd "$HOST_UID" | cut -d: -f1)"
+
+    mkdir -p "$HOME"
+    chown "$HOST_UID:$HOST_GID" "$HOME"
+
+    runuser -u "$BUILDER_USER" -- env HOME="$HOME" bash -lc "$BUILD_SCRIPT"
+  '
