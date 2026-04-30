@@ -152,6 +152,18 @@ struct DnfBackendSearchOptions {
 };
 
 // -----------------------------------------------------------------------------
+// DNF package group metadata shown in the left panel.
+// Groups come from repository comps metadata and may be unavailable when only
+// the installed package database can be loaded.
+// -----------------------------------------------------------------------------
+struct PackageGroup {
+  std::string id;
+  std::string name;
+  std::string description;
+  size_t package_count = 0;
+};
+
+// -----------------------------------------------------------------------------
 // Publish the backend-owned search option snapshot.
 // -----------------------------------------------------------------------------
 void dnf_backend_set_search_options(const DnfBackendSearchOptions &options);
@@ -231,6 +243,16 @@ std::vector<PackageRow> dnf_backend_get_browse_package_rows_interruptible(GCance
 // -----------------------------------------------------------------------------
 std::vector<PackageRow> dnf_backend_search_package_rows_interruptible(const std::string &pattern,
                                                                       GCancellable *cancellable);
+
+// -----------------------------------------------------------------------------
+// Return user-visible DNF package groups from repository comps metadata.
+// -----------------------------------------------------------------------------
+std::vector<PackageGroup> dnf_backend_get_package_groups_interruptible(GCancellable *cancellable);
+// -----------------------------------------------------------------------------
+// Return the merged package rows belonging to one DNF package group.
+// -----------------------------------------------------------------------------
+std::vector<PackageRow> dnf_backend_get_package_group_package_rows_interruptible(const std::string &group_id,
+                                                                                 GCancellable *cancellable);
 
 // -----------------------------------------------------------------------------
 // Return installed package rows that exactly match one NEVRA.

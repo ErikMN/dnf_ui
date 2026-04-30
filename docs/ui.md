@@ -21,6 +21,7 @@ It is responsible for:
 
 - creating the top menu
 - creating search and list buttons
+- creating the left panel with History and Groups tabs
 - creating the package table
 - creating the package details notebook
 - creating the pending actions tab
@@ -55,6 +56,7 @@ owns the package list workflows:
 - list installed packages
 - browse available and installed packages together
 - search packages
+- browse packages from a selected DNF package group
 - stop the active list request
 - restore a search from history
 - clear the package list

@@ -23,6 +23,7 @@
 struct PackageQueryWidgets {
   GtkEntry *entry = nullptr;
   GtkListBox *history_list = nullptr;
+  GtkListBox *group_list = nullptr;
   GtkSpinner *spinner = nullptr;
   GtkButton *search_button = nullptr;
   GtkButton *list_button = nullptr;

@@ -30,6 +30,8 @@ authorize the privileged step.
   exact package build.
 - EVR means epoch, version, and release. The backend uses it when comparing
   package versions.
+- DNF package groups come from comps metadata. They are repository-provided
+  package categories such as development tools, fonts, and system roles.
 - D-Bus is the local message bus used by the GUI and transaction service to
   call each other.
 - Polkit is the authorization service used before privileged package apply work.
@@ -87,7 +89,7 @@ The main window is built once and the controller files own behavior.
 - [src/ui/widgets.hpp](../src/ui/widgets.hpp) groups the widget pointers and shared UI state.
 - [src/ui/widgets.cpp](../src/ui/widgets.cpp) owns repository refresh callbacks and task helpers shared by controllers.
 - [src/ui/main_menu.cpp](../src/ui/main_menu.cpp) owns top menu actions.
-- [src/ui/package_query_controller.cpp](../src/ui/package_query_controller.cpp) owns search, browsing, list cancellation, history, and package-list refresh.
+- [src/ui/package_query_controller.cpp](../src/ui/package_query_controller.cpp) owns search, browsing, group browsing, list cancellation, history, and package-list refresh.
 - [src/ui/package_info_controller.cpp](../src/ui/package_info_controller.cpp) owns selection handling and details loading.
 - [src/ui/package_table_view.cpp](../src/ui/package_table_view.cpp) owns the package table.
 - [src/ui/pending_transaction_controller.cpp](../src/ui/pending_transaction_controller.cpp) owns marking actions, preview, apply, and post-apply refresh.
@@ -117,6 +119,7 @@ The backend implementation is split by responsibility:
 
 - [src/base_manager.cpp](../src/base_manager.cpp) owns the shared libdnf5 `Base`.
 - [src/dnf_backend/dnf_query.cpp](../src/dnf_backend/dnf_query.cpp) builds package rows for search, browse, and installed-list views.
+- [src/dnf_backend/dnf_groups.cpp](../src/dnf_backend/dnf_groups.cpp) maps DNF package groups to the merged package row model.
 - [src/dnf_backend/dnf_details.cpp](../src/dnf_backend/dnf_details.cpp) formats package details, files, dependencies, and changelog text.
 - [src/dnf_backend/dnf_state.cpp](../src/dnf_backend/dnf_state.cpp) owns installed-package snapshot state and package status classification.
 - [src/dnf_backend/dnf_transaction.cpp](../src/dnf_backend/dnf_transaction.cpp) resolves previews and applies transactions.

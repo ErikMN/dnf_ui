@@ -10,7 +10,7 @@ struct SearchWidgets;
 
 struct MainMenuWidgets {
   GtkWidget *window = nullptr;
-  GtkWidget *history_panel = nullptr;
+  GtkWidget *left_panel = nullptr;
   GtkWidget *info_panel = nullptr;
 };
 

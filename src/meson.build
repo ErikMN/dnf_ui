@@ -2,6 +2,7 @@ backend_sources = files(
   'base_manager.cpp',
   'dnf_backend/dnf_common.cpp',
   'dnf_backend/dnf_details.cpp',
+  'dnf_backend/dnf_groups.cpp',
   'dnf_backend/dnf_query.cpp',
   'dnf_backend/dnf_state.cpp',
   'dnf_backend/dnf_transaction.cpp',

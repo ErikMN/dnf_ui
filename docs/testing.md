@@ -27,6 +27,7 @@ On Fedora, `catch-devel` provides `pkgconfig(catch2-with-main)`.
 Key files:
 
 - [test/unit/test_backend.cpp](../test/unit/test_backend.cpp)
+- [test/unit/test_groups.cpp](../test/unit/test_groups.cpp)
 - [test/unit/test_package_query_cache.cpp](../test/unit/test_package_query_cache.cpp)
 - [test/unit/test_pending_transaction_request.cpp](../test/unit/test_pending_transaction_request.cpp)
 - [test/unit/test_search.cpp](../test/unit/test_search.cpp)
@@ -39,6 +40,7 @@ Key files:
 These tests protect:
 
 - package search and merge behavior
+- package group metadata and group package listing behavior
 - installed snapshot behavior
 - transaction preview behavior
 - transaction request validation

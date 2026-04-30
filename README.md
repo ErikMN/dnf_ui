@@ -36,13 +36,14 @@ applications, or software-center discovery workflows.
 
 - Search repo packages together with installed-only local RPMs
 - List installed packages or browse the merged package view
+- Browse packages by DNF package group when group metadata is available
 - View package details, files, dependencies, and changelog information
 - Mark packages for install, reinstall, and removal
 - Review a transaction summary before applying changes
 - Apply transactions through a privileged system service with Polkit authorization
 - Cancel long-running package queries
 - Show search history
-- Hide or show the history and information panes
+- Hide or show the left panel and package information panel
 
 The main browse and search views keep one visible row per package name and
 architecture. Repo candidates stay visible as usual, and locally installed RPMs

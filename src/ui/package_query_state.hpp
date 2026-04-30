@@ -16,7 +16,7 @@
 // -----------------------------------------------------------------------------
 // Active background request using the package-list action buttons
 // -----------------------------------------------------------------------------
-enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
+enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE, GROUP };
 
 // -----------------------------------------------------------------------------
 // Last query-backed package view shown in the main table.
@@ -25,11 +25,13 @@ enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE
 // refreshed via the currently selected NEVRA instead of adding more global UI
 // state.
 // -----------------------------------------------------------------------------
-enum class DisplayedPackageQueryKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
+enum class DisplayedPackageQueryKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE, GROUP };
 
 struct DisplayedPackageQueryState {
   DisplayedPackageQueryKind kind = DisplayedPackageQueryKind::NONE;
   std::string search_term;
+  std::string group_id;
+  std::string group_name;
   bool search_in_description = false;
   bool exact_match = false;
 };

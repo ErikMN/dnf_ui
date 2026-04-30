@@ -40,6 +40,14 @@ struct SearchTaskData {
   bool exact_match;
 };
 
+// Data passed to one background group package task.
+struct GroupPackagesTaskData {
+  char *group_id;
+  char *group_name;
+  uint64_t request_id;
+  uint64_t generation;
+};
+
 // -----------------------------------------------------------------------------
 // Free data owned by one background search task.
 // -----------------------------------------------------------------------------
@@ -52,6 +60,21 @@ search_task_data_free(gpointer p)
   }
   g_free(d->term);
   g_free(d->cache_key);
+  g_free(d);
+}
+
+// -----------------------------------------------------------------------------
+// Free data owned by one background group package task.
+// -----------------------------------------------------------------------------
+static void
+group_packages_task_data_free(gpointer p)
+{
+  GroupPackagesTaskData *d = static_cast<GroupPackagesTaskData *>(p);
+  if (!d) {
+    return;
+  }
+  g_free(d->group_id);
+  g_free(d->group_name);
   g_free(d);
 }
 
@@ -88,6 +111,22 @@ set_displayed_search_query(SearchWidgets *widgets, const SearchTaskData &task_da
   widgets->query_state.displayed_query.search_term = task_data.term ? task_data.term : "";
   widgets->query_state.displayed_query.search_in_description = task_data.search_in_description;
   widgets->query_state.displayed_query.exact_match = task_data.exact_match;
+}
+
+// -----------------------------------------------------------------------------
+// Preserve the selected package group so refresh can rebuild the same group view.
+// -----------------------------------------------------------------------------
+static void
+set_displayed_group_query(SearchWidgets *widgets, const GroupPackagesTaskData &task_data)
+{
+  if (!widgets) {
+    return;
+  }
+
+  widgets->query_state.displayed_query = DisplayedPackageQueryState();
+  widgets->query_state.displayed_query.kind = DisplayedPackageQueryKind::GROUP;
+  widgets->query_state.displayed_query.group_id = task_data.group_id ? task_data.group_id : "";
+  widgets->query_state.displayed_query.group_name = task_data.group_name ? task_data.group_name : "";
 }
 
 // -----------------------------------------------------------------------------
@@ -148,6 +187,8 @@ package_list_stop_button(SearchWidgets *widgets, PackageListRequestKind kind)
     return widgets->query.list_button;
   case PackageListRequestKind::LIST_AVAILABLE:
     return widgets->query.list_available_button;
+  case PackageListRequestKind::GROUP:
+    return widgets->query.search_button;
   case PackageListRequestKind::SEARCH:
   case PackageListRequestKind::NONE:
   default:
@@ -168,6 +209,8 @@ package_list_cancelled_status(PackageListRequestKind kind)
     return "Listing installed packages cancelled.";
   case PackageListRequestKind::LIST_AVAILABLE:
     return "Listing packages cancelled.";
+  case PackageListRequestKind::GROUP:
+    return "Group package listing cancelled.";
   case PackageListRequestKind::NONE:
   default:
     return "Operation cancelled.";
@@ -201,6 +244,7 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.history_list), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.group_list), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_available_button), FALSE);
@@ -224,6 +268,7 @@ restore_package_list_controls(SearchWidgets *widgets)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.history_list), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.group_list), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_button), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_available_button), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), TRUE);
@@ -281,6 +326,135 @@ cancel_active_package_list_request(SearchWidgets *widgets)
 // GTK runs the window on the main thread. GTask lets package queries run on a
 // worker thread so the window stays responsive.
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// Remove all rows from one list box.
+// -----------------------------------------------------------------------------
+static void
+clear_list_box(GtkListBox *list_box)
+{
+  if (!list_box) {
+    return;
+  }
+
+  GtkWidget *child = gtk_widget_get_first_child(GTK_WIDGET(list_box));
+  while (child) {
+    GtkWidget *next = gtk_widget_get_next_sibling(child);
+    gtk_list_box_remove(list_box, child);
+    child = next;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Add one plain informational row to a list box.
+// -----------------------------------------------------------------------------
+static void
+append_plain_list_row(GtkListBox *list_box, const char *text)
+{
+  if (!list_box || !text) {
+    return;
+  }
+
+  GtkWidget *label = gtk_label_new(text);
+  gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
+  gtk_widget_set_margin_start(label, 8);
+  gtk_widget_set_margin_end(label, 8);
+  gtk_widget_set_margin_top(label, 8);
+  gtk_widget_set_margin_bottom(label, 8);
+  gtk_list_box_append(list_box, label);
+}
+
+// -----------------------------------------------------------------------------
+// Build one visible group row for the left panel.
+// -----------------------------------------------------------------------------
+static GtkWidget *
+create_group_row(const PackageGroup &group)
+{
+  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+  gtk_widget_set_margin_start(box, 8);
+  gtk_widget_set_margin_end(box, 8);
+  gtk_widget_set_margin_top(box, 6);
+  gtk_widget_set_margin_bottom(box, 6);
+
+  GtkWidget *name_label = gtk_label_new(group.name.c_str());
+  gtk_label_set_xalign(GTK_LABEL(name_label), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(name_label), TRUE);
+  gtk_box_append(GTK_BOX(box), name_label);
+
+  char package_count[64];
+  const char *package_word = group.package_count == 1 ? "package" : "packages";
+  snprintf(package_count, sizeof(package_count), "%zu %s", group.package_count, package_word);
+  GtkWidget *count_label = gtk_label_new(package_count);
+  gtk_label_set_xalign(GTK_LABEL(count_label), 0.0f);
+  gtk_widget_add_css_class(count_label, "package-meta");
+  gtk_box_append(GTK_BOX(box), count_label);
+
+  if (!group.description.empty()) {
+    GtkWidget *description_label = gtk_label_new(group.description.c_str());
+    gtk_label_set_xalign(GTK_LABEL(description_label), 0.0f);
+    gtk_label_set_wrap(GTK_LABEL(description_label), TRUE);
+    gtk_widget_add_css_class(description_label, "package-meta");
+    gtk_box_append(GTK_BOX(box), description_label);
+  }
+
+  GtkWidget *row = gtk_list_box_row_new();
+  gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), box);
+  g_object_set_data_full(G_OBJECT(row), "dnfui-group-id", g_strdup(group.id.c_str()), g_free);
+  g_object_set_data_full(G_OBJECT(row), "dnfui-group-name", g_strdup(group.name.c_str()), g_free);
+
+  return row;
+}
+
+// -----------------------------------------------------------------------------
+// Query package groups on a worker thread.
+// -----------------------------------------------------------------------------
+static void
+on_group_list_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
+{
+  try {
+    auto *groups = new std::vector<PackageGroup>(dnf_backend_get_package_groups_interruptible(cancellable));
+    g_task_return_pointer(task, groups, [](gpointer p) { delete static_cast<std::vector<PackageGroup> *>(p); });
+  } catch (const std::exception &e) {
+    g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Finish package group loading on the GTK thread.
+// -----------------------------------------------------------------------------
+static void
+on_group_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
+{
+  GTask *task = G_TASK(res);
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    return;
+  }
+
+  GError *error = nullptr;
+  std::vector<PackageGroup> *groups = static_cast<std::vector<PackageGroup> *>(g_task_propagate_pointer(task, &error));
+
+  clear_list_box(widgets->query.group_list);
+
+  if (groups) {
+    if (groups->empty()) {
+      append_plain_list_row(widgets->query.group_list, "No package groups found.");
+    } else {
+      for (const auto &group : *groups) {
+        gtk_list_box_append(widgets->query.group_list, create_group_row(group));
+      }
+    }
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.group_list), !has_active_package_list_request(widgets));
+    delete groups;
+  } else {
+    append_plain_list_row(widgets->query.group_list, error ? error->message : "Could not load package groups.");
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.group_list), !has_active_package_list_request(widgets));
+    if (error) {
+      g_error_free(error);
+    }
+  }
+}
 
 // -----------------------------------------------------------------------------
 // Query installed packages on a worker thread.
@@ -435,6 +609,90 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
     widgets->query_state.preserve_selection_on_reload = false;
     widgets->query_state.reload_selected_nevra.clear();
     ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
+    if (error) {
+      g_error_free(error);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Query packages that belong to one package group on a worker thread.
+// -----------------------------------------------------------------------------
+static void
+on_group_packages_task(GTask *task, gpointer, gpointer task_data, GCancellable *cancellable)
+{
+  const GroupPackagesTaskData *td = static_cast<const GroupPackagesTaskData *>(task_data);
+  const char *group_id = td && td->group_id ? td->group_id : "";
+
+  try {
+    auto *results =
+        new std::vector<PackageRow>(dnf_backend_get_package_group_package_rows_interruptible(group_id, cancellable));
+    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
+  } catch (const std::exception &e) {
+    g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Finish group package listing on the GTK thread.
+// -----------------------------------------------------------------------------
+static void
+on_group_packages_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
+{
+  GTask *task = G_TASK(res);
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  const GroupPackagesTaskData *td = static_cast<const GroupPackagesTaskData *>(g_task_get_task_data(task));
+
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    if (widgets && !widgets->window_state.destroyed) {
+      if (GCancellable *c = g_task_get_cancellable(task)) {
+        if (g_cancellable_is_cancelled(c) && td) {
+          end_package_list_request(widgets, td->request_id, PackageListRequestKind::GROUP);
+        }
+      }
+    }
+    return;
+  }
+
+  if (td && td->generation != BaseManager::instance().current_generation()) {
+    widgets_spinner_release(widgets->query.spinner);
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::GROUP);
+    return;
+  }
+
+  GError *error = nullptr;
+  std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
+
+  widgets_spinner_release(widgets->query.spinner);
+
+  if (td) {
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::GROUP);
+  }
+
+  if (packages) {
+    if (td) {
+      set_displayed_group_query(widgets, *td);
+    }
+
+    dnf_backend_refresh_installed_nevras();
+
+    if (widgets->query_state.preserve_selection_on_reload) {
+      widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
+    } else {
+      widgets->results.selected_nevra.clear();
+    }
+    package_table_fill_package_view(widgets, *packages);
+
+    char msg[256];
+    const char *group_name = td && td->group_name ? td->group_name : "group";
+    snprintf(msg, sizeof(msg), "Found %zu packages in %s.", packages->size(), group_name);
+    ui_helpers_set_status(widgets->query.status_label, msg, "green");
+    finish_results_refresh(widgets);
+    delete packages;
+  } else {
+    widgets->query_state.preserve_selection_on_reload = false;
+    widgets->query_state.reload_selected_nevra.clear();
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing group packages.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -629,6 +887,60 @@ perform_search(SearchWidgets *widgets, const std::string &term)
 }
 
 // -----------------------------------------------------------------------------
+// Start a background package listing for one DNF package group.
+// -----------------------------------------------------------------------------
+static void
+perform_group_package_list(SearchWidgets *widgets, const std::string &group_id, const std::string &group_name)
+{
+  if (!widgets || group_id.empty()) {
+    return;
+  }
+
+  ui_helpers_set_status(widgets->query.status_label, ("Listing packages in " + group_name + "...").c_str(), "blue");
+
+  if (!widgets->query_state.preserve_selection_on_reload) {
+    widgets->results.selected_nevra.clear();
+  }
+
+  widgets_spinner_acquire(widgets->query.spinner);
+
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.group_list));
+  GroupPackagesTaskData *td = static_cast<GroupPackagesTaskData *>(g_malloc0(sizeof *td));
+  td->group_id = g_strdup(group_id.c_str());
+  td->group_name = g_strdup(group_name.c_str());
+  td->request_id = widgets->query_state.next_package_list_request_id++;
+  td->generation = BaseManager::instance().current_generation();
+
+  begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::GROUP);
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_group_packages_task_finished);
+  g_task_set_task_data(task, td, group_packages_task_data_free);
+  g_task_run_in_thread(task, on_group_packages_task);
+  g_object_unref(task);
+  g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
+// Load DNF package groups into the left panel.
+// -----------------------------------------------------------------------------
+void
+package_query_load_groups(SearchWidgets *widgets)
+{
+  if (!widgets || !widgets->query.group_list) {
+    return;
+  }
+
+  clear_list_box(widgets->query.group_list);
+  append_plain_list_row(widgets->query.group_list, "Loading package groups...");
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.group_list), FALSE);
+
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.group_list));
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_group_list_task_finished);
+  g_task_run_in_thread(task, on_group_list_task);
+  g_object_unref(task);
+  g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
 // Handle the List Installed button.
 // The same button changes to Stop while its worker task is running.
 // -----------------------------------------------------------------------------
@@ -711,7 +1023,8 @@ package_query_on_search_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (has_active_package_list_request(widgets)) {
-    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::SEARCH) {
+    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::SEARCH ||
+        widgets->query_state.current_package_list_request_kind == PackageListRequestKind::GROUP) {
       cancel_active_package_list_request(widgets);
     }
     return;
@@ -743,6 +1056,30 @@ package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer
   GtkWidget *child = gtk_list_box_row_get_child(row);
   const char *term = gtk_label_get_text(GTK_LABEL(child));
   perform_search(widgets, term);
+}
+
+// -----------------------------------------------------------------------------
+// Handle selecting a package group from the left panel.
+// -----------------------------------------------------------------------------
+void
+package_query_on_group_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data)
+{
+  if (!row) {
+    return;
+  }
+
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (has_active_package_list_request(widgets)) {
+    return;
+  }
+
+  const char *group_id = static_cast<const char *>(g_object_get_data(G_OBJECT(row), "dnfui-group-id"));
+  const char *group_name = static_cast<const char *>(g_object_get_data(G_OBJECT(row), "dnfui-group-name"));
+  if (!group_id || !*group_id) {
+    return;
+  }
+
+  perform_group_package_list(widgets, group_id, group_name && *group_name ? group_name : group_id);
 }
 
 // -----------------------------------------------------------------------------
@@ -803,6 +1140,15 @@ package_query_reload_current_view(SearchWidgets *widgets)
     return;
   case DisplayedPackageQueryKind::LIST_AVAILABLE:
     package_query_on_list_available_button_clicked(nullptr, widgets);
+    return;
+  case DisplayedPackageQueryKind::GROUP:
+    if (view_state.group_id.empty()) {
+      widgets->query_state.preserve_selection_on_reload = false;
+      widgets->query_state.reload_selected_nevra.clear();
+      return;
+    }
+
+    perform_group_package_list(widgets, view_state.group_id, view_state.group_name);
     return;
   case DisplayedPackageQueryKind::NONE:
   default:

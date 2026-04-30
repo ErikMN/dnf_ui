@@ -28,6 +28,14 @@ void package_query_on_search_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
 void package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data);
 // -----------------------------------------------------------------------------
+// Load DNF package groups into the left panel.
+// -----------------------------------------------------------------------------
+void package_query_load_groups(SearchWidgets *widgets);
+// -----------------------------------------------------------------------------
+// List packages from a selected group row.
+// -----------------------------------------------------------------------------
+void package_query_on_group_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer user_data);
+// -----------------------------------------------------------------------------
 // Clear the current package list and search status.
 // -----------------------------------------------------------------------------
 void package_query_on_clear_button_clicked(GtkButton *, gpointer user_data);

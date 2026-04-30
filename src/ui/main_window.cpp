@@ -25,9 +25,10 @@ struct AppWidgets {
 
   GtkWidget *vbox_root = NULL;
   GtkWidget *vbox_main = NULL;
-  GtkWidget *vbox_history = NULL;
+  GtkWidget *left_panel = NULL;
 
   GtkWidget *history_list = NULL;
+  GtkWidget *group_list = NULL;
 
   GtkWidget *entry = NULL;
   GtkWidget *search_button = NULL;
@@ -203,27 +204,39 @@ build_main_ui(AppWidgets *ui)
   gtk_paned_set_end_child(GTK_PANED(outer_paned), vbox_main);
   ui->vbox_main = vbox_main;
 
-  GtkWidget *vbox_history = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
-  gtk_widget_set_vexpand(vbox_history, TRUE);
-  gtk_widget_set_hexpand(vbox_history, TRUE);
-  gtk_paned_set_start_child(GTK_PANED(outer_paned), vbox_history);
-  ui->vbox_history = vbox_history;
+  GtkWidget *left_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 5);
+  gtk_widget_set_vexpand(left_panel, TRUE);
+  gtk_widget_set_hexpand(left_panel, TRUE);
+  gtk_paned_set_start_child(GTK_PANED(outer_paned), left_panel);
+  ui->left_panel = left_panel;
 
-  GtkWidget *history_label = gtk_label_new("Search History");
-  gtk_label_set_xalign(GTK_LABEL(history_label), 0.0);
-  gtk_box_append(GTK_BOX(vbox_history), history_label);
-
-  // --- Flat line separator below Search History label ---
-  gtk_box_append(GTK_BOX(vbox_history), create_thin_separator());
+  GtkWidget *left_notebook = gtk_notebook_new();
+  gtk_widget_set_vexpand(left_notebook, TRUE);
+  gtk_widget_set_hexpand(left_notebook, TRUE);
+  gtk_box_append(GTK_BOX(left_panel), left_notebook);
 
   GtkWidget *scrolled_history = gtk_scrolled_window_new();
   gtk_widget_set_vexpand(scrolled_history, TRUE);
   gtk_widget_set_hexpand(scrolled_history, TRUE);
-  gtk_box_append(GTK_BOX(vbox_history), scrolled_history);
 
   GtkWidget *history_list = gtk_list_box_new();
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_history), history_list);
   ui->history_list = history_list;
+
+  GtkWidget *history_tab_label = gtk_label_new("History");
+  gtk_notebook_append_page(GTK_NOTEBOOK(left_notebook), scrolled_history, history_tab_label);
+
+  GtkWidget *scrolled_groups = gtk_scrolled_window_new();
+  gtk_widget_set_vexpand(scrolled_groups, TRUE);
+  gtk_widget_set_hexpand(scrolled_groups, TRUE);
+
+  GtkWidget *group_list = gtk_list_box_new();
+  gtk_list_box_set_selection_mode(GTK_LIST_BOX(group_list), GTK_SELECTION_SINGLE);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled_groups), group_list);
+  ui->group_list = group_list;
+
+  GtkWidget *groups_tab_label = gtk_label_new("Groups");
+  gtk_notebook_append_page(GTK_NOTEBOOK(left_notebook), scrolled_groups, groups_tab_label);
 
   // --- Search bar row ---
   GtkWidget *hbox_search = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
@@ -424,6 +437,7 @@ create_search_widgets(const AppWidgets *ui)
   auto widgets = std::make_shared<SearchWidgets>();
   widgets->query.entry = GTK_ENTRY(ui->entry);
   widgets->query.history_list = GTK_LIST_BOX(ui->history_list);
+  widgets->query.group_list = GTK_LIST_BOX(ui->group_list);
   widgets->query.spinner = GTK_SPINNER(ui->spinner);
   widgets->query.search_button = GTK_BUTTON(ui->search_button);
   widgets->query.list_button = GTK_BUTTON(ui->list_button);
@@ -548,6 +562,7 @@ initialize_ui_state(SearchWidgets *widgets)
 
   ui_helpers_set_status(widgets->query.status_label, "Ready.", "gray");
   package_table_fill_package_view(widgets, {});
+  package_query_load_groups(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -558,7 +573,7 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
 {
   MainMenuWidgets menu_widgets;
   menu_widgets.window = ui->window;
-  menu_widgets.history_panel = ui->vbox_history;
+  menu_widgets.left_panel = ui->left_panel;
   menu_widgets.info_panel = ui->notebook;
   main_menu_connect_actions(menu_widgets, widgets);
 
@@ -578,6 +593,7 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
 
   g_signal_connect(ui->entry, "activate", G_CALLBACK(package_query_on_search_button_clicked), widgets);
   g_signal_connect(ui->history_list, "row-selected", G_CALLBACK(package_query_on_history_row_selected), widgets);
+  g_signal_connect(ui->group_list, "row-selected", G_CALLBACK(package_query_on_group_row_selected), widgets);
 
   g_signal_connect(ui->apply_button, "clicked", G_CALLBACK(pending_transaction_on_apply_button_clicked), widgets);
   g_signal_connect(

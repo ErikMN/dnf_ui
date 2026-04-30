@@ -171,6 +171,7 @@ widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
     // Search caches are bound to the old Base generation and must be dropped
     // before the user can query against freshly refreshed repositories.
     package_query_clear_search_cache();
+    package_query_load_groups(widgets);
     dnf_backend_refresh_installed_nevras();
     if (*refresh_state == BaseRepoState::LIVE_METADATA) {
       ui_helpers_set_status(widgets->query.status_label, "Repositories refreshed.", "green");

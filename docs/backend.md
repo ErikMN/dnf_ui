@@ -13,6 +13,7 @@ controller layer by exposing small value types:
 - `PackageInstallReason`
 - `PackageInstallState`
 - `PackageRepoCandidateRelation`
+- `PackageGroup`
 - `DnfBackendSearchOptions`
 - `TransactionPreview`
 
@@ -45,12 +46,20 @@ The main query paths are:
 - `dnf_backend_get_installed_package_rows_interruptible`
 - `dnf_backend_get_browse_package_rows_interruptible`
 - `dnf_backend_search_package_rows_interruptible`
+- `dnf_backend_get_package_groups_interruptible`
+- `dnf_backend_get_package_group_package_rows_interruptible`
 - `dnf_backend_get_installed_package_rows_by_nevra`
 - `dnf_backend_get_available_package_rows_by_nevra`
 
 The browse and search views merge repository candidates with installed-only
 packages. The visible result keeps one row for each package name and
 architecture pair.
+
+[src/dnf_backend/dnf_groups.cpp](../src/dnf_backend/dnf_groups.cpp) reads DNF
+package groups from comps metadata. A selected group is translated into package
+names and then into the same merged package row model used by the main browse
+view. Group data may be empty when repository metadata does not include comps
+or when the backend is running from installed-package data only.
 
 ## Installed Snapshot
 

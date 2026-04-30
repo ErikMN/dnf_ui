@@ -17,7 +17,7 @@
 struct MainMenuActionData {
   SearchWidgets *widgets = nullptr;
   GtkWidget *window = nullptr;
-  GtkWidget *history_panel = nullptr;
+  GtkWidget *left_panel = nullptr;
   GtkWidget *info_panel = nullptr;
 };
 
@@ -101,18 +101,18 @@ on_menu_about(GSimpleAction *, GVariant *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Show or hide the history panel from the menu.
+// Show or hide the left panel from the menu.
 // -----------------------------------------------------------------------------
 static void
-on_menu_show_history_changed(GSimpleAction *action, GVariant *value, gpointer user_data)
+on_menu_show_left_panel_changed(GSimpleAction *action, GVariant *value, gpointer user_data)
 {
   MainMenuActionData *data = static_cast<MainMenuActionData *>(user_data);
-  if (!data || !data->history_panel || !value) {
+  if (!data || !data->left_panel || !value) {
     return;
   }
 
   gboolean visible = g_variant_get_boolean(value);
-  gtk_widget_set_visible(data->history_panel, visible);
+  gtk_widget_set_visible(data->left_panel, visible);
   g_simple_action_set_state(action, value);
 }
 
@@ -146,7 +146,7 @@ main_menu_create()
   g_object_unref(file_menu);
 
   GMenu *view_menu = g_menu_new();
-  g_menu_append(view_menu, "History Panel", "win.show-history");
+  g_menu_append(view_menu, "Left Panel", "win.show-left-panel");
   g_menu_append(view_menu, "Package Info Panel", "win.show-info");
   g_menu_append_submenu(menu_bar, "View", G_MENU_MODEL(view_menu));
   g_object_unref(view_menu);
@@ -177,7 +177,7 @@ main_menu_connect_actions(const MainMenuWidgets &menu_widgets, SearchWidgets *wi
   MainMenuActionData *data = new MainMenuActionData();
   data->widgets = widgets;
   data->window = menu_widgets.window;
-  data->history_panel = menu_widgets.history_panel;
+  data->left_panel = menu_widgets.left_panel;
   data->info_panel = menu_widgets.info_panel;
   g_object_set_data_full(
       G_OBJECT(menu_widgets.window), "dnfui-menu-action-data", data, +[](gpointer p) {
@@ -191,9 +191,9 @@ main_menu_connect_actions(const MainMenuWidgets &menu_widgets, SearchWidgets *wi
   entries[1].activate = on_menu_clear_list;
   entries[2].name = "clear-cache";
   entries[2].activate = on_menu_clear_cache;
-  entries[3].name = "show-history";
+  entries[3].name = "show-left-panel";
   entries[3].state = "true";
-  entries[3].change_state = on_menu_show_history_changed;
+  entries[3].change_state = on_menu_show_left_panel_changed;
   entries[4].name = "show-info";
   entries[4].state = "true";
   entries[4].change_state = on_menu_show_info_changed;
