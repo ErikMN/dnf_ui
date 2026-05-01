@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        GTK frontend for DNF5 with a privileged transaction service
 
@@ -73,5 +73,10 @@ appstreamcli validate --no-net packaging/com.fedora.dnfui.metainfo.xml
 %{_unitdir}/dnfui-service.service
 
 %changelog
+* Fri May 01 2026 ErikMN <erik@example.invalid> - 0.1.1-1
+- Add upgrade-all support
+- Add upgradable package listing
+- Improve documentation and tests
+
 * Thu Apr 30 2026 ErikMN <erik@example.invalid> - 0.1.0-1
 - First public test release
