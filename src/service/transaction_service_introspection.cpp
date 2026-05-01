@@ -14,6 +14,9 @@ const char kTransactionServiceManagerIntrospectionXml[] = R"XML(
       <arg name="reinstall" type="as" direction="in"/>
       <arg name="transaction_path" type="o" direction="out"/>
     </method>
+    <method name="StartUpgradeAllTransaction">
+      <arg name="transaction_path" type="o" direction="out"/>
+    </method>
   </interface>
 </node>
 )XML";

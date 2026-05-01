@@ -22,14 +22,19 @@ Important files:
 
 `TransactionRequest` is shared by the GUI and the service.
 
-It contains three explicit user action lists:
+It contains one upgrade-all flag and three explicit user action lists:
 
+- upgrade all
 - install
 - remove
 - reinstall
 
 Dependency changes are not stored in the request. They are resolved later when
 the backend builds the preview.
+
+Upgrade-all requests are mutually exclusive with the explicit package action
+lists. They are sent through the separate `StartUpgradeAllTransaction` D-Bus
+method and resolved by libdnf5 as one upgrade job for all installed packages.
 
 The GUI builds this request from pending actions in
 [src/ui/pending_transaction_request.cpp](../src/ui/pending_transaction_request.cpp).
@@ -48,12 +53,20 @@ When the user clicks Apply:
 8. The service authorizes and runs the transaction.
 9. The GUI refreshes package state and releases the request object.
 
+When the user clicks Upgrade All, the GUI skips the pending action list and asks
+the service to start an upgrade-all request directly. If the resolved preview is
+empty, the GUI releases the request object and reports that all packages are
+already up to date. Empty previews cannot be applied.
+
 ```mermaid
 flowchart TD
     Mark[Marked actions] --> Request[TransactionRequest]
+    UpgradeAll[Upgrade All] --> StartAll[StartUpgradeAllTransaction]
     Request --> Start[StartTransaction]
     Start --> Preview[Preview worker]
+    StartAll --> Preview
     Preview --> Dialog[Summary dialog]
+    Preview --> NoChanges[No changes available]
     Dialog --> Apply[Apply method]
     Apply --> Auth[Polkit authorization]
     Auth --> Run[Apply worker]
@@ -68,6 +81,7 @@ The service exposes one manager object and one request object per transaction.
 The manager object has:
 
 - `StartTransaction`
+- `StartUpgradeAllTransaction`
 
 Each request object has:
 
@@ -120,7 +134,7 @@ the package that owns the running DNF UI executable.
 
 Before resolving the preview, the service refreshes backend state:
 
-- install and reinstall requests need repository metadata
+- install, reinstall, and upgrade-all requests need repository metadata
 - remove-only requests can use installed-package state only
 
 If refresh fails, the service continues with the package state it can still

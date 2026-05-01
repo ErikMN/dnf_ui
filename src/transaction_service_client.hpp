@@ -19,6 +19,12 @@ bool transaction_service_client_preview_request(const TransactionRequest &reques
                                                 TransactionPreview &preview_out,
                                                 std::string &transaction_path_out,
                                                 std::string &error_out);
+// -----------------------------------------------------------------------------
+// Prepare an upgrade-all transaction through the service.
+// -----------------------------------------------------------------------------
+bool transaction_service_client_preview_upgrade_all_request(TransactionPreview &preview_out,
+                                                            std::string &transaction_path_out,
+                                                            std::string &error_out);
 
 // -----------------------------------------------------------------------------
 // Apply one previously prepared transaction request and forward its progress.

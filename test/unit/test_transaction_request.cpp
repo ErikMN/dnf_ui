@@ -27,6 +27,12 @@ TEST_CASE("Transaction request empty state and item count reflect queued actions
 
   REQUIRE_FALSE(request.empty());
   REQUIRE(request.item_count() == 3);
+
+  TransactionRequest upgrade_all_request;
+  upgrade_all_request.upgrade_all = true;
+
+  REQUIRE_FALSE(upgrade_all_request.empty());
+  REQUIRE(upgrade_all_request.item_count() == 1);
 }
 
 // -----------------------------------------------------------------------------
@@ -84,6 +90,29 @@ TEST_CASE("Transaction request validation rejects too many package actions")
 
   REQUIRE_FALSE(request.validate(error));
   REQUIRE(error == "Transaction request contains too many package actions.");
+}
+
+TEST_CASE("Transaction request validation rejects mixed upgrade-all requests")
+{
+  TransactionRequest request;
+  std::string error;
+
+  request.upgrade_all = true;
+  request.install.push_back("example-install-spec");
+
+  REQUIRE_FALSE(request.validate(error));
+  REQUIRE(error == "Upgrade all cannot be combined with other package actions.");
+}
+
+TEST_CASE("Transaction request validation accepts upgrade-all requests")
+{
+  TransactionRequest request;
+  std::string error = "stale";
+
+  request.upgrade_all = true;
+
+  REQUIRE(request.validate(error));
+  REQUIRE(error.empty());
 }
 
 TEST_CASE("Transaction request validation rejects package specs that are too long")

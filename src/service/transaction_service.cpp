@@ -72,6 +72,17 @@ run_test_preview_wait_hook_if_requested()
 
   g_usleep(delay_ms * 1000);
 }
+
+// -----------------------------------------------------------------------------
+// In test builds, allow one upgrade-all preview to finish as an empty
+// transaction without touching the real package state.
+// -----------------------------------------------------------------------------
+static bool
+test_force_empty_upgrade_all_preview_requested(const TransactionRequest &request)
+{
+  const char *force_empty = g_getenv("DNFUI_TEST_FORCE_EMPTY_UPGRADE_ALL_PREVIEW");
+  return request.upgrade_all && force_empty && g_strcmp0(force_empty, "1") == 0;
+}
 #else
 // -----------------------------------------------------------------------------
 // Do nothing when preview failure injection is not compiled in.
@@ -87,6 +98,15 @@ throw_if_test_preview_exception_requested()
 static void
 run_test_preview_wait_hook_if_requested()
 {
+}
+
+// -----------------------------------------------------------------------------
+// Do not force empty upgrade-all previews in production builds.
+// -----------------------------------------------------------------------------
+static bool
+test_force_empty_upgrade_all_preview_requested(const TransactionRequest &)
+{
+  return false;
 }
 #endif
 
@@ -588,6 +608,7 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
   TransactionSession *session = it->second.get();
   GDBusMethodInvocation *invocation = nullptr;
   bool preview_ready = false;
+  bool preview_empty = false;
   {
     std::lock_guard<std::mutex> lock(session->state_mutex);
     if (!session->pending_apply_invocation) {
@@ -596,12 +617,20 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
     invocation = session->pending_apply_invocation;
     session->pending_apply_invocation = nullptr;
     preview_ready = session->stage == TransactionStage::PREVIEW_READY && session->finished.load() && session->success;
+    preview_empty = session->preview.empty();
   }
 
   // The request must still be ready for apply after authorization completes.
   if (!preview_ready) {
     g_dbus_method_invocation_return_error(
         invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction state changed during authorization.");
+    g_object_unref(invocation);
+    return;
+  }
+
+  if (preview_empty) {
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "No package changes are available.");
     g_object_unref(invocation);
     return;
   }
@@ -755,7 +784,7 @@ validate_transaction_request_for_service(const TransactionRequest &request, std:
 static bool
 transaction_request_needs_available_repos(const TransactionRequest &request)
 {
-  return !request.install.empty() || !request.reinstall.empty();
+  return request.upgrade_all || !request.install.empty() || !request.reinstall.empty();
 }
 
 // -----------------------------------------------------------------------------
@@ -777,6 +806,19 @@ run_transaction_preview(TransactionSession *session)
     DNFUI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
     throw_if_test_preview_exception_requested();
     run_test_preview_wait_hook_if_requested();
+
+    if (test_force_empty_upgrade_all_preview_requested(session->request)) {
+      // Finish with an empty preview so tests can cover the no-updates path.
+      queue_transaction_progress(session, "No package updates are available.");
+      {
+        std::lock_guard<std::mutex> lock(session->state_mutex);
+        session->preview = preview;
+      }
+      queue_transaction_finished(
+          session, TransactionStage::PREVIEW_READY, true, format_transaction_preview_details(preview));
+      return;
+    }
+
     try {
       if (transaction_request_needs_available_repos(session->request)) {
         // The transaction service is a long-lived process, so packages installed or
@@ -801,8 +843,13 @@ run_transaction_preview(TransactionSession *session)
       }
     }
 
-    bool ok = dnf_backend_preview_transaction(
-        session->request.install, session->request.remove, session->request.reinstall, preview, error_out, progress_cb);
+    bool ok = dnf_backend_preview_transaction(session->request.install,
+                                              session->request.remove,
+                                              session->request.reinstall,
+                                              preview,
+                                              error_out,
+                                              progress_cb,
+                                              session->request.upgrade_all);
 
     if (session->cancelled.load()) {
       DNFUI_TRACE("Transaction service preview cancelled path=%s", session->object_path.c_str());
@@ -905,8 +952,12 @@ run_transaction_apply(TransactionSession *session)
     auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
     DNFUI_TRACE("Transaction service apply start path=%s", session->object_path.c_str());
-    bool ok = dnf_backend_apply_transaction(
-        session->request.install, session->request.remove, session->request.reinstall, error_out, progress_cb);
+    bool ok = dnf_backend_apply_transaction(session->request.install,
+                                            session->request.remove,
+                                            session->request.reinstall,
+                                            error_out,
+                                            progress_cb,
+                                            session->request.upgrade_all);
 
     std::string details;
     TransactionStage stage = TransactionStage::APPLY_FAILED;
@@ -1078,14 +1129,22 @@ on_transaction_method_call(GDBusConnection *,
 
   if (g_strcmp0(method_name, "Apply") == 0) {
     bool preview_ready = false;
+    bool preview_empty = false;
     {
       std::lock_guard<std::mutex> lock(session->state_mutex);
       preview_ready = session->stage == TransactionStage::PREVIEW_READY && session->finished.load() && session->success;
+      preview_empty = session->preview.empty();
     }
 
     if (!preview_ready) {
       g_dbus_method_invocation_return_error(
           invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview must succeed before apply can start.");
+      return;
+    }
+
+    if (preview_empty) {
+      g_dbus_method_invocation_return_error(
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "No package changes are available.");
       return;
     }
 
@@ -1340,12 +1399,18 @@ on_manager_method_call(GDBusConnection *,
     return;
   }
 
-  if (g_strcmp0(interface_name, kManagerInterface) != 0 || g_strcmp0(method_name, "StartTransaction") != 0) {
+  if (g_strcmp0(interface_name, kManagerInterface) != 0 ||
+      (g_strcmp0(method_name, "StartTransaction") != 0 && g_strcmp0(method_name, "StartUpgradeAllTransaction") != 0)) {
     g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "Unknown method.");
     return;
   }
 
-  TransactionRequest request = transaction_service_request_from_variant(parameters);
+  TransactionRequest request;
+  if (g_strcmp0(method_name, "StartUpgradeAllTransaction") == 0) {
+    request.upgrade_all = true;
+  } else {
+    request = transaction_service_request_from_variant(parameters);
+  }
   std::string error_out;
 
   std::string owner_name;
@@ -1369,10 +1434,11 @@ on_manager_method_call(GDBusConnection *,
     return;
   }
 
-  DNFUI_TRACE("Transaction service start install=%zu remove=%zu reinstall=%zu",
+  DNFUI_TRACE("Transaction service start install=%zu remove=%zu reinstall=%zu upgrade_all=%d",
               request.install.size(),
               request.remove.size(),
-              request.reinstall.size());
+              request.reinstall.size(),
+              request.upgrade_all ? 1 : 0);
 
   TransactionSession *session = create_transaction_session(service, request, owner_name, error_out);
   if (!session) {

@@ -137,6 +137,14 @@ struct TransactionPreview {
   std::vector<std::string> reinstall;
   std::vector<std::string> remove;
   long long disk_space_delta = 0;
+
+  // -----------------------------------------------------------------------------
+  // Return true when the preview contains no resolved package actions.
+  // -----------------------------------------------------------------------------
+  bool empty() const
+  {
+    return install.empty() && upgrade.empty() && downgrade.empty() && reinstall.empty() && remove.empty();
+  }
 };
 
 using TransactionProgressCallback = std::function<void(const std::string &)>;
@@ -264,7 +272,8 @@ bool dnf_backend_preview_transaction(const std::vector<std::string> &install_nev
                                      const std::vector<std::string> &reinstall_nevras,
                                      TransactionPreview &preview,
                                      std::string &error_out,
-                                     const TransactionProgressCallback &progress_cb = {});
+                                     const TransactionProgressCallback &progress_cb = {},
+                                     bool upgrade_all = false);
 // -----------------------------------------------------------------------------
 // Resolve and apply the requested transaction and report progress.
 // -----------------------------------------------------------------------------
@@ -272,7 +281,8 @@ bool dnf_backend_apply_transaction(const std::vector<std::string> &install_nevra
                                    const std::vector<std::string> &remove_nevras,
                                    const std::vector<std::string> &reinstall_nevras,
                                    std::string &error_out,
-                                   const TransactionProgressCallback &progress_cb = {});
+                                   const TransactionProgressCallback &progress_cb = {},
+                                   bool upgrade_all = false);
 
 #ifdef DNFUI_BUILD_TESTS
 // -----------------------------------------------------------------------------

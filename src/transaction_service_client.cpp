@@ -216,6 +216,55 @@ start_transaction_request(GDBusConnection *connection,
 }
 
 // -----------------------------------------------------------------------------
+// Start a new upgrade-all transaction request and return its service object path
+// -----------------------------------------------------------------------------
+static bool
+start_upgrade_all_transaction_request(GDBusConnection *connection,
+                                      std::string &transaction_path_out,
+                                      std::string &error_out)
+{
+  transaction_path_out.clear();
+  error_out.clear();
+
+  if (!connection) {
+    error_out = "Transaction service connection is not available.";
+    return false;
+  }
+
+  GError *error = nullptr;
+  GVariant *start_reply = g_dbus_connection_call_sync(connection,
+                                                      kTransactionServiceName,
+                                                      kTransactionServiceManagerPath,
+                                                      kTransactionServiceManagerInterface,
+                                                      "StartUpgradeAllTransaction",
+                                                      nullptr,
+                                                      G_VARIANT_TYPE("(o)"),
+                                                      G_DBUS_CALL_FLAGS_NONE,
+                                                      -1,
+                                                      nullptr,
+                                                      &error);
+  if (!start_reply) {
+    error_out = error ? error->message : "Could not start the upgrade-all transaction service request.";
+    g_clear_error(&error);
+    return false;
+  }
+
+  const gchar *path = nullptr;
+  g_variant_get(start_reply, "(&o)", &path);
+  transaction_path_out = path ? path : "";
+  g_variant_unref(start_reply);
+
+  if (transaction_path_out.empty()) {
+    error_out = "Transaction service returned an empty request path.";
+    return false;
+  }
+
+  DNFUI_TRACE("Transaction service client start upgrade-all path=%s", transaction_path_out.c_str());
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
 // Read the current state of a service transaction request
 // -----------------------------------------------------------------------------
 static bool
@@ -518,6 +567,54 @@ on_transaction_progress_signal(GDBusConnection *,
   (*forwarder->progress_callback)(line);
 }
 
+// -----------------------------------------------------------------------------
+// Wait for a started preview request and read its structured preview
+// -----------------------------------------------------------------------------
+static bool
+wait_for_started_transaction_preview(GDBusConnection *connection,
+                                     const std::string &transaction_path,
+                                     TransactionPreview &preview_out,
+                                     std::string &error_out)
+{
+  TransactionServiceResult result;
+
+  // Create a dedicated main context for the duration of the preview wait.
+  // The Finished signal subscription inside wait_for_transaction_stage is
+  // dispatched on the thread-default context, so it and the iterated context
+  // must be the same object.
+  GMainContext *wait_context = g_main_context_new();
+  g_main_context_push_thread_default(wait_context);
+  bool stage_ok =
+      wait_for_transaction_stage(connection, transaction_path, "preview-running", wait_context, result, error_out);
+  g_main_context_pop_thread_default(wait_context);
+  g_main_context_unref(wait_context);
+
+  if (!stage_ok) {
+    std::string release_error;
+    release_transaction_request(connection, transaction_path, release_error);
+    return false;
+  }
+
+  if (result.stage != "preview-ready" || !result.finished || !result.success) {
+    error_out = result.details.empty() ? "Privileged transaction preview failed." : result.details;
+    DNFUI_TRACE(
+        "Transaction service client preview failed path=%s error=%s", transaction_path.c_str(), error_out.c_str());
+    std::string release_error;
+    release_transaction_request(connection, transaction_path, release_error);
+    return false;
+  }
+
+  if (!get_transaction_preview(connection, transaction_path, preview_out, error_out)) {
+    DNFUI_TRACE(
+        "Transaction service client get preview failed path=%s error=%s", transaction_path.c_str(), error_out.c_str());
+    std::string release_error;
+    release_transaction_request(connection, transaction_path, release_error);
+    return false;
+  }
+
+  return true;
+}
+
 } // namespace
 
 // -----------------------------------------------------------------------------
@@ -537,6 +634,11 @@ transaction_service_client_preview_request(const TransactionRequest &request,
     return false;
   }
 
+  if (request.upgrade_all) {
+    error_out = "Use the upgrade-all preview helper for upgrade-all requests.";
+    return false;
+  }
+
   std::string connect_error;
   GDBusConnection *connection = connect_transaction_service(connect_error);
   if (!connection) {
@@ -544,46 +646,46 @@ transaction_service_client_preview_request(const TransactionRequest &request,
     return false;
   }
 
-  TransactionServiceResult result;
   if (!start_transaction_request(connection, request, transaction_path_out, error_out)) {
     g_object_unref(connection);
     return false;
   }
 
-  // Create a dedicated main context for the duration of the preview wait.
-  // The Finished signal subscription inside wait_for_transaction_stage is
-  // dispatched on the thread-default context, so it and the iterated context
-  // must be the same object.
-  GMainContext *wait_context = g_main_context_new();
-  g_main_context_push_thread_default(wait_context);
-  bool stage_ok =
-      wait_for_transaction_stage(connection, transaction_path_out, "preview-running", wait_context, result, error_out);
-  g_main_context_pop_thread_default(wait_context);
-  g_main_context_unref(wait_context);
-
-  if (!stage_ok) {
-    std::string release_error;
-    release_transaction_request(connection, transaction_path_out, release_error);
+  if (!wait_for_started_transaction_preview(connection, transaction_path_out, preview_out, error_out)) {
     g_object_unref(connection);
     return false;
   }
 
-  if (result.stage != "preview-ready" || !result.finished || !result.success) {
-    error_out = result.details.empty() ? "Privileged transaction preview failed." : result.details;
-    DNFUI_TRACE(
-        "Transaction service client preview failed path=%s error=%s", transaction_path_out.c_str(), error_out.c_str());
-    std::string release_error;
-    release_transaction_request(connection, transaction_path_out, release_error);
+  g_object_unref(connection);
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Resolve an upgrade-all service-backed transaction preview
+// -----------------------------------------------------------------------------
+bool
+transaction_service_client_preview_upgrade_all_request(TransactionPreview &preview_out,
+                                                       std::string &transaction_path_out,
+                                                       std::string &error_out)
+{
+  preview_out = {};
+  transaction_path_out.clear();
+  error_out.clear();
+
+  std::string connect_error;
+  GDBusConnection *connection = connect_transaction_service(connect_error);
+  if (!connection) {
+    error_out = connect_error;
+    return false;
+  }
+
+  if (!start_upgrade_all_transaction_request(connection, transaction_path_out, error_out)) {
     g_object_unref(connection);
     return false;
   }
 
-  if (!get_transaction_preview(connection, transaction_path_out, preview_out, error_out)) {
-    DNFUI_TRACE("Transaction service client get preview failed path=%s error=%s",
-                transaction_path_out.c_str(),
-                error_out.c_str());
-    std::string release_error;
-    release_transaction_request(connection, transaction_path_out, release_error);
+  if (!wait_for_started_transaction_preview(connection, transaction_path_out, preview_out, error_out)) {
     g_object_unref(connection);
     return false;
   }

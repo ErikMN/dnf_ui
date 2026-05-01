@@ -41,6 +41,7 @@ TEST_CASE("Pending transaction request builder splits actions by operation type"
 TEST_CASE("Pending transaction request builder clears stale request data")
 {
   TransactionRequest request;
+  request.upgrade_all = true;
   request.install.push_back("old-install");
   request.remove.push_back("old-remove");
   request.reinstall.push_back("old-reinstall");
@@ -51,6 +52,7 @@ TEST_CASE("Pending transaction request builder clears stale request data")
 
   pending_transaction_build_request(actions, request);
 
+  REQUIRE_FALSE(request.upgrade_all);
   REQUIRE(request.install.empty());
   REQUIRE(request.remove ==
           std::vector<std::string> {

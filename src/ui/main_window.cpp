@@ -42,6 +42,7 @@ struct AppWidgets {
   GtkWidget *install_button = NULL;
   GtkWidget *reinstall_button = NULL;
   GtkWidget *remove_button = NULL;
+  GtkWidget *upgrade_all_button = NULL;
   GtkWidget *apply_button = NULL;
   GtkWidget *clear_pending_button = NULL;
 
@@ -290,6 +291,10 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
   ui->remove_button = remove_button;
 
+  GtkWidget *upgrade_all_button = ui_helpers_create_icon_button("view-refresh-symbolic", "Upgrade All");
+  gtk_box_append(GTK_BOX(hbox_tx_buttons), upgrade_all_button);
+  ui->upgrade_all_button = upgrade_all_button;
+
   GtkWidget *apply_button = ui_helpers_create_icon_button("emblem-ok-symbolic", "Apply Transactions");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), apply_button);
   ui->apply_button = apply_button;
@@ -444,6 +449,7 @@ create_search_widgets(const AppWidgets *ui)
   widgets->transaction.install_button = GTK_BUTTON(ui->install_button);
   widgets->transaction.remove_button = GTK_BUTTON(ui->remove_button);
   widgets->transaction.reinstall_button = GTK_BUTTON(ui->reinstall_button);
+  widgets->transaction.upgrade_all_button = GTK_BUTTON(ui->upgrade_all_button);
   widgets->transaction.apply_button = GTK_BUTTON(ui->apply_button);
   widgets->transaction.clear_pending_button = GTK_BUTTON(ui->clear_pending_button);
   widgets->transaction.pending_list = GTK_LIST_BOX(ui->pending_list);
@@ -573,6 +579,9 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
       ui->reinstall_button, "clicked", G_CALLBACK(pending_transaction_on_reinstall_button_clicked), widgets);
 
   g_signal_connect(ui->remove_button, "clicked", G_CALLBACK(pending_transaction_on_remove_button_clicked), widgets);
+
+  g_signal_connect(
+      ui->upgrade_all_button, "clicked", G_CALLBACK(pending_transaction_on_upgrade_all_button_clicked), widgets);
 
   g_signal_connect(ui->search_button, "clicked", G_CALLBACK(package_query_on_search_button_clicked), widgets);
 

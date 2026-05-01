@@ -90,6 +90,7 @@ invalidate_service_preview(SearchWidgets *widgets)
   }
 
   widgets->transaction.preview_transaction_path.clear();
+  widgets->transaction.preview_upgrade_all = false;
 }
 
 // -----------------------------------------------------------------------------
@@ -133,6 +134,9 @@ set_preview_request_busy_state(SearchWidgets *widgets, bool busy)
   widgets->transaction.preview_request_in_progress = busy;
   if (widgets->transaction.pending_list) {
     gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.pending_list), !busy);
+  }
+  if (widgets->transaction.upgrade_all_button) {
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.upgrade_all_button), !busy);
   }
 
   if (busy) {
@@ -354,13 +358,16 @@ start_apply_transaction(SearchWidgets *widgets)
 
   ApplyTaskData *td = new ApplyTaskData;
   td->transaction_path = widgets->transaction.preview_transaction_path;
-  td->progress_window = transaction_progress_create_window(widgets, widgets->transaction.actions.size());
+  size_t pending_count = widgets->transaction.preview_upgrade_all ? 0 : widgets->transaction.actions.size();
+  td->progress_window = transaction_progress_create_window(widgets, pending_count);
   // Keep the progress state alive for the whole apply task even if the user closes the window first.
   transaction_progress_retain(td->progress_window);
 
   transaction_progress_append(td->progress_window, "Queued transaction request.");
-  ui_helpers_set_status(
-      widgets->query.status_label, "Applying pending changes. See transaction window for details.", "blue");
+  const char *status_message = widgets->transaction.preview_upgrade_all
+      ? "Applying package upgrades. See transaction window for details."
+      : "Applying pending changes. See transaction window for details.";
+  ui_helpers_set_status(widgets->query.status_label, status_message, "blue");
   widgets_spinner_acquire(widgets->query.spinner);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
@@ -588,33 +595,13 @@ pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_d
 }
 
 // -----------------------------------------------------------------------------
-// Prepare a transaction preview and ask the user to confirm it.
+// Prepare a service-backed transaction preview and show the confirmation dialog.
 // -----------------------------------------------------------------------------
-void
-pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
+static void
+start_preview_request(SearchWidgets *widgets, TransactionRequest request)
 {
-  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
-  if (pending_transaction_preview_is_busy(widgets)) {
-    ui_helpers_set_status(widgets->query.status_label, pending_transaction_preview_busy_message(), "blue");
-    return;
-  }
-
-  if (widgets->transaction.actions.empty()) {
-    ui_helpers_set_status(widgets->query.status_label, "No pending changes.", "gray");
-    return;
-  }
-
-  TransactionRequest request;
-  std::string error;
-  pending_transaction_build_request(widgets->transaction.actions, request);
-
-  // Refuse self-protected transactions before asking the service to preview them.
-  if (!pending_transaction_validate_request(request, error)) {
-    ui_helpers_set_status(widgets->query.status_label, error.c_str(), "red");
-    return;
-  }
-
   invalidate_service_preview(widgets);
+  widgets->transaction.preview_upgrade_all = request.upgrade_all;
   ui_helpers_set_status(widgets->query.status_label, "Preparing transaction preview...", "blue");
   widgets_spinner_acquire(widgets->query.spinner);
   set_preview_request_busy_state(widgets, true);
@@ -641,6 +628,7 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
         if (!success || !td) {
           const char *status_message =
               error && error->message ? error->message : "Unable to prepare transaction preview.";
+          widgets->transaction.preview_upgrade_all = false;
           ui_helpers_set_status(widgets->query.status_label, status_message, "red");
           transaction_progress_show_error_dialog(widgets,
                                                  "Transaction Preview Failed",
@@ -652,7 +640,18 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
           return;
         }
 
+        if (td->preview.empty()) {
+          if (!td->transaction_path.empty()) {
+            transaction_service_client_release_request(td->transaction_path);
+          }
+          widgets->transaction.preview_transaction_path.clear();
+          widgets->transaction.preview_upgrade_all = false;
+          ui_helpers_set_status(widgets->query.status_label, "All packages are already up to date.", "green");
+          return;
+        }
+
         widgets->transaction.preview_transaction_path = td->transaction_path;
+        widgets->transaction.preview_upgrade_all = td->request.upgrade_all;
         transaction_progress_show_summary_dialog(
             widgets, td->preview, start_apply_transaction, invalidate_service_preview);
       });
@@ -662,7 +661,14 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
       task, +[](GTask *task, gpointer, gpointer task_data, GCancellable *) {
         PreviewTaskData *td = static_cast<PreviewTaskData *>(task_data);
         std::string error;
-        if (!td || !transaction_service_client_preview_request(td->request, td->preview, td->transaction_path, error)) {
+        bool ok = false;
+        if (td && td->request.upgrade_all) {
+          ok = transaction_service_client_preview_upgrade_all_request(td->preview, td->transaction_path, error);
+        } else if (td) {
+          ok = transaction_service_client_preview_request(td->request, td->preview, td->transaction_path, error);
+        }
+
+        if (!ok) {
           g_task_return_new_error(task,
                                   G_IO_ERROR,
                                   G_IO_ERROR_FAILED,
@@ -676,6 +682,65 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
 
   g_object_unref(task);
   g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
+// Prepare a transaction preview for all package upgrades.
+// -----------------------------------------------------------------------------
+void
+pending_transaction_on_upgrade_all_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (pending_transaction_preview_is_busy(widgets)) {
+    ui_helpers_set_status(widgets->query.status_label, pending_transaction_preview_busy_message(), "blue");
+    return;
+  }
+
+  if (!widgets->transaction.actions.empty()) {
+    ui_helpers_set_status(
+        widgets->query.status_label, "Clear pending package actions before upgrading all packages.", "blue");
+    return;
+  }
+
+  TransactionRequest request;
+  request.upgrade_all = true;
+  std::string error;
+  if (!request.validate(error)) {
+    ui_helpers_set_status(widgets->query.status_label, error.c_str(), "red");
+    return;
+  }
+
+  start_preview_request(widgets, std::move(request));
+}
+
+// -----------------------------------------------------------------------------
+// Prepare a transaction preview and ask the user to confirm it.
+// -----------------------------------------------------------------------------
+void
+pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (pending_transaction_preview_is_busy(widgets)) {
+    ui_helpers_set_status(widgets->query.status_label, pending_transaction_preview_busy_message(), "blue");
+    return;
+  }
+
+  if (widgets->transaction.actions.empty()) {
+    ui_helpers_set_status(widgets->query.status_label, "No pending changes.", "gray");
+    return;
+  }
+
+  TransactionRequest request;
+  std::string error;
+  pending_transaction_build_request(widgets->transaction.actions, request);
+
+  // Refuse self-protected transactions before asking the service to preview them.
+  if (!pending_transaction_validate_request(request, error)) {
+    ui_helpers_set_status(widgets->query.status_label, error.c_str(), "red");
+    return;
+  }
+
+  start_preview_request(widgets, std::move(request));
 }
 
 // -----------------------------------------------------------------------------

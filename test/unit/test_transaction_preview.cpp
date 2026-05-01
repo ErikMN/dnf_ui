@@ -79,6 +79,54 @@ TEST_CASE("Transaction preview reports a friendly resolve error for an impossibl
   REQUIRE(progress_contains(progress_lines, "Resolving dependency changes..."));
 }
 
+TEST_CASE("Transaction preview accepts empty upgrade-all results")
+{
+  reset_backend_globals();
+  ScopedEnvVar force_empty_upgrade_all("DNFUI_TEST_SKIP_UPGRADE_ALL_GOAL_JOB", "1");
+
+  TransactionPreview preview;
+  std::string error = "stale";
+  std::vector<std::string> progress_lines;
+
+  bool ok = dnf_backend_preview_transaction(
+      {}, {}, {}, preview, error, [&](const std::string &line) { progress_lines.push_back(line); }, true);
+
+  REQUIRE(ok);
+  REQUIRE(error.empty());
+  REQUIRE(preview.empty());
+  REQUIRE(progress_contains(progress_lines, "No package updates are available."));
+}
+
+TEST_CASE("Transaction preview rejects mixed upgrade-all requests")
+{
+  reset_backend_globals();
+
+  TransactionPreview preview;
+  std::string error;
+
+  bool ok = dnf_backend_preview_transaction({ "example-install-spec" }, {}, {}, preview, error, {}, true);
+
+  REQUIRE_FALSE(ok);
+  REQUIRE(error == "Upgrade all cannot be combined with other package actions.");
+  REQUIRE(preview.empty());
+}
+
+TEST_CASE("Transaction apply rejects empty upgrade-all results")
+{
+  reset_backend_globals();
+  ScopedEnvVar force_empty_upgrade_all("DNFUI_TEST_SKIP_UPGRADE_ALL_GOAL_JOB", "1");
+
+  std::string error;
+  std::vector<std::string> progress_lines;
+
+  bool ok = dnf_backend_apply_transaction(
+      {}, {}, {}, error, [&](const std::string &line) { progress_lines.push_back(line); }, true);
+
+  REQUIRE_FALSE(ok);
+  REQUIRE(error == "No package updates are available.");
+  REQUIRE(progress_contains(progress_lines, "No package updates are available."));
+}
+
 // -----------------------------------------------------------------------------
 // Transaction preview success path tests
 // -----------------------------------------------------------------------------

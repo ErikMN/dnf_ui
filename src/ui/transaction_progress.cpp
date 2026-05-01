@@ -119,10 +119,14 @@ transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count)
   gtk_window_set_child(progress->window, outer);
 
   progress->title_label = GTK_LABEL(gtk_label_new(nullptr));
-  gtk_label_set_markup(progress->title_label,
-                       ("<b>Applying " + std::to_string(pending_count) + " pending package change" +
-                        (pending_count == 1 ? "</b>" : "s</b>"))
-                           .c_str());
+  std::string title_text;
+  if (pending_count == 0) {
+    title_text = "<b>Applying package transaction</b>";
+  } else {
+    title_text = "<b>Applying " + std::to_string(pending_count) + " pending package change" +
+        (pending_count == 1 ? "</b>" : "s</b>");
+  }
+  gtk_label_set_markup(progress->title_label, title_text.c_str());
   gtk_label_set_xalign(progress->title_label, 0.0f);
   gtk_box_append(GTK_BOX(outer), GTK_WIDGET(progress->title_label));
 

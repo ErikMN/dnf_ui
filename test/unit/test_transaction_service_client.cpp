@@ -174,6 +174,36 @@ call_start_transaction(GDBusConnection *connection,
   return true;
 }
 
+// -----------------------------------------------------------------------------
+// Call Apply directly on a request object and return the D-Bus error text.
+// -----------------------------------------------------------------------------
+static bool
+call_apply_transaction(GDBusConnection *connection, const std::string &transaction_path, std::string &error_out)
+{
+  error_out.clear();
+
+  GError *error = nullptr;
+  GVariant *reply = g_dbus_connection_call_sync(connection,
+                                                kTransactionServiceName,
+                                                transaction_path.c_str(),
+                                                kTransactionServiceRequestInterface,
+                                                "Apply",
+                                                nullptr,
+                                                nullptr,
+                                                G_DBUS_CALL_FLAGS_NONE,
+                                                -1,
+                                                nullptr,
+                                                &error);
+  if (!reply) {
+    error_out = error && error->message ? error->message : "";
+    g_clear_error(&error);
+    return false;
+  }
+
+  g_variant_unref(reply);
+  return true;
+}
+
 } // namespace
 
 TEST_CASE("Transaction service client reports an error when the service disappears while waiting")
@@ -316,6 +346,82 @@ TEST_CASE("Transaction service rejects too many active requests from one client"
   REQUIRE_FALSE(call_start_transaction(connection, "bash", rejected_path, rejected_error));
   REQUIRE(rejected_error.find("This client has too many active transaction requests.") != std::string::npos);
 
+  transaction_service_client_reset_for_tests();
+  g_object_unref(connection);
+  g_subprocess_force_exit(service);
+  g_object_unref(service);
+  g_test_dbus_down(test_bus);
+  g_object_unref(test_bus);
+}
+
+TEST_CASE("Transaction service client rejects upgrade-all through the package-list preview helper")
+{
+  TransactionRequest request;
+  request.upgrade_all = true;
+
+  TransactionPreview preview;
+  std::string transaction_path;
+  std::string error;
+
+  REQUIRE_FALSE(transaction_service_client_preview_request(request, preview, transaction_path, error));
+  REQUIRE(error == "Use the upgrade-all preview helper for upgrade-all requests.");
+  REQUIRE(transaction_path.empty());
+  REQUIRE(preview.empty());
+}
+
+TEST_CASE("Transaction service upgrade-all preview handles no available package updates")
+{
+  REQUIRE(std::string(DNFUI_TEST_SERVICE_BIN).size() > 0);
+
+  GTestDBus *test_bus = g_test_dbus_new(G_TEST_DBUS_NONE);
+  REQUIRE(test_bus != nullptr);
+  g_test_dbus_up(test_bus);
+
+  ScopedEnvironmentOverride session_bus_address_env("DBUS_SESSION_BUS_ADDRESS");
+  ScopedEnvironmentOverride transaction_bus_env("DNFUI_TRANSACTION_BUS");
+
+  const char *bus_address = g_test_dbus_get_bus_address(test_bus);
+  REQUIRE(bus_address != nullptr);
+  REQUIRE(g_setenv("DBUS_SESSION_BUS_ADDRESS", bus_address, TRUE));
+  REQUIRE(g_setenv("DNFUI_TRANSACTION_BUS", "session", TRUE));
+
+  GError *error = nullptr;
+  GSubprocessLauncher *launcher = g_subprocess_launcher_new(
+      static_cast<GSubprocessFlags>(G_SUBPROCESS_FLAGS_STDOUT_SILENCE | G_SUBPROCESS_FLAGS_STDERR_SILENCE));
+  REQUIRE(launcher != nullptr);
+  g_subprocess_launcher_setenv(launcher, "DBUS_SESSION_BUS_ADDRESS", bus_address, TRUE);
+  g_subprocess_launcher_setenv(launcher, "DNFUI_TEST_FORCE_EMPTY_UPGRADE_ALL_PREVIEW", "1", TRUE);
+
+  const char *service_argv[] = {
+    DNFUI_TEST_SERVICE_BIN,
+    "--session",
+    nullptr,
+  };
+  GSubprocess *service = g_subprocess_launcher_spawnv(launcher, service_argv, &error);
+  std::string error_text = error && error->message ? error->message : "";
+  INFO(error_text);
+  REQUIRE(service != nullptr);
+  g_object_unref(launcher);
+
+  GDBusConnection *connection = connect_to_test_bus(bus_address, &error);
+  error_text = error && error->message ? error->message : "";
+  INFO(error_text);
+  REQUIRE(connection != nullptr);
+  REQUIRE(wait_for_bus_name_owner(connection, kTransactionServiceName, 5000));
+
+  TransactionPreview preview;
+  std::string transaction_path;
+  std::string preview_error;
+  REQUIRE(transaction_service_client_preview_upgrade_all_request(preview, transaction_path, preview_error));
+  REQUIRE(preview_error.empty());
+  REQUIRE_FALSE(transaction_path.empty());
+  REQUIRE(preview.empty());
+
+  std::string apply_error;
+  REQUIRE_FALSE(call_apply_transaction(connection, transaction_path, apply_error));
+  REQUIRE(apply_error.find("No package changes are available.") != std::string::npos);
+
+  transaction_service_client_release_request(transaction_path);
   transaction_service_client_reset_for_tests();
   g_object_unref(connection);
   g_subprocess_force_exit(service);

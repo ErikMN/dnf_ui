@@ -17,6 +17,8 @@ constexpr size_t kTransactionRequestMaxSpecLength = 4096;
 // Transaction request shared by the GUI and privileged transaction service
 // -----------------------------------------------------------------------------
 struct TransactionRequest {
+  // Upgrade all installed packages.
+  bool upgrade_all = false;
   // Package specs explicitly marked for install.
   std::vector<std::string> install;
   // Package specs explicitly marked for removal.
@@ -29,15 +31,15 @@ struct TransactionRequest {
   // -----------------------------------------------------------------------------
   bool empty() const
   {
-    return install.empty() && remove.empty() && reinstall.empty();
+    return !upgrade_all && install.empty() && remove.empty() && reinstall.empty();
   }
 
   // -----------------------------------------------------------------------------
-  // Return the total number of explicitly marked package actions.
+  // Return the total number of requested package actions.
   // -----------------------------------------------------------------------------
   size_t item_count() const
   {
-    return install.size() + remove.size() + reinstall.size();
+    return (upgrade_all ? 1 : 0) + install.size() + remove.size() + reinstall.size();
   }
 
   // -----------------------------------------------------------------------------
@@ -49,6 +51,11 @@ struct TransactionRequest {
 
     if (empty()) {
       error_out = "Transaction request is empty.";
+      return false;
+    }
+
+    if (upgrade_all && (!install.empty() || !remove.empty() || !reinstall.empty())) {
+      error_out = "Upgrade all cannot be combined with other package actions.";
       return false;
     }
 

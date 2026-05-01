@@ -42,6 +42,7 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
 void
 pending_transaction_build_request(const std::vector<PendingAction> &actions, TransactionRequest &request)
 {
+  request.upgrade_all = false;
   build_pending_transaction_specs(actions, request.install, request.remove, request.reinstall);
 }
 

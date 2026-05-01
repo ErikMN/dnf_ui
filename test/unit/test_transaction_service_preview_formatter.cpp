@@ -33,7 +33,8 @@ TEST_CASE("Transaction preview formatter reports unchanged disk space for an emp
 
   const std::string summary = format_transaction_preview_details(preview);
 
-  REQUIRE(summary == "Disk space usage will be unchanged.\n\n");
+  REQUIRE(preview.empty());
+  REQUIRE(summary == "No package changes are available.\nDisk space usage will be unchanged.\n\n");
 }
 
 TEST_CASE("Transaction preview formatter uses singular and plural package count lines")
@@ -44,6 +45,7 @@ TEST_CASE("Transaction preview formatter uses singular and plural package count 
 
   const std::string summary = format_transaction_preview_details(preview);
 
+  REQUIRE_FALSE(preview.empty());
   REQUIRE(summary.find("1 package will be installed.") != std::string::npos);
   REQUIRE(summary.find("2 packages will be removed.") != std::string::npos);
 }

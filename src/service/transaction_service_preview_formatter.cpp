@@ -65,6 +65,10 @@ format_transaction_preview_details(const TransactionPreview &preview)
 {
   std::ostringstream summary;
 
+  if (preview.empty()) {
+    summary << "No package changes are available.\n";
+  }
+
   auto append_count_line = [&](size_t count, const char *verb) {
     if (count == 0) {
       return;

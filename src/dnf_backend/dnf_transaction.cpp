@@ -12,6 +12,7 @@
 #include "debug_trace.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -24,6 +25,28 @@
 #include <libdnf5/base/transaction_package.hpp>
 #include <libdnf5/repo/download_callbacks.hpp>
 #include <libdnf5/rpm/package_query.hpp>
+
+#ifdef DNFUI_BUILD_TESTS
+// -----------------------------------------------------------------------------
+// Test-only hook that makes the upgrade-all resolver reach the empty transaction
+// path without depending on live repository update state.
+// -----------------------------------------------------------------------------
+static bool
+test_skip_upgrade_all_goal_job_requested()
+{
+  const char *skip_upgrade_job = std::getenv("DNFUI_TEST_SKIP_UPGRADE_ALL_GOAL_JOB");
+  return skip_upgrade_job && std::string(skip_upgrade_job) == "1";
+}
+#else
+// -----------------------------------------------------------------------------
+// Do not change upgrade-all goal construction in production builds.
+// -----------------------------------------------------------------------------
+static bool
+test_skip_upgrade_all_goal_job_requested()
+{
+  return false;
+}
+#endif
 
 // -----------------------------------------------------------------------------
 // Format a short, bounded summary of package specs for diagnostic error paths.
@@ -267,12 +290,18 @@ resolve_transaction_plan(libdnf5::Base &base,
                          const std::vector<std::string> &reinstall_nevras,
                          std::string &error_out,
                          const TransactionProgressCallback &progress_cb,
-                         std::unique_ptr<libdnf5::base::Transaction> &transaction_out)
+                         std::unique_ptr<libdnf5::base::Transaction> &transaction_out,
+                         bool upgrade_all)
 {
   transaction_out.reset();
 
-  if (install_nevras.empty() && remove_nevras.empty() && reinstall_nevras.empty()) {
+  if (!upgrade_all && install_nevras.empty() && remove_nevras.empty() && reinstall_nevras.empty()) {
     error_out = "No packages specified in transaction.";
+    return false;
+  }
+
+  if (upgrade_all && (!install_nevras.empty() || !remove_nevras.empty() || !reinstall_nevras.empty())) {
+    error_out = "Upgrade all cannot be combined with other package actions.";
     return false;
   }
 
@@ -299,6 +328,10 @@ resolve_transaction_plan(libdnf5::Base &base,
     goal.add_rpm_reinstall(spec);
   }
 
+  if (upgrade_all && !test_skip_upgrade_all_goal_job_requested()) {
+    goal.add_rpm_upgrade();
+  }
+
   auto transaction = goal.resolve();
 
   auto goal_problem = transaction.get_problems();
@@ -316,11 +349,18 @@ resolve_transaction_plan(libdnf5::Base &base,
   }
 
   if (transaction.get_transaction_packages().empty()) {
+    if (upgrade_all) {
+      emit_progress_line(progress_cb, "No package updates are available.");
+      transaction_out = std::make_unique<libdnf5::base::Transaction>(std::move(transaction));
+      return true;
+    }
+
     std::ostringstream oss;
     oss << "No packages in transaction (nothing to do).\n"
         << "Install specs: " << format_specs(install_nevras) << "\n"
         << "Remove specs: " << format_specs(remove_nevras) << "\n"
-        << "Reinstall specs: " << format_specs(reinstall_nevras) << "\n";
+        << "Reinstall specs: " << format_specs(reinstall_nevras) << "\n"
+        << "Upgrade all: " << (upgrade_all ? "yes" : "no") << "\n";
     error_out = oss.str();
     emit_progress_block(progress_cb, error_out);
     return false;
@@ -381,21 +421,23 @@ dnf_backend_preview_transaction(const std::vector<std::string> &install_nevras,
                                 const std::vector<std::string> &reinstall_nevras,
                                 TransactionPreview &preview,
                                 std::string &error_out,
-                                const TransactionProgressCallback &progress_cb)
+                                const TransactionProgressCallback &progress_cb,
+                                bool upgrade_all)
 {
   error_out.clear();
   preview = TransactionPreview();
 
   try {
-    DNFUI_TRACE("Transaction preview start install=%zu remove=%zu reinstall=%zu",
+    DNFUI_TRACE("Transaction preview start install=%zu remove=%zu reinstall=%zu upgrade_all=%d",
                 install_nevras.size(),
                 remove_nevras.size(),
-                reinstall_nevras.size());
+                reinstall_nevras.size(),
+                upgrade_all ? 1 : 0);
     auto [base, guard] = BaseManager::instance().acquire_write();
     std::unique_ptr<libdnf5::base::Transaction> transaction;
 
     if (!resolve_transaction_plan(
-            base, install_nevras, remove_nevras, reinstall_nevras, error_out, progress_cb, transaction)) {
+            base, install_nevras, remove_nevras, reinstall_nevras, error_out, progress_cb, transaction, upgrade_all)) {
       DNFUI_TRACE("Transaction preview resolve failed: %s", error_out.c_str());
       return false;
     }
@@ -424,22 +466,30 @@ dnf_backend_apply_transaction(const std::vector<std::string> &install_nevras,
                               const std::vector<std::string> &remove_nevras,
                               const std::vector<std::string> &reinstall_nevras,
                               std::string &error_out,
-                              const TransactionProgressCallback &progress_cb)
+                              const TransactionProgressCallback &progress_cb,
+                              bool upgrade_all)
 {
   error_out.clear();
 
   try {
-    DNFUI_TRACE("Transaction apply start install=%zu remove=%zu reinstall=%zu",
+    DNFUI_TRACE("Transaction apply start install=%zu remove=%zu reinstall=%zu upgrade_all=%d",
                 install_nevras.size(),
                 remove_nevras.size(),
-                reinstall_nevras.size());
+                reinstall_nevras.size(),
+                upgrade_all ? 1 : 0);
     // Exclusive access to shared libdnf Base for transactional changes.
     auto [base, guard] = BaseManager::instance().acquire_write();
     std::unique_ptr<libdnf5::base::Transaction> transaction;
 
     if (!resolve_transaction_plan(
-            base, install_nevras, remove_nevras, reinstall_nevras, error_out, progress_cb, transaction)) {
+            base, install_nevras, remove_nevras, reinstall_nevras, error_out, progress_cb, transaction, upgrade_all)) {
       DNFUI_TRACE("Transaction apply resolve failed: %s", error_out.c_str());
+      return false;
+    }
+
+    if (transaction->get_transaction_packages().empty()) {
+      error_out = "No package updates are available.";
+      emit_progress_line(progress_cb, error_out);
       return false;
     }
 

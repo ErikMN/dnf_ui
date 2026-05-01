@@ -38,6 +38,7 @@ applications, or software-center discovery workflows.
 - List installed packages or browse the merged package view
 - View package details, files, dependencies, and changelog information
 - Mark packages for install, reinstall, and removal
+- Upgrade all installed packages with available updates
 - Review a transaction summary before applying changes
 - Apply transactions through a privileged system service with Polkit authorization
 - Cancel long-running package queries
