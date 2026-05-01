@@ -153,6 +153,9 @@ make test
 For the full test matrix, Docker test commands, and memory checks, see
 [docs/testing.md](docs/testing.md).
 
+For architecture notes and source-backed external API assumptions, start with
+[docs/architecture.md](docs/architecture.md).
+
 ### Docker
 
 [Docker](https://www.docker.com/) is the default container runtime. The container targets also support

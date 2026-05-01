@@ -2,6 +2,9 @@
 
 This document explains how DNF UI talks to libdnf5.
 
+For source-backed libdnf5 assumptions, see
+[External API assumptions](api-assumptions.md).
+
 ## Public Backend Contract
 
 The UI uses [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp).

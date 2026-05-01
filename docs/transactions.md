@@ -2,6 +2,9 @@
 
 This document explains how package preview and apply work.
 
+For source-backed libdnf5, GDBus, and Polkit assumptions, see
+[External API assumptions](api-assumptions.md).
+
 ## Boundary
 
 The GUI process stays unprivileged.

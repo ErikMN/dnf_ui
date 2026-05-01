@@ -2,6 +2,9 @@
 
 This document explains the test layout and what each group protects.
 
+For the external API behavior these tests help protect, see
+[External API assumptions](api-assumptions.md).
+
 ## Test Types
 
 The project uses:

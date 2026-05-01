@@ -2,6 +2,9 @@
 
 This document explains how the GTK user interface is organized.
 
+For source-backed GTK and GIO assumptions, see
+[External API assumptions](api-assumptions.md).
+
 ## Main Idea
 
 `main_window.cpp` builds the widgets. Controller files own behavior.
