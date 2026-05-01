@@ -73,6 +73,11 @@ Build dependencies:
 - libdnf5-devel
 - gtk4-devel
 - polkit-devel
+- rpm-build
+
+Test dependency:
+
+- catch-devel
 
 Meson handles the real build and install logic.
 The `Makefile` is a thin task runner for the common developer commands.
