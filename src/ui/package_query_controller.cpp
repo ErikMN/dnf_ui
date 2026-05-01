@@ -148,6 +148,8 @@ package_list_stop_button(SearchWidgets *widgets, PackageListRequestKind kind)
     return widgets->query.list_button;
   case PackageListRequestKind::LIST_AVAILABLE:
     return widgets->query.list_available_button;
+  case PackageListRequestKind::LIST_UPGRADEABLE:
+    return widgets->query.list_upgradeable_button;
   case PackageListRequestKind::SEARCH:
   case PackageListRequestKind::NONE:
   default:
@@ -168,6 +170,8 @@ package_list_cancelled_status(PackageListRequestKind kind)
     return "Listing installed packages cancelled.";
   case PackageListRequestKind::LIST_AVAILABLE:
     return "Listing packages cancelled.";
+  case PackageListRequestKind::LIST_UPGRADEABLE:
+    return "Listing upgradable packages cancelled.";
   case PackageListRequestKind::NONE:
   default:
     return "Operation cancelled.";
@@ -196,6 +200,7 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
   ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", "Search");
   ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", "List Installed");
   ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", "List Packages");
+  ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", "List Upgradable");
   ui_helpers_set_icon_button(stop_button, "process-stop-symbolic", "Stop");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), FALSE);
@@ -204,6 +209,7 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_available_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_upgradeable_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(stop_button), TRUE);
 }
 
@@ -220,12 +226,14 @@ restore_package_list_controls(SearchWidgets *widgets)
   ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", "Search");
   ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", "List Installed");
   ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", "List Packages");
+  ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", "List Upgradable");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.history_list), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_button), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_available_button), TRUE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_upgradeable_button), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), TRUE);
 }
 
@@ -435,6 +443,85 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
     widgets->query_state.preserve_selection_on_reload = false;
     widgets->query_state.reload_selected_nevra.clear();
     ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
+    if (error) {
+      g_error_free(error);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Query packages that have available updates on a worker thread.
+// -----------------------------------------------------------------------------
+static void
+on_list_upgradeable_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
+{
+  try {
+    auto *results = new std::vector<PackageRow>(dnf_backend_get_upgradeable_package_rows_interruptible(cancellable));
+    g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
+  } catch (const std::exception &e) {
+    g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Finish upgradable package listing on the GTK thread.
+// Refresh the installed snapshot before updating package status in the table.
+// -----------------------------------------------------------------------------
+static void
+on_list_upgradeable_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
+{
+  GTask *task = G_TASK(res);
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  const PackageListTaskData *td = static_cast<const PackageListTaskData *>(g_task_get_task_data(task));
+
+  if (widgets_task_should_skip_completion(task, widgets)) {
+    if (widgets && !widgets->window_state.destroyed) {
+      if (GCancellable *c = g_task_get_cancellable(task)) {
+        if (g_cancellable_is_cancelled(c) && td) {
+          end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_UPGRADEABLE);
+        }
+      }
+    }
+    return;
+  }
+
+  if (td && td->generation != BaseManager::instance().current_generation()) {
+    widgets_spinner_release(widgets->query.spinner);
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_UPGRADEABLE);
+    return;
+  }
+
+  GError *error = nullptr;
+  std::vector<PackageRow> *packages = static_cast<std::vector<PackageRow> *>(g_task_propagate_pointer(task, &error));
+
+  // Release this task's spinner slot.
+  widgets_spinner_release(widgets->query.spinner);
+
+  if (td) {
+    end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_UPGRADEABLE);
+  }
+
+  if (packages) {
+    set_displayed_query_kind(widgets, DisplayedPackageQueryKind::LIST_UPGRADEABLE);
+
+    dnf_backend_refresh_installed_nevras();
+
+    if (widgets->query_state.preserve_selection_on_reload) {
+      widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
+    } else {
+      widgets->results.selected_nevra.clear();
+    }
+    package_table_fill_package_view(widgets, *packages);
+    char msg[256];
+    snprintf(msg, sizeof(msg), "Found %zu upgradable package%s.", packages->size(), packages->size() == 1 ? "" : "s");
+    ui_helpers_set_status(widgets->query.status_label, msg, packages->empty() ? "gray" : "green");
+    finish_results_refresh(widgets);
+    delete packages;
+  } else {
+    widgets->query_state.preserve_selection_on_reload = false;
+    widgets->query_state.reload_selected_nevra.clear();
+    ui_helpers_set_status(
+        widgets->query.status_label, error ? error->message : "Error listing upgradable packages.", "red");
     if (error) {
       g_error_free(error);
     }
@@ -702,6 +789,42 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
+// Handle the List Upgradable button.
+// Starts background listing of installed packages that have available updates.
+// The same button changes to Stop while the worker task is running.
+// -----------------------------------------------------------------------------
+void
+package_query_on_list_upgradeable_button_clicked(GtkButton *, gpointer user_data)
+{
+  SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (has_active_package_list_request(widgets)) {
+    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::LIST_UPGRADEABLE) {
+      cancel_active_package_list_request(widgets);
+    }
+    return;
+  }
+
+  ui_helpers_set_status(widgets->query.status_label, "Listing upgradable packages...", "blue");
+
+  // Show the spinner for this task.
+  widgets_spinner_acquire(widgets->query.spinner);
+
+  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
+  PackageListTaskData *td = new PackageListTaskData;
+  td->request_id = widgets->query_state.next_package_list_request_id++;
+  td->generation = BaseManager::instance().current_generation();
+
+  // Disable the query controls and make List Upgradable stop this task.
+  begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_UPGRADEABLE);
+  GTask *task = widgets_task_new_for_search_widgets(widgets, c, on_list_upgradeable_task_finished);
+  g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
+
+  g_task_run_in_thread(task, on_list_upgradeable_task);
+  g_object_unref(task);
+  g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
 // Handle the Search button or Enter in the search field.
 // Reads options, checks the cache, and starts background search when needed.
 // The same button acts as Stop while a search worker task is running.
@@ -803,6 +926,9 @@ package_query_reload_current_view(SearchWidgets *widgets)
     return;
   case DisplayedPackageQueryKind::LIST_AVAILABLE:
     package_query_on_list_available_button_clicked(nullptr, widgets);
+    return;
+  case DisplayedPackageQueryKind::LIST_UPGRADEABLE:
+    package_query_on_list_upgradeable_button_clicked(nullptr, widgets);
     return;
   case DisplayedPackageQueryKind::NONE:
   default:

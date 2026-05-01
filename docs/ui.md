@@ -54,6 +54,7 @@ owns the package list workflows:
 
 - list installed packages
 - browse available and installed packages together
+- list installed packages that have available updates
 - search packages
 - stop the active list request
 - restore a search from history

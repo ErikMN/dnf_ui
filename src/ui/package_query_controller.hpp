@@ -20,6 +20,10 @@ void package_query_on_list_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
 void package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data);
 // -----------------------------------------------------------------------------
+// Handle the upgradeable packages list button click.
+// -----------------------------------------------------------------------------
+void package_query_on_list_upgradeable_button_clicked(GtkButton *, gpointer user_data);
+// -----------------------------------------------------------------------------
 // Handle the package search button click.
 // -----------------------------------------------------------------------------
 void package_query_on_search_button_clicked(GtkButton *, gpointer user_data);

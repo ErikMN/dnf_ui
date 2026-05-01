@@ -37,6 +37,7 @@ struct AppWidgets {
 
   GtkWidget *list_button = NULL;
   GtkWidget *list_available_button = NULL;
+  GtkWidget *list_upgradeable_button = NULL;
   GtkWidget *refresh_button = NULL;
 
   GtkWidget *install_button = NULL;
@@ -268,6 +269,10 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_buttons), list_available_button);
   ui->list_available_button = list_available_button;
 
+  GtkWidget *list_upgradeable_button = ui_helpers_create_icon_button("view-list-symbolic", "List Upgradable");
+  gtk_box_append(GTK_BOX(hbox_buttons), list_upgradeable_button);
+  ui->list_upgradeable_button = list_upgradeable_button;
+
   // --- Refresh Repositories button ---
   // Triggers an asynchronous repository rebuild using BaseManager::rebuild()
   // Runs in a background thread to keep the GTK UI responsive
@@ -433,6 +438,7 @@ create_search_widgets(const AppWidgets *ui)
   widgets->query.search_button = GTK_BUTTON(ui->search_button);
   widgets->query.list_button = GTK_BUTTON(ui->list_button);
   widgets->query.list_available_button = GTK_BUTTON(ui->list_available_button);
+  widgets->query.list_upgradeable_button = GTK_BUTTON(ui->list_upgradeable_button);
   widgets->query.status_label = GTK_LABEL(ui->status_label);
   widgets->query.desc_checkbox = GTK_CHECK_BUTTON(ui->desc_checkbox);
   widgets->query.exact_checkbox = GTK_CHECK_BUTTON(ui->exact_checkbox);
@@ -572,6 +578,9 @@ connect_signals(const AppWidgets *ui, SearchWidgets *widgets)
 
   g_signal_connect(
       ui->list_available_button, "clicked", G_CALLBACK(package_query_on_list_available_button_clicked), widgets);
+
+  g_signal_connect(
+      ui->list_upgradeable_button, "clicked", G_CALLBACK(package_query_on_list_upgradeable_button_clicked), widgets);
 
   g_signal_connect(ui->install_button, "clicked", G_CALLBACK(pending_transaction_on_install_button_clicked), widgets);
 

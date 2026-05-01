@@ -35,7 +35,7 @@ applications, or software-center discovery workflows.
 ## Current features
 
 - Search repo packages together with installed-only local RPMs
-- List installed packages or browse the merged package view
+- List installed packages, upgradable packages, or browse the merged package view
 - View package details, files, dependencies, and changelog information
 - Mark packages for install, reinstall, and removal
 - Upgrade all installed packages with available updates

@@ -246,6 +246,32 @@ TEST_CASE("Search results keep one visible EVR per package name and architecture
   }
 }
 
+TEST_CASE("Upgradeable package rows are classified as upgradeable")
+{
+  reset_backend_globals();
+
+  auto results = dnf_backend_get_upgradeable_package_rows_interruptible(nullptr);
+  dnf_backend_refresh_installed_nevras();
+
+  for (const auto &row : results) {
+    INFO(row.nevra);
+    REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::UPGRADEABLE);
+  }
+}
+
+TEST_CASE("Cancelled upgradeable package list returns no results")
+{
+  reset_backend_globals();
+
+  GCancellable *cancellable = g_cancellable_new();
+  g_cancellable_cancel(cancellable);
+
+  auto results = dnf_backend_get_upgradeable_package_rows_interruptible(cancellable);
+
+  REQUIRE(results.empty());
+  g_object_unref(cancellable);
+}
+
 // -----------------------------------------------------------------------------
 // Dependency and file list tests (read-only)
 // -----------------------------------------------------------------------------

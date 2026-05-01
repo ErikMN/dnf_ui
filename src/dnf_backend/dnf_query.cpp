@@ -347,6 +347,41 @@ dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
 }
 
 // -----------------------------------------------------------------------------
+// Query available repo packages that are upgrades to installed packages.
+// The returned rows are the available update candidates so selecting one shows
+// the version that would be installed by an upgrade transaction.
+// -----------------------------------------------------------------------------
+std::vector<PackageRow>
+dnf_backend_get_upgradeable_package_rows_interruptible(GCancellable *cancellable)
+{
+  auto [base, guard, generation] = BaseManager::instance().acquire_read();
+
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_available();
+  query.filter_upgrades();
+  query.filter_latest_evr();
+
+  std::map<std::string, PackageRow> rows_by_name_arch;
+  for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      rows_by_name_arch.clear();
+      break;
+    }
+
+    PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
+    remember_newest_row(rows_by_name_arch, row);
+  }
+
+  std::vector<PackageRow> rows;
+  rows.reserve(rows_by_name_arch.size());
+  for (auto &[key, row] : rows_by_name_arch) {
+    rows.push_back(row);
+  }
+
+  return rows;
+}
+
+// -----------------------------------------------------------------------------
 // Return installed package rows that exactly match one NEVRA. Repo provenance is
 // annotated when repository data is available so pending-action navigation can still show
 // local-only or newer-than-repo status when possible.

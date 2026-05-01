@@ -44,6 +44,7 @@ The main query paths are:
 
 - `dnf_backend_get_installed_package_rows_interruptible`
 - `dnf_backend_get_browse_package_rows_interruptible`
+- `dnf_backend_get_upgradeable_package_rows_interruptible`
 - `dnf_backend_search_package_rows_interruptible`
 - `dnf_backend_get_installed_package_rows_by_nevra`
 - `dnf_backend_get_available_package_rows_by_nevra`

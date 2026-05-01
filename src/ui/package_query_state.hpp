@@ -16,7 +16,7 @@
 // -----------------------------------------------------------------------------
 // Active background request using the package-list action buttons
 // -----------------------------------------------------------------------------
-enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
+enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE, LIST_UPGRADEABLE };
 
 // -----------------------------------------------------------------------------
 // Last query-backed package view shown in the main table.
@@ -25,7 +25,7 @@ enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE
 // refreshed via the currently selected NEVRA instead of adding more global UI
 // state.
 // -----------------------------------------------------------------------------
-enum class DisplayedPackageQueryKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE };
+enum class DisplayedPackageQueryKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE, LIST_UPGRADEABLE };
 
 struct DisplayedPackageQueryState {
   DisplayedPackageQueryKind kind = DisplayedPackageQueryKind::NONE;
@@ -44,8 +44,7 @@ struct PackageQueryState {
   uint64_t next_package_list_request_id = 1;
   // Current package-list request id owned by the active package-list button UI state.
   uint64_t current_package_list_request_id = 0;
-  // Identifies whether the active Stop button belongs to search, installed listing,
-  // or available-package listing.
+  // Identifies which query button owns the active Stop state.
   PackageListRequestKind current_package_list_request_kind = PackageListRequestKind::NONE;
   // Remembers the last query-backed result view so rebuilds can repopulate the
   // visible table instead of leaving outdated rows on screen after a transaction.
