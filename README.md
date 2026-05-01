@@ -247,8 +247,20 @@ mock -r fedora-rawhide-x86_64 --rebuild dnf-ui-latest.src.rpm
 Use a different `-r` value if you want to build for another Fedora release or
 architecture.
 
-## Screenshot
+## Screenshots
 
 <p align="center">
-  <img src="img/latest_screenshot.png" width="900" alt="DNF UI screenshot"/>
+  <img src="img/latest_screenshot.png" width="900" alt="DNF UI GNOME screenshot"/>
+</p>
+
+<p align="center">
+DNF UI running on GNOME.
+</p>
+
+<p align="center">
+  <img src="img/latest_screenshot2.png" width="900" alt="DNF UI KDE screenshot"/>
+</p>
+
+<p align="center">
+DNF UI running on KDE.
 </p>
