@@ -27,6 +27,9 @@ appears_before(const std::string &text, const std::string &first, const std::str
 
 } // namespace
 
+// -----------------------------------------------------------------------------
+// Verify that an empty preview explains no changes and unchanged disk use.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview formatter reports unchanged disk space for an empty preview")
 {
   TransactionPreview preview;
@@ -37,6 +40,9 @@ TEST_CASE("Transaction preview formatter reports unchanged disk space for an emp
   REQUIRE(summary == "No package changes are available.\nDisk space usage will be unchanged.\n\n");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that package count text uses singular and plural wording correctly.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview formatter uses singular and plural package count lines")
 {
   TransactionPreview preview;
@@ -50,6 +56,9 @@ TEST_CASE("Transaction preview formatter uses singular and plural package count 
   REQUIRE(summary.find("2 packages will be removed.") != std::string::npos);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that package sections appear in the intended user-facing order.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview formatter keeps transaction sections in display order")
 {
   TransactionPreview preview;
@@ -73,6 +82,9 @@ TEST_CASE("Transaction preview formatter keeps transaction sections in display o
   REQUIRE(summary.find("  demo-remove-1-1.x86_64\n") != std::string::npos);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that empty transaction sections are not shown in the summary.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview formatter omits empty package sections")
 {
   TransactionPreview preview;
@@ -87,6 +99,9 @@ TEST_CASE("Transaction preview formatter omits empty package sections")
   REQUIRE(summary.find("To be removed:") == std::string::npos);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that disk space increases and decreases use distinct wording.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview formatter describes positive and negative disk space changes")
 {
   TransactionPreview install_preview;

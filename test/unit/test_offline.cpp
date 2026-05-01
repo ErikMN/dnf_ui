@@ -96,6 +96,9 @@ wait_for_bus_name_owner(GDBusConnection *connection, const char *service_name, i
 
 } // namespace
 
+// -----------------------------------------------------------------------------
+// Verify that cached repository metadata can satisfy search without network.
+// -----------------------------------------------------------------------------
 TEST_CASE("Offline cached search finds a repo package", "[offline]")
 {
   const char *repo_spec = g_getenv("DNFUI_TEST_OFFLINE_REPO_SPEC");
@@ -121,6 +124,9 @@ TEST_CASE("Offline cached search finds a repo package", "[offline]")
   mgr.reset_for_tests();
 }
 
+// -----------------------------------------------------------------------------
+// Verify that remove-only preview can proceed from installed package state.
+// -----------------------------------------------------------------------------
 TEST_CASE("Offline remove-only service preview stays local-first", "[offline]")
 {
   REQUIRE(std::string(DNFUI_TEST_SERVICE_BIN).size() > 0);

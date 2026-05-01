@@ -36,6 +36,9 @@ progress_contains(const std::vector<std::string> &lines, const std::string &need
 // Transaction preview request validation tests
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that empty preview requests fail and clear stale preview output.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview rejects an empty request")
 {
   reset_backend_globals();
@@ -57,6 +60,9 @@ TEST_CASE("Transaction preview rejects an empty request")
   REQUIRE(preview.disk_space_delta == 0);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that impossible install specs return a user-facing resolve error.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview reports a friendly resolve error for an impossible package")
 {
   reset_backend_globals();
@@ -79,6 +85,9 @@ TEST_CASE("Transaction preview reports a friendly resolve error for an impossibl
   REQUIRE(progress_contains(progress_lines, "Resolving dependency changes..."));
 }
 
+// -----------------------------------------------------------------------------
+// Verify that upgrade all preview treats no available updates as success.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview accepts empty upgrade-all results")
 {
   reset_backend_globals();
@@ -97,6 +106,9 @@ TEST_CASE("Transaction preview accepts empty upgrade-all results")
   REQUIRE(progress_contains(progress_lines, "No package updates are available."));
 }
 
+// -----------------------------------------------------------------------------
+// Verify that preview rejects upgrade all mixed with explicit package specs.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview rejects mixed upgrade-all requests")
 {
   reset_backend_globals();
@@ -111,6 +123,9 @@ TEST_CASE("Transaction preview rejects mixed upgrade-all requests")
   REQUIRE(preview.empty());
 }
 
+// -----------------------------------------------------------------------------
+// Verify that apply refuses an empty upgrade all transaction.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction apply rejects empty upgrade-all results")
 {
   reset_backend_globals();
@@ -131,6 +146,9 @@ TEST_CASE("Transaction apply rejects empty upgrade-all results")
 // Transaction preview success path tests
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that preview can resolve reinstall for an installed package row.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction preview resolves a reinstall request for an installed package")
 {
   reset_backend_globals();

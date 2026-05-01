@@ -10,6 +10,9 @@
 #include <string>
 #include <vector>
 
+// -----------------------------------------------------------------------------
+// Verify that marked UI actions are copied into the matching request lists.
+// -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction request builder splits actions by operation type")
 {
   std::vector<PendingAction> actions = {
@@ -38,6 +41,9 @@ TEST_CASE("Pending transaction request builder splits actions by operation type"
           });
 }
 
+// -----------------------------------------------------------------------------
+// Verify that building a request replaces stale data from an earlier request.
+// -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction request builder clears stale request data")
 {
   TransactionRequest request;
@@ -61,6 +67,9 @@ TEST_CASE("Pending transaction request builder clears stale request data")
   REQUIRE(request.reinstall.empty());
 }
 
+// -----------------------------------------------------------------------------
+// Verify that ordinary non protected package requests pass UI validation.
+// -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction request validation accepts non protected requests")
 {
   TransactionRequest request;

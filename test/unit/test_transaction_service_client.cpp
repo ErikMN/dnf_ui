@@ -206,6 +206,9 @@ call_apply_transaction(GDBusConnection *connection, const std::string &transacti
 
 } // namespace
 
+// -----------------------------------------------------------------------------
+// Verify that the client returns an error if the service exits while waiting.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction service client reports an error when the service disappears while waiting")
 {
   REQUIRE(std::string(DNFUI_TEST_SERVICE_BIN).size() > 0);
@@ -293,6 +296,9 @@ TEST_CASE("Transaction service client reports an error when the service disappea
   g_object_unref(test_bus);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that the service enforces the per-client live request limit.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction service rejects too many active requests from one client")
 {
   REQUIRE(std::string(DNFUI_TEST_SERVICE_BIN).size() > 0);
@@ -354,6 +360,9 @@ TEST_CASE("Transaction service rejects too many active requests from one client"
   g_object_unref(test_bus);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that package-list preview helper rejects upgrade-all requests.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction service client rejects upgrade-all through the package-list preview helper")
 {
   TransactionRequest request;
@@ -369,6 +378,9 @@ TEST_CASE("Transaction service client rejects upgrade-all through the package-li
   REQUIRE(preview.empty());
 }
 
+// -----------------------------------------------------------------------------
+// Verify that empty upgrade-all previews cannot be applied.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction service upgrade-all preview handles no available package updates")
 {
   REQUIRE(std::string(DNFUI_TEST_SERVICE_BIN).size() > 0);

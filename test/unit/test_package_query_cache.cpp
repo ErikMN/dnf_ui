@@ -27,6 +27,9 @@ make_cache_row(const std::string &nevra, const std::string &name)
 
 } // namespace
 
+// -----------------------------------------------------------------------------
+// Verify that cache keys include the search mode flags that affect results.
+// -----------------------------------------------------------------------------
 TEST_CASE("Package query cache key includes search options")
 {
   reset_backend_globals();
@@ -44,6 +47,9 @@ TEST_CASE("Package query cache key includes search options")
   REQUIRE(package_query_cache_key_for("bash") == "desc:exact:bash");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that cached rows are returned only for the same key and generation.
+// -----------------------------------------------------------------------------
 TEST_CASE("Package query cache returns rows for matching key and generation")
 {
   package_query_cache_clear();
@@ -63,6 +69,9 @@ TEST_CASE("Package query cache returns rows for matching key and generation")
   REQUIRE(loaded[1].nevra == "demo-libs-1-1.x86_64");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that stale generation lookups are rejected and removed from cache.
+// -----------------------------------------------------------------------------
 TEST_CASE("Package query cache rejects and removes stale generations")
 {
   package_query_cache_clear();
@@ -79,6 +88,9 @@ TEST_CASE("Package query cache rejects and removes stale generations")
   REQUIRE_FALSE(package_query_cache_lookup(key, 7, loaded));
 }
 
+// -----------------------------------------------------------------------------
+// Verify that clearing the query cache removes stored package rows.
+// -----------------------------------------------------------------------------
 TEST_CASE("Package query cache clear removes stored rows")
 {
   package_query_cache_clear();

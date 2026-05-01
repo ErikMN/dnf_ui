@@ -6,9 +6,8 @@
 #include <string>
 
 // -----------------------------------------------------------------------------
-// Contains search (basic positive case)
+// Verify that contains search can find a common repository package.
 // -----------------------------------------------------------------------------
-
 TEST_CASE("Search contains mode returns results for common package")
 {
   reset_backend_globals();
@@ -21,9 +20,8 @@ TEST_CASE("Search contains mode returns results for common package")
 }
 
 // -----------------------------------------------------------------------------
-// Exact match should not match substrings
+// Verify that exact search does not fall back to substring matching.
 // -----------------------------------------------------------------------------
-
 TEST_CASE("Search exact mode does not match partial substring")
 {
   reset_backend_globals();
@@ -36,9 +34,8 @@ TEST_CASE("Search exact mode does not match partial substring")
 }
 
 // -----------------------------------------------------------------------------
-// Description search should expand or equal name-only results
+// Verify that enabling description search does not drop name-only matches.
 // -----------------------------------------------------------------------------
-
 TEST_CASE("Search description mode expands or equals name-only results")
 {
   reset_backend_globals();
@@ -55,9 +52,8 @@ TEST_CASE("Search description mode expands or equals name-only results")
 }
 
 // -----------------------------------------------------------------------------
-// Negative search case
+// Verify that an impossible package name produces an empty result.
 // -----------------------------------------------------------------------------
-
 TEST_CASE("Search returns empty for impossible package name")
 {
   reset_backend_globals();

@@ -12,6 +12,9 @@
 // BaseManager safety & generation tests
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that rebuilding the package base advances the generation marker.
+// -----------------------------------------------------------------------------
 TEST_CASE("BaseManager generation increments on rebuild")
 {
   auto &mgr = BaseManager::instance();
@@ -25,6 +28,9 @@ TEST_CASE("BaseManager generation increments on rebuild")
   REQUIRE(after > before);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that read access reports the generation snapshot it is protecting.
+// -----------------------------------------------------------------------------
 TEST_CASE("acquire_read returns current generation snapshot")
 {
   auto &mgr = BaseManager::instance();
@@ -35,6 +41,9 @@ TEST_CASE("acquire_read returns current generation snapshot")
   REQUIRE(read.generation == expected);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that startup still exposes installed packages when repo loading fails.
+// -----------------------------------------------------------------------------
 TEST_CASE("BaseManager falls back to installed-package-only initialization when repo-backed startup fails")
 {
   reset_backend_globals();
@@ -50,6 +59,9 @@ TEST_CASE("BaseManager falls back to installed-package-only initialization when 
   mgr.reset_for_tests();
 }
 
+// -----------------------------------------------------------------------------
+// Verify that a failed repo refresh leaves installed package queries usable.
+// -----------------------------------------------------------------------------
 TEST_CASE("BaseManager rebuild keeps the app usable when repo-backed refresh fails")
 {
   reset_backend_globals();
@@ -75,6 +87,9 @@ TEST_CASE("BaseManager rebuild keeps the app usable when repo-backed refresh fai
 // Installed package cache consistency tests (read-only)
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that the published installed snapshot matches a full installed scan.
+// -----------------------------------------------------------------------------
 TEST_CASE("Installed package cache matches returned list")
 {
   reset_backend_globals();
@@ -88,6 +103,9 @@ TEST_CASE("Installed package cache matches returned list")
   }
 }
 
+// -----------------------------------------------------------------------------
+// Verify that refreshing installed NEVRAs creates a non-empty snapshot.
+// -----------------------------------------------------------------------------
 TEST_CASE("dnf_backend_refresh_installed_nevras populates installed NEVRA cache")
 {
   reset_backend_globals();
@@ -101,6 +119,9 @@ TEST_CASE("dnf_backend_refresh_installed_nevras populates installed NEVRA cache"
 // Search behavior tests (read-only repo metadata)
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that impossible package names do not produce fallback results.
+// -----------------------------------------------------------------------------
 TEST_CASE("Searching for impossible package name returns empty result")
 {
   reset_backend_globals();
@@ -112,6 +133,9 @@ TEST_CASE("Searching for impossible package name returns empty result")
   REQUIRE(results.empty());
 }
 
+// -----------------------------------------------------------------------------
+// Verify that exact search results remain a subset of contains search results.
+// -----------------------------------------------------------------------------
 TEST_CASE("Exact match results are subset of contains results")
 {
   reset_backend_globals();
@@ -130,6 +154,9 @@ TEST_CASE("Exact match results are subset of contains results")
   }
 }
 
+// -----------------------------------------------------------------------------
+// Verify that description search preserves all name-only matches.
+// -----------------------------------------------------------------------------
 TEST_CASE("Description search returns superset of name-only search")
 {
   reset_backend_globals();
@@ -148,6 +175,9 @@ TEST_CASE("Description search returns superset of name-only search")
   }
 }
 
+// -----------------------------------------------------------------------------
+// Verify that cancellation stops search without returning partial rows.
+// -----------------------------------------------------------------------------
 TEST_CASE("Cancelled search returns no results")
 {
   reset_backend_globals();
@@ -167,6 +197,9 @@ TEST_CASE("Cancelled search returns no results")
 // Package info tests (read-only)
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that invalid package identifiers return a friendly details message.
+// -----------------------------------------------------------------------------
 TEST_CASE("Invalid NEVRA returns friendly message")
 {
   auto info = dnf_backend_get_package_info("invalid-0-0.x86_64");
@@ -174,6 +207,9 @@ TEST_CASE("Invalid NEVRA returns friendly message")
   REQUIRE(info.find("No details found") != std::string::npos);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that package details include the expected user-visible fields.
+// -----------------------------------------------------------------------------
 TEST_CASE("Package info formatting contains expected fields")
 {
   reset_backend_globals();
@@ -197,6 +233,10 @@ TEST_CASE("Package info formatting contains expected fields")
 // -----------------------------------------------------------------------------
 // Structured package row metadata tests
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// Verify that search rows contain the metadata needed by the table and details.
+// -----------------------------------------------------------------------------
 TEST_CASE("Structured package rows expose searchable metadata")
 {
   reset_backend_globals();
@@ -214,6 +254,9 @@ TEST_CASE("Structured package rows expose searchable metadata")
   REQUIRE(!row.display_version().empty());
 }
 
+// -----------------------------------------------------------------------------
+// Verify that installed rows expose install reason from the rpm database.
+// -----------------------------------------------------------------------------
 TEST_CASE("Installed package rows expose install reason")
 {
   reset_backend_globals();
@@ -226,6 +269,9 @@ TEST_CASE("Installed package rows expose install reason")
   }));
 }
 
+// -----------------------------------------------------------------------------
+// Verify that merged search results keep one visible EVR per name and arch.
+// -----------------------------------------------------------------------------
 TEST_CASE("Search results keep one visible EVR per package name and architecture")
 {
   reset_backend_globals();
@@ -246,6 +292,9 @@ TEST_CASE("Search results keep one visible EVR per package name and architecture
   }
 }
 
+// -----------------------------------------------------------------------------
+// Verify that upgradable list rows classify as upgradeable after snapshot refresh.
+// -----------------------------------------------------------------------------
 TEST_CASE("Upgradeable package rows are classified as upgradeable")
 {
   reset_backend_globals();
@@ -259,6 +308,9 @@ TEST_CASE("Upgradeable package rows are classified as upgradeable")
   }
 }
 
+// -----------------------------------------------------------------------------
+// Verify that cancelling the upgradable list returns no partial candidates.
+// -----------------------------------------------------------------------------
 TEST_CASE("Cancelled upgradeable package list returns no results")
 {
   reset_backend_globals();
@@ -276,6 +328,9 @@ TEST_CASE("Cancelled upgradeable package list returns no results")
 // Dependency and file list tests (read-only)
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that dependency details keep all expected section headings.
+// -----------------------------------------------------------------------------
 TEST_CASE("Dependency info contains expected section headers")
 {
   reset_backend_globals();
@@ -292,6 +347,9 @@ TEST_CASE("Dependency info contains expected section headers")
   REQUIRE(deps.find("Obsoletes:") != std::string::npos);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that file list lookup returns either content or a friendly state.
+// -----------------------------------------------------------------------------
 TEST_CASE("File list query is safe and returns valid state")
 {
   reset_backend_globals();
@@ -311,6 +369,9 @@ TEST_CASE("File list query is safe and returns valid state")
   }
 }
 
+// -----------------------------------------------------------------------------
+// Verify that exact installed rows use repo relation to distinguish states.
+// -----------------------------------------------------------------------------
 TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
 {
   reset_backend_globals();
@@ -338,6 +399,9 @@ TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
   REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED_NEWER_THAN_REPO);
 }
 
+// -----------------------------------------------------------------------------
+// Verify that install-state sorting keeps installed-like rows before available.
+// -----------------------------------------------------------------------------
 TEST_CASE("Default install state sort keeps installed rows first")
 {
   REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::INSTALLED) <
@@ -348,6 +412,9 @@ TEST_CASE("Default install state sort keeps installed rows first")
           dnf_backend_get_install_state_sort_rank(PackageInstallState::AVAILABLE));
 }
 
+// -----------------------------------------------------------------------------
+// Verify that exact installed checks use the NEVRA snapshot, not name matching.
+// -----------------------------------------------------------------------------
 TEST_CASE("Exact installed checks use the cached installed NEVRA snapshot")
 {
   reset_backend_globals();
@@ -366,6 +433,9 @@ TEST_CASE("Exact installed checks use the cached installed NEVRA snapshot")
   REQUIRE_FALSE(dnf_backend_is_package_installed_exact(different_row));
 }
 
+// -----------------------------------------------------------------------------
+// Verify that failed repo annotation does not make installed rows unusable.
+// -----------------------------------------------------------------------------
 TEST_CASE("Annotation fallback keeps installed rows usable when repo lookup fails")
 {
   reset_backend_globals();

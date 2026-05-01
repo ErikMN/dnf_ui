@@ -14,6 +14,9 @@
 // TransactionRequest basic state tests
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that empty state and item count include explicit actions and upgrade all.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request empty state and item count reflect queued actions")
 {
   TransactionRequest request;
@@ -39,6 +42,9 @@ TEST_CASE("Transaction request empty state and item count reflect queued actions
 // TransactionRequest validation tests
 // -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+// Verify that validation rejects requests with no package operation.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects an empty request")
 {
   TransactionRequest request;
@@ -48,6 +54,9 @@ TEST_CASE("Transaction request validation rejects an empty request")
   REQUIRE(error == "Transaction request is empty.");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that validation rejects empty install specs before service work starts.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects an empty install package spec")
 {
   TransactionRequest request;
@@ -59,6 +68,9 @@ TEST_CASE("Transaction request validation rejects an empty install package spec"
   REQUIRE(error == "Transaction request contains an empty install package spec.");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that validation rejects empty remove specs before service work starts.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects an empty remove package spec")
 {
   TransactionRequest request;
@@ -70,6 +82,9 @@ TEST_CASE("Transaction request validation rejects an empty remove package spec")
   REQUIRE(error == "Transaction request contains an empty remove package spec.");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that validation rejects empty reinstall specs before service work starts.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects an empty reinstall package spec")
 {
   TransactionRequest request;
@@ -81,6 +96,9 @@ TEST_CASE("Transaction request validation rejects an empty reinstall package spe
   REQUIRE(error == "Transaction request contains an empty reinstall package spec.");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that validation enforces the request item limit.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects too many package actions")
 {
   TransactionRequest request;
@@ -92,6 +110,9 @@ TEST_CASE("Transaction request validation rejects too many package actions")
   REQUIRE(error == "Transaction request contains too many package actions.");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that upgrade all cannot be combined with explicit package actions.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects mixed upgrade-all requests")
 {
   TransactionRequest request;
@@ -104,6 +125,9 @@ TEST_CASE("Transaction request validation rejects mixed upgrade-all requests")
   REQUIRE(error == "Upgrade all cannot be combined with other package actions.");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that upgrade all is valid as a standalone request.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation accepts upgrade-all requests")
 {
   TransactionRequest request;
@@ -115,6 +139,9 @@ TEST_CASE("Transaction request validation accepts upgrade-all requests")
   REQUIRE(error.empty());
 }
 
+// -----------------------------------------------------------------------------
+// Verify that validation enforces the package spec length limit.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects package specs that are too long")
 {
   TransactionRequest request;
@@ -126,6 +153,9 @@ TEST_CASE("Transaction request validation rejects package specs that are too lon
   REQUIRE(error == "Transaction request contains a package spec that is too long.");
 }
 
+// -----------------------------------------------------------------------------
+// Verify that validation accepts normal mixed package action requests.
+// -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation accepts mixed non empty package specs")
 {
   TransactionRequest request;
