@@ -5,6 +5,7 @@
 // -----------------------------------------------------------------------------
 #include "package_table_context_menu.hpp"
 
+#include "i18n.hpp"
 #include "pending_transaction_controller.hpp"
 #include "ui/pending_transaction_state.hpp"
 #include "ui/widgets.hpp"
@@ -89,11 +90,11 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   // Keep context menu actions aligned with the normal package action buttons.
   const char *install_label =
-      has_pending && pending_type == PendingAction::INSTALL ? "Unmark Install" : "Mark for Install";
+      has_pending && pending_type == PendingAction::INSTALL ? _("Unmark Install") : _("Mark for Install");
   const char *remove_label =
-      has_pending && pending_type == PendingAction::REMOVE ? "Unmark Removal" : "Mark for Removal";
+      has_pending && pending_type == PendingAction::REMOVE ? _("Unmark Removal") : _("Mark for Removal");
   const char *reinstall_label =
-      has_pending && pending_type == PendingAction::REINSTALL ? "Unmark Reinstall" : "Mark for Reinstall";
+      has_pending && pending_type == PendingAction::REINSTALL ? _("Unmark Reinstall") : _("Mark for Reinstall");
 
   append_context_menu_action(GTK_BOX(box),
                              install_label,

@@ -8,6 +8,7 @@
 
 #include "base_manager.hpp"
 #include "debug_trace.hpp"
+#include "i18n.hpp"
 #include "ui_helpers.hpp"
 #include "widgets.hpp"
 #include "widgets_internal.hpp"
@@ -68,7 +69,7 @@ info_task_result_free(gpointer p)
 static void
 return_package_info_task_cancelled(GTask *task)
 {
-  g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Package info load was cancelled.");
+  g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Package info load was cancelled."));
 }
 
 // -----------------------------------------------------------------------------
@@ -94,10 +95,10 @@ package_info_reset_details_view(SearchWidgets *widgets)
     return;
   }
 
-  set_notebook_text(widgets->results.details_buffer, "Select a package for details.");
-  set_notebook_text(widgets->results.files_buffer, "Select an installed package to view its file list.");
-  set_notebook_text(widgets->results.deps_buffer, "Select a package to view dependencies.");
-  set_notebook_text(widgets->results.changelog_buffer, "Select a package to view its changelog.");
+  set_notebook_text(widgets->results.details_buffer, _("Select a package for details."));
+  set_notebook_text(widgets->results.files_buffer, _("Select an installed package to view its file list."));
+  set_notebook_text(widgets->results.deps_buffer, _("Select a package to view dependencies."));
+  set_notebook_text(widgets->results.changelog_buffer, _("Select a package to view its changelog."));
 }
 
 // -----------------------------------------------------------------------------
@@ -258,7 +259,7 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (!result) {
-    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error loading info.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : _("Error loading info."), "red");
     if (error) {
       g_error_free(error);
     }
@@ -266,21 +267,21 @@ on_package_info_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   // Display general package information
-  set_notebook_text(widgets->results.details_buffer, result->info ? result->info : "No details found.");
+  set_notebook_text(widgets->results.details_buffer, result->info ? result->info : _("No details found."));
 
   // Display the file list fetched by the background task.
   set_notebook_text(widgets->results.files_buffer,
-                    result->files ? result->files : "Select an installed package to view its file list.");
+                    result->files ? result->files : _("Select an installed package to view its file list."));
 
   // Display dependencies fetched by the background task.
   set_notebook_text(widgets->results.deps_buffer,
-                    result->deps ? result->deps : "Select a package to view dependencies.");
+                    result->deps ? result->deps : _("Select a package to view dependencies."));
 
   // Display changelog fetched by the background task.
   set_notebook_text(widgets->results.changelog_buffer,
-                    result->changelog ? result->changelog : "Select a package to view its changelog.");
+                    result->changelog ? result->changelog : _("Select a package to view its changelog."));
 
-  ui_helpers_set_status(widgets->query.status_label, "Package info loaded.", "green");
+  ui_helpers_set_status(widgets->query.status_label, _("Package info loaded."), "green");
   info_task_result_free(result);
 }
 
@@ -295,7 +296,7 @@ package_info_load_selected_package_info(SearchWidgets *widgets, const PackageRow
   }
 
   widgets->results.selected_nevra = selected.nevra;
-  ui_helpers_set_status(widgets->query.status_label, "Fetching package info...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, _("Fetching package info..."), "blue");
   update_selected_package_actions(widgets, selected);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));

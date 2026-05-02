@@ -9,6 +9,7 @@
 #include "base_manager.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
+#include "i18n.hpp"
 #include "package_info_controller.hpp"
 #include "package_query_cache.hpp"
 #include "package_query_controller.hpp"
@@ -165,16 +166,16 @@ package_list_cancelled_status(PackageListRequestKind kind)
 {
   switch (kind) {
   case PackageListRequestKind::SEARCH:
-    return "Search cancelled.";
+    return _("Search cancelled.");
   case PackageListRequestKind::LIST_INSTALLED:
-    return "Listing installed packages cancelled.";
+    return _("Listing installed packages cancelled.");
   case PackageListRequestKind::LIST_AVAILABLE:
-    return "Listing packages cancelled.";
+    return _("Listing packages cancelled.");
   case PackageListRequestKind::LIST_UPGRADEABLE:
-    return "Listing upgradable packages cancelled.";
+    return _("Listing upgradable packages cancelled.");
   case PackageListRequestKind::NONE:
   default:
-    return "Operation cancelled.";
+    return _("Operation cancelled.");
   }
 }
 
@@ -197,11 +198,11 @@ begin_package_list_request(SearchWidgets *widgets, GCancellable *c, uint64_t req
   widgets->query_state.current_package_list_request_kind = kind;
   GtkButton *stop_button = package_list_stop_button(widgets, kind);
 
-  ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", "Search");
-  ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", "List Installed");
-  ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", "List Packages");
-  ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", "List Upgradable");
-  ui_helpers_set_icon_button(stop_button, "process-stop-symbolic", "Stop");
+  ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", _("Search"));
+  ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", _("List Installed"));
+  ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", _("List Packages"));
+  ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", _("List Upgradable"));
+  ui_helpers_set_icon_button(stop_button, "process-stop-symbolic", _("Stop"));
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), FALSE);
@@ -223,10 +224,10 @@ restore_package_list_controls(SearchWidgets *widgets)
     return;
   }
 
-  ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", "Search");
-  ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", "List Installed");
-  ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", "List Packages");
-  ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", "List Upgradable");
+  ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", _("Search"));
+  ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", _("List Installed"));
+  ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", _("List Packages"));
+  ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", _("List Upgradable"));
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), TRUE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), TRUE);
@@ -355,15 +356,15 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
       widgets->results.selected_nevra.clear();
     }
     package_table_fill_package_view(widgets, *packages);
-    char msg[256];
-    snprintf(msg, sizeof(msg), "Found %zu installed packages.", packages->size());
+    std::string msg =
+        dnfui_i18n_format_count(packages->size(), "Found %zu installed package.", "Found %zu installed packages.");
     ui_helpers_set_status(widgets->query.status_label, msg, "green");
     finish_results_refresh(widgets);
     delete packages;
   } else {
     widgets->query_state.preserve_selection_on_reload = false;
     widgets->query_state.reload_selected_nevra.clear();
-    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : _("Error listing packages."), "red");
     if (error) {
       g_error_free(error);
     }
@@ -434,15 +435,14 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
       widgets->results.selected_nevra.clear();
     }
     package_table_fill_package_view(widgets, *packages);
-    char msg[256];
-    snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
+    std::string msg = dnfui_i18n_format_count(packages->size(), "Found %zu package.", "Found %zu packages.");
     ui_helpers_set_status(widgets->query.status_label, msg, "green");
     finish_results_refresh(widgets);
     delete packages;
   } else {
     widgets->query_state.preserve_selection_on_reload = false;
     widgets->query_state.reload_selected_nevra.clear();
-    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error listing packages.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : _("Error listing packages."), "red");
     if (error) {
       g_error_free(error);
     }
@@ -512,8 +512,8 @@ on_list_upgradeable_task_finished(GObject *, GAsyncResult *res, gpointer user_da
       widgets->results.selected_nevra.clear();
     }
     package_table_fill_package_view(widgets, *packages);
-    char msg[256];
-    snprintf(msg, sizeof(msg), "Found %zu upgradable package%s.", packages->size(), packages->size() == 1 ? "" : "s");
+    std::string msg =
+        dnfui_i18n_format_count(packages->size(), "Found %zu upgradable package.", "Found %zu upgradable packages.");
     ui_helpers_set_status(widgets->query.status_label, msg, packages->empty() ? "gray" : "green");
     finish_results_refresh(widgets);
     delete packages;
@@ -521,7 +521,7 @@ on_list_upgradeable_task_finished(GObject *, GAsyncResult *res, gpointer user_da
     widgets->query_state.preserve_selection_on_reload = false;
     widgets->query_state.reload_selected_nevra.clear();
     ui_helpers_set_status(
-        widgets->query.status_label, error ? error->message : "Error listing upgradable packages.", "red");
+        widgets->query.status_label, error ? error->message : _("Error listing upgradable packages."), "red");
     if (error) {
       g_error_free(error);
     }
@@ -607,15 +607,14 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
       widgets->results.selected_nevra.clear();
     }
     package_table_fill_package_view(widgets, *packages);
-    char msg[256];
-    snprintf(msg, sizeof(msg), "Found %zu packages.", packages->size());
+    std::string msg = dnfui_i18n_format_count(packages->size(), "Found %zu package.", "Found %zu packages.");
     ui_helpers_set_status(widgets->query.status_label, msg, "green");
     finish_results_refresh(widgets);
     delete packages;
   } else {
     widgets->query_state.preserve_selection_on_reload = false;
     widgets->query_state.reload_selected_nevra.clear();
-    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Error or no results.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : _("Error or no results."), "red");
     if (error) {
       g_error_free(error);
     }
@@ -665,7 +664,8 @@ perform_search(SearchWidgets *widgets, const std::string &term)
   const DnfBackendSearchOptions search_options = dnf_backend_get_search_options();
 
   gtk_editable_set_text(GTK_EDITABLE(widgets->query.entry), term.c_str());
-  ui_helpers_set_status(widgets->query.status_label, ("Searching for '" + term + "'...").c_str(), "blue");
+  std::string searching_message = dnfui_i18n_format(_("Searching for '%s'..."), term.c_str());
+  ui_helpers_set_status(widgets->query.status_label, searching_message, "blue");
   if (!widgets->query_state.preserve_selection_on_reload) {
     widgets->results.selected_nevra.clear();
   }
@@ -686,8 +686,8 @@ perform_search(SearchWidgets *widgets, const std::string &term)
 
     package_table_fill_package_view(widgets, cached_packages);
 
-    char msg[256];
-    snprintf(msg, sizeof(msg), "Loaded %zu cached results.", cached_packages.size());
+    std::string msg =
+        dnfui_i18n_format_count(cached_packages.size(), "Loaded %zu cached result.", "Loaded %zu cached results.");
     ui_helpers_set_status(widgets->query.status_label, msg, "gray");
     finish_results_refresh(widgets);
 
@@ -730,7 +730,7 @@ package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  ui_helpers_set_status(widgets->query.status_label, "Listing installed packages...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, _("Listing installed packages..."), "blue");
 
   // Show the spinner for this task.
   widgets_spinner_acquire(widgets->query.spinner);
@@ -768,7 +768,7 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  ui_helpers_set_status(widgets->query.status_label, "Listing packages...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, _("Listing packages..."), "blue");
 
   // Show the spinner for this task.
   widgets_spinner_acquire(widgets->query.spinner);
@@ -804,7 +804,7 @@ package_query_on_list_upgradeable_button_clicked(GtkButton *, gpointer user_data
     return;
   }
 
-  ui_helpers_set_status(widgets->query.status_label, "Listing upgradable packages...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, _("Listing upgradable packages..."), "blue");
 
   // Show the spinner for this task.
   widgets_spinner_acquire(widgets->query.spinner);
@@ -887,7 +887,7 @@ package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
   package_table_fill_package_view(widgets, {});
 
   // Reset status labels and package actions.
-  ui_helpers_set_status(widgets->query.status_label, "Ready.", "gray");
+  ui_helpers_set_status(widgets->query.status_label, _("Ready."), "gray");
   package_info_reset_details_view(widgets);
   ui_helpers_update_action_button_labels(widgets, "");
 }

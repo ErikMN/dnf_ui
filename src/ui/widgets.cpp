@@ -6,6 +6,7 @@
 // -----------------------------------------------------------------------------
 #include "widgets.hpp"
 #include "base_manager.hpp"
+#include "i18n.hpp"
 #include "package_query_controller.hpp"
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
@@ -173,18 +174,18 @@ widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
     package_query_clear_search_cache();
     dnf_backend_refresh_installed_nevras();
     if (*refresh_state == BaseRepoState::LIVE_METADATA) {
-      ui_helpers_set_status(widgets->query.status_label, "Repositories refreshed.", "green");
+      ui_helpers_set_status(widgets->query.status_label, _("Repositories refreshed."), "green");
     } else if (*refresh_state == BaseRepoState::CACHED_METADATA) {
       ui_helpers_set_status(
-          widgets->query.status_label, "Live repo refresh failed. Using cached repository metadata.", "blue");
+          widgets->query.status_label, _("Live repo refresh failed. Using cached repository metadata."), "blue");
     } else {
       ui_helpers_set_status(
-          widgets->query.status_label, "Live repo refresh failed. Showing installed packages only.", "blue");
+          widgets->query.status_label, _("Live repo refresh failed. Showing installed packages only."), "blue");
     }
     package_query_reload_current_view(widgets);
     delete refresh_state;
   } else {
-    ui_helpers_set_status(widgets->query.status_label, error ? error->message : "Repo refresh failed.", "red");
+    ui_helpers_set_status(widgets->query.status_label, error ? error->message : _("Repo refresh failed."), "red");
     if (error) {
       g_error_free(error);
     }
@@ -203,7 +204,7 @@ widgets_on_refresh_button_clicked(GtkButton *, gpointer user_data)
   // Once a rebuild starts, stop serving cached search results so the UI does
   // not reuse rows from repository state that is changing.
   package_query_clear_search_cache();
-  ui_helpers_set_status(widgets->query.status_label, "Refreshing repositories...", "blue");
+  ui_helpers_set_status(widgets->query.status_label, _("Refreshing repositories..."), "blue");
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), FALSE);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));

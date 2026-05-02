@@ -10,6 +10,7 @@ backend_sources = files(
 app_sources = files(
   'app.cpp',
   'config.cpp',
+  'i18n.cpp',
   'ui/main_menu.cpp',
   'ui/main_window.cpp',
   'main.cpp',

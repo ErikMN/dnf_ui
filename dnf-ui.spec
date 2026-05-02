@@ -11,6 +11,7 @@ BuildRequires:  appstream
 BuildRequires:  dbus-daemon
 BuildRequires:  desktop-file-utils
 BuildRequires:  gcc-c++
+BuildRequires:  gettext
 BuildRequires:  meson
 BuildRequires:  ninja-build
 BuildRequires:  pkgconfig(catch2-with-main)

@@ -7,6 +7,7 @@
 #include "main_window.hpp"
 
 #include "config.hpp"
+#include "i18n.hpp"
 #include "main_menu.hpp"
 #include "package_query_controller.hpp"
 #include "package_table_view.hpp"
@@ -93,7 +94,7 @@ static GtkWidget *
 create_window(GtkApplication *app)
 {
   GtkWidget *window = gtk_application_window_new(app);
-  gtk_window_set_title(GTK_WINDOW(window), "DNF UI");
+  gtk_window_set_title(GTK_WINDOW(window), _("DNF UI"));
   config_load_window_geometry(GTK_WINDOW(window));
 
   return window;
@@ -211,7 +212,7 @@ build_main_ui(AppWidgets *ui)
   gtk_paned_set_start_child(GTK_PANED(outer_paned), vbox_history);
   ui->vbox_history = vbox_history;
 
-  GtkWidget *history_label = gtk_label_new("Search History");
+  GtkWidget *history_label = gtk_label_new(_("Search History"));
   gtk_label_set_xalign(GTK_LABEL(history_label), 0.0);
   gtk_box_append(GTK_BOX(vbox_history), history_label);
 
@@ -232,20 +233,20 @@ build_main_ui(AppWidgets *ui)
   gtk_box_append(GTK_BOX(vbox_root), hbox_search);
 
   GtkWidget *entry = gtk_entry_new();
-  gtk_entry_set_placeholder_text(GTK_ENTRY(entry), "Search packages...");
+  gtk_entry_set_placeholder_text(GTK_ENTRY(entry), _("Search packages..."));
   gtk_widget_set_hexpand(entry, TRUE);
   gtk_box_append(GTK_BOX(hbox_search), entry);
   ui->entry = entry;
 
-  GtkWidget *search_button = ui_helpers_create_icon_button("system-search-symbolic", "Search");
+  GtkWidget *search_button = ui_helpers_create_icon_button("system-search-symbolic", _("Search"));
   gtk_box_append(GTK_BOX(hbox_search), search_button);
   ui->search_button = search_button;
 
-  GtkWidget *desc_checkbox = gtk_check_button_new_with_label("Search in description");
+  GtkWidget *desc_checkbox = gtk_check_button_new_with_label(_("Search in description"));
   gtk_box_append(GTK_BOX(hbox_search), desc_checkbox);
   ui->desc_checkbox = desc_checkbox;
 
-  GtkWidget *exact_checkbox = gtk_check_button_new_with_label("Exact match");
+  GtkWidget *exact_checkbox = gtk_check_button_new_with_label(_("Exact match"));
   gtk_box_append(GTK_BOX(hbox_search), exact_checkbox);
   ui->exact_checkbox = exact_checkbox;
 
@@ -261,22 +262,22 @@ build_main_ui(AppWidgets *ui)
   GtkWidget *hbox_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_root), hbox_buttons);
 
-  GtkWidget *list_button = ui_helpers_create_icon_button("view-list-symbolic", "List Installed");
+  GtkWidget *list_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Installed"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_button);
   ui->list_button = list_button;
 
-  GtkWidget *list_available_button = ui_helpers_create_icon_button("view-list-symbolic", "List Packages");
+  GtkWidget *list_available_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Packages"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_available_button);
   ui->list_available_button = list_available_button;
 
-  GtkWidget *list_upgradeable_button = ui_helpers_create_icon_button("view-list-symbolic", "List Upgradable");
+  GtkWidget *list_upgradeable_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Upgradable"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_upgradeable_button);
   ui->list_upgradeable_button = list_upgradeable_button;
 
   // --- Refresh Repositories button ---
   // Triggers an asynchronous repository rebuild using BaseManager::rebuild()
   // Runs in a background thread to keep the GTK UI responsive
-  GtkWidget *refresh_button = ui_helpers_create_icon_button("view-refresh-symbolic", "Refresh Repositories");
+  GtkWidget *refresh_button = ui_helpers_create_icon_button("view-refresh-symbolic", _("Refresh Repositories"));
   gtk_box_append(GTK_BOX(hbox_buttons), refresh_button);
   ui->refresh_button = refresh_button;
 
@@ -284,34 +285,34 @@ build_main_ui(AppWidgets *ui)
   GtkWidget *hbox_tx_buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   gtk_box_append(GTK_BOX(vbox_root), hbox_tx_buttons);
 
-  GtkWidget *install_button = ui_helpers_create_icon_button("list-add-symbolic", "Mark for Install");
+  GtkWidget *install_button = ui_helpers_create_icon_button("list-add-symbolic", _("Mark for Install"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), install_button);
   ui->install_button = install_button;
 
-  GtkWidget *reinstall_button = ui_helpers_create_icon_button("view-refresh-symbolic", "Mark for Reinstall");
+  GtkWidget *reinstall_button = ui_helpers_create_icon_button("view-refresh-symbolic", _("Mark for Reinstall"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), reinstall_button);
   ui->reinstall_button = reinstall_button;
 
-  GtkWidget *remove_button = ui_helpers_create_icon_button("list-remove-symbolic", "Mark for Removal");
+  GtkWidget *remove_button = ui_helpers_create_icon_button("list-remove-symbolic", _("Mark for Removal"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
   ui->remove_button = remove_button;
 
-  GtkWidget *upgrade_all_button = ui_helpers_create_icon_button("view-refresh-symbolic", "Upgrade All");
+  GtkWidget *upgrade_all_button = ui_helpers_create_icon_button("view-refresh-symbolic", _("Upgrade All"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), upgrade_all_button);
   ui->upgrade_all_button = upgrade_all_button;
 
-  GtkWidget *apply_button = ui_helpers_create_icon_button("emblem-ok-symbolic", "Apply Transactions");
+  GtkWidget *apply_button = ui_helpers_create_icon_button("emblem-ok-symbolic", _("Apply Transactions"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), apply_button);
   ui->apply_button = apply_button;
 
-  GtkWidget *clear_pending_button = ui_helpers_create_icon_button("edit-clear-symbolic", "Clear Transactions");
+  GtkWidget *clear_pending_button = ui_helpers_create_icon_button("edit-clear-symbolic", _("Clear Transactions"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), clear_pending_button);
   ui->clear_pending_button = clear_pending_button;
 
   // --- Flat line separator ---
   gtk_box_append(GTK_BOX(vbox_root), create_thin_separator());
 
-  GtkWidget *status_label = gtk_label_new("Ready.");
+  GtkWidget *status_label = gtk_label_new(_("Ready."));
   gtk_label_set_xalign(GTK_LABEL(status_label), 0.0);
   gtk_label_set_selectable(GTK_LABEL(status_label), TRUE);
   gtk_label_set_wrap(GTK_LABEL(status_label), TRUE);
@@ -357,37 +358,37 @@ build_main_ui(AppWidgets *ui)
   // --- Tab 1: Package Info ---
   GtkTextBuffer *details_buffer = NULL;
   GtkWidget *scrolled_details =
-      create_scrolled_text_view("Select a package for details.", GTK_WRAP_WORD, &details_buffer);
+      create_scrolled_text_view(_("Select a package for details."), GTK_WRAP_WORD, &details_buffer);
   ui->details_buffer = details_buffer;
 
-  GtkWidget *tab_label_info = gtk_label_new("Info");
+  GtkWidget *tab_label_info = gtk_label_new(_("Info"));
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_details, tab_label_info);
 
   // --- Tab 2: File List ---
   GtkTextBuffer *files_buffer = NULL;
   GtkWidget *scrolled_files =
-      create_scrolled_text_view("Select an installed package to view its file list.", GTK_WRAP_NONE, &files_buffer);
+      create_scrolled_text_view(_("Select an installed package to view its file list."), GTK_WRAP_NONE, &files_buffer);
   ui->files_buffer = files_buffer;
 
-  GtkWidget *tab_label_files = gtk_label_new("Files");
+  GtkWidget *tab_label_files = gtk_label_new(_("Files"));
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_files, tab_label_files);
 
   // --- Tab 3: Dependencies ---
   GtkTextBuffer *deps_buffer = NULL;
   GtkWidget *scrolled_deps =
-      create_scrolled_text_view("Select a package to view dependencies.", GTK_WRAP_WORD, &deps_buffer);
+      create_scrolled_text_view(_("Select a package to view dependencies."), GTK_WRAP_WORD, &deps_buffer);
   ui->deps_buffer = deps_buffer;
 
-  GtkWidget *tab_label_deps = gtk_label_new("Dependencies");
+  GtkWidget *tab_label_deps = gtk_label_new(_("Dependencies"));
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_deps, tab_label_deps);
 
   // --- Tab 4: Changelog ---
   GtkTextBuffer *changelog_buffer = NULL;
   GtkWidget *scrolled_changelog =
-      create_scrolled_text_view("Select a package to view its changelog.", GTK_WRAP_WORD, &changelog_buffer);
+      create_scrolled_text_view(_("Select a package to view its changelog."), GTK_WRAP_WORD, &changelog_buffer);
   ui->changelog_buffer = changelog_buffer;
 
-  GtkWidget *tab_label_changelog = gtk_label_new("Changelog");
+  GtkWidget *tab_label_changelog = gtk_label_new(_("Changelog"));
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), scrolled_changelog, tab_label_changelog);
 
   // --- Tab 5: Pending actions ---
@@ -401,7 +402,7 @@ build_main_ui(AppWidgets *ui)
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(pending_scrolled), pending_list);
   ui->pending_list = pending_list;
 
-  GtkWidget *tab_label_pending = gtk_label_new("Pending");
+  GtkWidget *tab_label_pending = gtk_label_new(_("Pending"));
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook), pending_scrolled, tab_label_pending);
 
   // --- Bottom bar with item count ---
@@ -410,14 +411,14 @@ build_main_ui(AppWidgets *ui)
   gtk_widget_add_css_class(bottom_bar, "bottom-bar");
   gtk_box_append(GTK_BOX(vbox_root), bottom_bar);
 
-  GtkWidget *count_label = gtk_label_new("Items: 0");
+  GtkWidget *count_label = gtk_label_new(_("Items: 0"));
   gtk_label_set_xalign(GTK_LABEL(count_label), 0.0);
   gtk_widget_set_hexpand(count_label, TRUE);
   gtk_box_append(GTK_BOX(bottom_bar), count_label);
   ui->count_label = count_label;
 
   // Passive startup note shown only while the backend is warming up.
-  GtkWidget *warmup_label = gtk_label_new("Loading package data...");
+  GtkWidget *warmup_label = gtk_label_new(_("Loading package data..."));
   gtk_label_set_xalign(GTK_LABEL(warmup_label), 1.0);
   gtk_widget_set_visible(warmup_label, FALSE);
   gtk_box_append(GTK_BOX(bottom_bar), warmup_label);
@@ -558,7 +559,7 @@ initialize_ui_state(SearchWidgets *widgets)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), FALSE);
 
-  ui_helpers_set_status(widgets->query.status_label, "Ready.", "gray");
+  ui_helpers_set_status(widgets->query.status_label, _("Ready."), "gray");
   package_table_fill_package_view(widgets, {});
 }
 
@@ -626,7 +627,7 @@ show_pending_quit_dialog(SearchWidgets *widgets)
   widgets->window_state.pending_quit_dialog_open = true;
 
   GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
-  gtk_window_set_title(dialog, "Quit and discard marked changes?");
+  gtk_window_set_title(dialog, _("Quit and discard marked changes?"));
   gtk_window_set_default_size(dialog, 520, 180);
   gtk_window_set_modal(dialog, TRUE);
 
@@ -647,12 +648,14 @@ show_pending_quit_dialog(SearchWidgets *widgets)
   gtk_window_set_child(dialog, outer);
 
   GtkWidget *title = gtk_label_new(nullptr);
-  gtk_label_set_markup(GTK_LABEL(title), "<b>Quit and discard marked changes?</b>");
+  gchar *title_markup = g_markup_printf_escaped("<b>%s</b>", _("Quit and discard marked changes?"));
+  gtk_label_set_markup(GTK_LABEL(title), title_markup);
+  g_free(title_markup);
   gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
   gtk_box_append(GTK_BOX(outer), title);
 
   GtkWidget *message = gtk_label_new(
-      "There are still marked changes that have not yet been applied. They will get lost if you choose to quit.");
+      _("There are still marked changes that have not yet been applied. They will get lost if you choose to quit."));
   gtk_label_set_xalign(GTK_LABEL(message), 0.0f);
   gtk_label_set_wrap(GTK_LABEL(message), TRUE);
   gtk_box_append(GTK_BOX(outer), message);
@@ -661,10 +664,10 @@ show_pending_quit_dialog(SearchWidgets *widgets)
   gtk_widget_set_halign(button_box, GTK_ALIGN_END);
   gtk_box_append(GTK_BOX(outer), button_box);
 
-  GtkWidget *cancel_button = gtk_button_new_with_label("Cancel");
+  GtkWidget *cancel_button = gtk_button_new_with_label(_("Cancel"));
   gtk_box_append(GTK_BOX(button_box), cancel_button);
 
-  GtkWidget *quit_button = gtk_button_new_with_label("Quit");
+  GtkWidget *quit_button = gtk_button_new_with_label(_("Quit"));
   gtk_widget_add_css_class(quit_button, "destructive-action");
   gtk_box_append(GTK_BOX(button_box), quit_button);
 

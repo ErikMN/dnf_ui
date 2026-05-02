@@ -6,6 +6,7 @@
 // -----------------------------------------------------------------------------
 #include "package_table_status.hpp"
 
+#include "i18n.hpp"
 #include "widgets.hpp"
 
 #include <string>
@@ -18,16 +19,16 @@ package_table_status_text(PackageInstallState state)
 {
   switch (state) {
   case PackageInstallState::INSTALLED:
-    return "Installed";
+    return _("Installed");
   case PackageInstallState::LOCAL_ONLY:
-    return "Installed (local only)";
+    return _("Installed (local only)");
   case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
-    return "Installed (newer than repo)";
+    return _("Installed (newer than repo)");
   case PackageInstallState::UPGRADEABLE:
-    return "Update available";
+    return _("Update available");
   case PackageInstallState::AVAILABLE:
   default:
-    return "Available";
+    return _("Available");
   }
 }
 
@@ -53,7 +54,8 @@ package_table_status_tooltip_text(const PackageRow &row)
 
   std::string tooltip = package_table_status_text(state);
   if (row.install_reason != PackageInstallReason::UNKNOWN) {
-    tooltip += "\nInstall reason: ";
+    tooltip += "\n";
+    tooltip += _("Install reason: ");
     tooltip += dnf_backend_install_reason_to_string(row.install_reason);
   }
 
@@ -110,13 +112,13 @@ package_table_update_status_label(GtkWidget *label, SearchWidgets *widgets, cons
     if (a.nevra == row.nevra) {
       switch (a.type) {
       case PendingAction::INSTALL:
-        text = "Pending Install";
+        text = _("Pending Install");
         break;
       case PendingAction::REINSTALL:
-        text = "Pending Reinstall";
+        text = _("Pending Reinstall");
         break;
       case PendingAction::REMOVE:
-        text = "Pending Removal";
+        text = _("Pending Removal");
         break;
       }
       break;

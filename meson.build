@@ -11,6 +11,11 @@ project(
 
 add_project_arguments('-fdiagnostics-color=always', language: 'cpp')
 add_project_arguments('-DDNFUI_VERSION="@0@"'.format(meson.project_version()), language: 'cpp')
+add_project_arguments('-DGETTEXT_PACKAGE="@0@"'.format(meson.project_name()), language: 'cpp')
+add_project_arguments(
+  '-DLOCALEDIR="@0@"'.format(join_paths(get_option('prefix'), get_option('localedir'))),
+  language: 'cpp',
+)
 
 if get_option('final_build')
   add_project_arguments(
@@ -55,6 +60,7 @@ endif
 
 subdir('src')
 subdir('packaging')
+subdir('po')
 
 if get_option('build_tests')
   subdir('test')

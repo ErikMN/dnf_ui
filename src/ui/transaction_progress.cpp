@@ -5,6 +5,7 @@
 // -----------------------------------------------------------------------------
 #include "transaction_progress.hpp"
 
+#include "i18n.hpp"
 #include "widgets.hpp"
 
 #include <atomic>
@@ -98,7 +99,7 @@ transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count)
   progress->finished = false;
 
   progress->window = GTK_WINDOW(gtk_window_new());
-  gtk_window_set_title(progress->window, "Transaction Progress");
+  gtk_window_set_title(progress->window, _("Transaction Progress"));
   gtk_window_set_default_size(progress->window, 760, 420);
   gtk_window_set_modal(progress->window, TRUE);
 
@@ -121,10 +122,15 @@ transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count)
   progress->title_label = GTK_LABEL(gtk_label_new(nullptr));
   std::string title_text;
   if (pending_count == 0) {
-    title_text = "<b>Applying package transaction</b>";
+    char *markup = g_markup_printf_escaped("<b>%s</b>", _("Applying package transaction"));
+    title_text = markup ? markup : "";
+    g_free(markup);
   } else {
-    title_text = "<b>Applying " + std::to_string(pending_count) + " pending package change" +
-        (pending_count == 1 ? "</b>" : "s</b>");
+    std::string count_text = dnfui_i18n_format_count(
+        pending_count, "Applying %zu pending package change", "Applying %zu pending package changes");
+    char *markup = g_markup_printf_escaped("<b>%s</b>", count_text.c_str());
+    title_text = markup ? markup : "";
+    g_free(markup);
   }
   gtk_label_set_markup(progress->title_label, title_text.c_str());
   gtk_label_set_xalign(progress->title_label, 0.0f);
@@ -137,7 +143,7 @@ transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count)
   gtk_spinner_start(progress->spinner);
   gtk_box_append(GTK_BOX(stage_box), GTK_WIDGET(progress->spinner));
 
-  progress->stage_label = GTK_LABEL(gtk_label_new("Resolving dependency changes..."));
+  progress->stage_label = GTK_LABEL(gtk_label_new(_("Resolving dependency changes...")));
   gtk_label_set_xalign(progress->stage_label, 0.0f);
   gtk_widget_set_hexpand(GTK_WIDGET(progress->stage_label), TRUE);
   gtk_box_append(GTK_BOX(stage_box), GTK_WIDGET(progress->stage_label));
@@ -159,7 +165,7 @@ transaction_progress_create_window(SearchWidgets *widgets, size_t pending_count)
   gtk_widget_set_halign(button_box, GTK_ALIGN_END);
   gtk_box_append(GTK_BOX(outer), button_box);
 
-  progress->close_button = GTK_BUTTON(gtk_button_new_with_label("Close"));
+  progress->close_button = GTK_BUTTON(gtk_button_new_with_label(_("Close")));
   gtk_widget_set_sensitive(GTK_WIDGET(progress->close_button), FALSE);
   gtk_box_append(GTK_BOX(button_box), GTK_WIDGET(progress->close_button));
 
@@ -290,10 +296,10 @@ transaction_progress_finish(TransactionProgressWindow *progress, bool success, c
   }
   if (progress->stage_label) {
     gtk_label_set_text(progress->stage_label,
-                       success ? "Transaction finished successfully." : "Transaction finished with errors.");
+                       success ? _("Transaction finished successfully.") : _("Transaction finished with errors."));
   }
   if (progress->window) {
-    gtk_window_set_title(progress->window, success ? "Transaction Complete" : "Transaction Failed");
+    gtk_window_set_title(progress->window, success ? _("Transaction Complete") : _("Transaction Failed"));
   }
 }
 
@@ -321,7 +327,7 @@ static std::string
 format_transaction_space_change(long long delta_bytes)
 {
   if (delta_bytes == 0) {
-    return "Disk space usage will be unchanged.";
+    return _("Disk space usage will be unchanged.");
   }
 
   unsigned long long abs_bytes =
@@ -330,9 +336,9 @@ format_transaction_space_change(long long delta_bytes)
   std::string line;
 
   if (delta_bytes > 0) {
-    line = std::string(formatted) + " extra disk space will be used.";
+    line = dnfui_i18n_format(_("%s extra disk space will be used."), formatted);
   } else {
-    line = std::string(formatted) + " of disk space will be freed.";
+    line = dnfui_i18n_format(_("%s of disk space will be freed."), formatted);
   }
 
   g_free(formatted);
@@ -379,7 +385,7 @@ transaction_progress_show_summary_dialog(SearchWidgets *widgets,
                                          TransactionApplyCallback on_cancel)
 {
   GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
-  gtk_window_set_title(dialog, "Summary");
+  gtk_window_set_title(dialog, _("Summary"));
   gtk_window_set_default_size(dialog, 760, 520);
   gtk_window_set_modal(dialog, TRUE);
 
@@ -400,16 +406,18 @@ transaction_progress_show_summary_dialog(SearchWidgets *widgets,
   gtk_window_set_child(dialog, outer);
 
   GtkWidget *title = gtk_label_new(nullptr);
-  gtk_label_set_markup(GTK_LABEL(title), "<b>Summary</b>");
+  gchar *title_markup = g_markup_printf_escaped("<b>%s</b>", _("Summary"));
+  gtk_label_set_markup(GTK_LABEL(title), title_markup);
+  g_free(title_markup);
   gtk_label_set_xalign(GTK_LABEL(title), 0.0f);
   gtk_box_append(GTK_BOX(outer), title);
 
-  GtkWidget *question = gtk_label_new("Apply the following changes?");
+  GtkWidget *question = gtk_label_new(_("Apply the following changes?"));
   gtk_label_set_xalign(GTK_LABEL(question), 0.0f);
   gtk_box_append(GTK_BOX(outer), question);
 
   GtkWidget *intro = gtk_label_new(
-      "This is your last opportunity to look through the list of marked changes before they are applied.");
+      _("This is your last opportunity to look through the list of marked changes before they are applied."));
   gtk_label_set_xalign(GTK_LABEL(intro), 0.0f);
   gtk_label_set_wrap(GTK_LABEL(intro), TRUE);
   gtk_box_append(GTK_BOX(outer), intro);
@@ -427,14 +435,16 @@ transaction_progress_show_summary_dialog(SearchWidgets *widgets,
   gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroller), contents);
 
   // Show the resolved backend changes, not only the packages the user marked manually.
-  append_transaction_summary_section(GTK_BOX(contents), "To be installed", preview.install);
-  append_transaction_summary_section(GTK_BOX(contents), "To be upgraded", preview.upgrade);
-  append_transaction_summary_section(GTK_BOX(contents), "To be downgraded", preview.downgrade);
-  append_transaction_summary_section(GTK_BOX(contents), "To be reinstalled", preview.reinstall);
-  append_transaction_summary_section(GTK_BOX(contents), "To be removed", preview.remove);
+  append_transaction_summary_section(GTK_BOX(contents), _("To be installed"), preview.install);
+  append_transaction_summary_section(GTK_BOX(contents), _("To be upgraded"), preview.upgrade);
+  append_transaction_summary_section(GTK_BOX(contents), _("To be downgraded"), preview.downgrade);
+  append_transaction_summary_section(GTK_BOX(contents), _("To be reinstalled"), preview.reinstall);
+  append_transaction_summary_section(GTK_BOX(contents), _("To be removed"), preview.remove);
 
   GtkWidget *summary_heading = gtk_label_new(nullptr);
-  gtk_label_set_markup(GTK_LABEL(summary_heading), "<b>Summary</b>");
+  gchar *summary_markup = g_markup_printf_escaped("<b>%s</b>", _("Summary"));
+  gtk_label_set_markup(GTK_LABEL(summary_heading), summary_markup);
+  g_free(summary_markup);
   gtk_label_set_xalign(GTK_LABEL(summary_heading), 0.0f);
   gtk_box_append(GTK_BOX(outer), summary_heading);
 
@@ -448,31 +458,29 @@ transaction_progress_show_summary_dialog(SearchWidgets *widgets,
     gtk_box_append(GTK_BOX(summary_box), label);
   };
 
-  auto append_count_line = [&](size_t count, const char *verb) {
+  auto append_count_line = [&](size_t count, const char *singular, const char *plural) {
     if (count == 0) {
       return;
     }
 
-    char line[256];
-    snprintf(line, sizeof(line), "%zu package%s will be %s.", count, count == 1 ? "" : "s", verb);
-    append_summary_line(line);
+    append_summary_line(dnfui_i18n_format_count(count, singular, plural));
   };
 
-  append_count_line(preview.install.size(), "installed");
-  append_count_line(preview.upgrade.size(), "upgraded");
-  append_count_line(preview.downgrade.size(), "downgraded");
-  append_count_line(preview.reinstall.size(), "reinstalled");
-  append_count_line(preview.remove.size(), "removed");
+  append_count_line(preview.install.size(), "%zu package will be installed.", "%zu packages will be installed.");
+  append_count_line(preview.upgrade.size(), "%zu package will be upgraded.", "%zu packages will be upgraded.");
+  append_count_line(preview.downgrade.size(), "%zu package will be downgraded.", "%zu packages will be downgraded.");
+  append_count_line(preview.reinstall.size(), "%zu package will be reinstalled.", "%zu packages will be reinstalled.");
+  append_count_line(preview.remove.size(), "%zu package will be removed.", "%zu packages will be removed.");
   append_summary_line(format_transaction_space_change(preview.disk_space_delta));
 
   GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_set_halign(button_box, GTK_ALIGN_END);
   gtk_box_append(GTK_BOX(outer), button_box);
 
-  GtkWidget *cancel_button = gtk_button_new_with_label("Cancel");
+  GtkWidget *cancel_button = gtk_button_new_with_label(_("Cancel"));
   gtk_box_append(GTK_BOX(button_box), cancel_button);
 
-  GtkWidget *apply_button = gtk_button_new_with_label("Apply");
+  GtkWidget *apply_button = gtk_button_new_with_label(_("Apply"));
   gtk_widget_add_css_class(apply_button, "suggested-action");
   gtk_box_append(GTK_BOX(button_box), apply_button);
 
@@ -588,7 +596,7 @@ transaction_progress_show_error_dialog(SearchWidgets *widgets,
   gtk_widget_set_halign(button_box, GTK_ALIGN_END);
   gtk_box_append(GTK_BOX(outer), button_box);
 
-  GtkWidget *close_button = gtk_button_new_with_label("Close");
+  GtkWidget *close_button = gtk_button_new_with_label(_("Close"));
   gtk_box_append(GTK_BOX(button_box), close_button);
 
   g_signal_connect(close_button,

@@ -1,4 +1,5 @@
 service_sources = files(
+  '../i18n.cpp',
   'transaction_service.cpp',
   'transaction_service_introspection.cpp',
   'transaction_service_preview_formatter.cpp',

@@ -9,6 +9,7 @@
 
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
+#include "i18n.hpp"
 #include "service/transaction_service_dbus.hpp"
 #include "transaction_request.hpp"
 
@@ -139,7 +140,7 @@ connect_transaction_service(std::string &error_out)
     connection = g_bus_get_sync(bus_type, nullptr, &error);
   }
   if (!connection) {
-    error_out = error ? error->message : "Could not connect to the transaction service bus.";
+    error_out = error ? error->message : _("Could not connect to the transaction service bus.");
     g_clear_error(&error);
     return nullptr;
   }
@@ -178,7 +179,7 @@ start_transaction_request(GDBusConnection *connection,
   error_out.clear();
 
   if (!connection) {
-    error_out = "Transaction service connection is not available.";
+    error_out = _("Transaction service connection is not available.");
     return false;
   }
 
@@ -195,7 +196,7 @@ start_transaction_request(GDBusConnection *connection,
                                                       nullptr,
                                                       &error);
   if (!start_reply) {
-    error_out = error ? error->message : "Could not start the transaction service request.";
+    error_out = error ? error->message : _("Could not start the transaction service request.");
     g_clear_error(&error);
     return false;
   }
@@ -206,7 +207,7 @@ start_transaction_request(GDBusConnection *connection,
   g_variant_unref(start_reply);
 
   if (transaction_path_out.empty()) {
-    error_out = "Transaction service returned an empty request path.";
+    error_out = _("Transaction service returned an empty request path.");
     return false;
   }
 
@@ -227,7 +228,7 @@ start_upgrade_all_transaction_request(GDBusConnection *connection,
   error_out.clear();
 
   if (!connection) {
-    error_out = "Transaction service connection is not available.";
+    error_out = _("Transaction service connection is not available.");
     return false;
   }
 
@@ -244,7 +245,7 @@ start_upgrade_all_transaction_request(GDBusConnection *connection,
                                                       nullptr,
                                                       &error);
   if (!start_reply) {
-    error_out = error ? error->message : "Could not start the upgrade-all transaction service request.";
+    error_out = error ? error->message : _("Could not start the upgrade-all transaction service request.");
     g_clear_error(&error);
     return false;
   }
@@ -255,7 +256,7 @@ start_upgrade_all_transaction_request(GDBusConnection *connection,
   g_variant_unref(start_reply);
 
   if (transaction_path_out.empty()) {
-    error_out = "Transaction service returned an empty request path.";
+    error_out = _("Transaction service returned an empty request path.");
     return false;
   }
 
@@ -289,7 +290,7 @@ get_transaction_result(GDBusConnection *connection,
                                                 nullptr,
                                                 &error);
   if (!reply) {
-    error_out = error ? error->message : "Failed to read transaction service result.";
+    error_out = error ? error->message : _("Failed to read transaction service result.");
     g_clear_error(&error);
     return false;
   }
@@ -334,7 +335,7 @@ get_transaction_preview(GDBusConnection *connection,
                                                 nullptr,
                                                 &error);
   if (!reply) {
-    error_out = error ? error->message : "Failed to read transaction service preview.";
+    error_out = error ? error->message : _("Failed to read transaction service preview.");
     g_clear_error(&error);
     return false;
   }
@@ -400,7 +401,7 @@ release_transaction_request(GDBusConnection *connection, const std::string &tran
                                                 nullptr,
                                                 &error);
   if (!reply) {
-    error_out = error ? error->message : "Failed to release transaction service request.";
+    error_out = error ? error->message : _("Failed to release transaction service request.");
     g_clear_error(&error);
     return false;
   }
@@ -519,7 +520,7 @@ wait_for_transaction_stage(GDBusConnection *connection,
   // Return a normal client error if the service disappears while the client
   // is still waiting for the final state signal.
   if (wait_state.service_disappeared && !wait_state.received) {
-    error_out = "Transaction service disappeared while waiting for the result.";
+    error_out = _("Transaction service disappeared while waiting for the result.");
     return false;
   }
 
@@ -596,7 +597,7 @@ wait_for_started_transaction_preview(GDBusConnection *connection,
   }
 
   if (result.stage != "preview-ready" || !result.finished || !result.success) {
-    error_out = result.details.empty() ? "Privileged transaction preview failed." : result.details;
+    error_out = result.details.empty() ? _("Privileged transaction preview failed.") : result.details;
     DNFUI_TRACE(
         "Transaction service client preview failed path=%s error=%s", transaction_path.c_str(), error_out.c_str());
     std::string release_error;
@@ -635,7 +636,7 @@ transaction_service_client_preview_request(const TransactionRequest &request,
   }
 
   if (request.upgrade_all) {
-    error_out = "Use the upgrade-all preview helper for upgrade-all requests.";
+    error_out = _("Use the upgrade-all preview helper for upgrade-all requests.");
     return false;
   }
 
@@ -706,7 +707,7 @@ transaction_service_client_apply_started_request(const std::string &transaction_
   error_out.clear();
 
   if (transaction_path.empty()) {
-    error_out = "Transaction service request path is empty.";
+    error_out = _("Transaction service request path is empty.");
     return false;
   }
 
@@ -716,7 +717,7 @@ transaction_service_client_apply_started_request(const std::string &transaction_
     }
   };
 
-  append_progress("Connecting to transaction service...");
+  append_progress(_("Connecting to transaction service..."));
 
   std::string connect_error;
   GDBusConnection *connection = connect_transaction_service(connect_error);
@@ -745,8 +746,8 @@ transaction_service_client_apply_started_request(const std::string &transaction_
                                                                   &progress_forwarder,
                                                                   nullptr);
 
-    append_progress("Privileged transaction preview ready.");
-    append_progress("Requesting authorization and starting apply...");
+    append_progress(_("Privileged transaction preview ready."));
+    append_progress(_("Requesting authorization and starting apply..."));
 
     GError *error = nullptr;
     GVariant *apply_reply = g_dbus_connection_call_sync(connection,
@@ -761,23 +762,23 @@ transaction_service_client_apply_started_request(const std::string &transaction_
                                                         nullptr,
                                                         &error);
     if (!apply_reply) {
-      error_out = error ? error->message : "Could not start the privileged apply request.";
+      error_out = error ? error->message : _("Could not start the privileged apply request.");
       g_clear_error(&error);
       break;
     }
     g_variant_unref(apply_reply);
 
-    append_progress("Waiting for privileged apply to finish...");
+    append_progress(_("Waiting for privileged apply to finish..."));
     if (!wait_for_transaction_stage(connection, transaction_path, "apply-running", signal_context, result, error_out)) {
       break;
     }
 
     if (result.stage != "apply-succeeded" || !result.finished || !result.success) {
-      error_out = result.details.empty() ? "Privileged apply failed." : result.details;
+      error_out = result.details.empty() ? _("Privileged apply failed.") : result.details;
       break;
     }
 
-    append_progress(result.details.empty() ? "Transaction applied successfully." : result.details);
+    append_progress(result.details.empty() ? _("Transaction applied successfully.") : result.details);
     DNFUI_TRACE("Transaction service client apply done path=%s", transaction_path.c_str());
     ok = true;
   } while (false);

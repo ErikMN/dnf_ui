@@ -10,6 +10,7 @@
 #include "base_manager.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
+#include "i18n.hpp"
 #include "service/transaction_service_dbus.hpp"
 #include "service/transaction_service_introspection.hpp"
 #include "service/transaction_service_preview_formatter.hpp"
@@ -235,12 +236,12 @@ static bool
 service_request_limit_reached(TransactionService *service, const std::string &owner_name, std::string &error_out)
 {
   if (!service) {
-    error_out = "Transaction service is not ready.";
+    error_out = _("Transaction service is not ready.");
     return true;
   }
 
   if (service->transactions.size() >= kMaxLiveTransactionSessions) {
-    error_out = "The transaction service has too many active requests.";
+    error_out = _("The transaction service has too many active requests.");
     return true;
   }
 
@@ -253,7 +254,7 @@ service_request_limit_reached(TransactionService *service, const std::string &ow
   }
 
   if (owner_count >= kMaxLiveTransactionSessionsPerClient) {
-    error_out = "This client has too many active transaction requests.";
+    error_out = _("This client has too many active transaction requests.");
     return true;
   }
 
@@ -557,7 +558,7 @@ complete_apply_request(TransactionSession *session, GDBusMethodInvocation *invoc
   bool expected = false;
   if (!session->service->apply_running.compare_exchange_strong(expected, true)) {
     g_dbus_method_invocation_return_error(
-        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Another transaction apply is already running.");
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", _("Another transaction apply is already running."));
     return;
   }
 
@@ -623,14 +624,14 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
   // The request must still be ready for apply after authorization completes.
   if (!preview_ready) {
     g_dbus_method_invocation_return_error(
-        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction state changed during authorization.");
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", _("Transaction state changed during authorization."));
     g_object_unref(invocation);
     return;
   }
 
   if (preview_empty) {
     g_dbus_method_invocation_return_error(
-        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "No package changes are available.");
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", _("No package changes are available."));
     g_object_unref(invocation);
     return;
   }
@@ -640,7 +641,7 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
   PolkitAuthorizationResult *result = polkit_authority_check_authorization_finish(authority, res, &error);
 
   if (!result) {
-    std::string error_msg = error ? error->message : "Authorization check failed.";
+    std::string error_msg = error ? error->message : _("Authorization check failed.");
     DNFUI_TRACE("Transaction service apply authorization failed path=%s error=%s",
                 session->object_path.c_str(),
                 error_msg.c_str());
@@ -657,7 +658,7 @@ on_apply_authorization_result(GObject *source_object, GAsyncResult *res, gpointe
   if (!authorized) {
     DNFUI_TRACE("Transaction service apply authorization denied path=%s", session->object_path.c_str());
     g_dbus_method_invocation_return_error(
-        invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "Not authorized to apply package transactions.");
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED, "%s", _("Not authorized to apply package transactions."));
     g_object_unref(invocation);
     return;
   }
@@ -678,7 +679,7 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
   error_out.clear();
 
   if (!session || !session->service || !invocation) {
-    error_out = "Transaction service authorization state is not available.";
+    error_out = _("Transaction service authorization state is not available.");
     return false;
   }
 
@@ -690,14 +691,14 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
 
   const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
   if (!sender || !*sender) {
-    error_out = "Could not determine the caller identity.";
+    error_out = _("Could not determine the caller identity.");
     return false;
   }
 
   GError *error = nullptr;
   PolkitAuthority *authority = polkit_authority_get_sync(nullptr, &error);
   if (!authority) {
-    error_out = error ? error->message : "Failed to contact the authorization service.";
+    error_out = error ? error->message : _("Failed to contact the authorization service.");
     g_clear_error(&error);
     return false;
   }
@@ -710,7 +711,7 @@ start_authorize_apply_request(TransactionSession *session, GDBusMethodInvocation
   {
     std::lock_guard<std::mutex> lock(session->state_mutex);
     if (session->pending_apply_invocation) {
-      error_out = "Apply authorization is already in progress.";
+      error_out = _("Apply authorization is already in progress.");
       g_object_unref(subject);
       g_object_unref(authority);
       return false;
@@ -756,20 +757,20 @@ validate_transaction_request_for_service(const TransactionRequest &request, std:
     BaseManager::instance().ensure_system_only_initialized_if_needed();
     dnf_backend_refresh_installed_nevras();
   } catch (const std::exception &e) {
-    error_out = "Unable to validate protected installed packages: " + std::string(e.what());
+    error_out = std::string(_("Unable to validate protected installed packages: ")) + e.what();
     return false;
   }
 
   for (const auto &spec : request.remove) {
     if (dnf_backend_is_self_protected_transaction_spec(spec)) {
-      error_out = "DNF UI cannot remove the package that owns the running application.";
+      error_out = _("DNF UI cannot remove the package that owns the running application.");
       return false;
     }
   }
 
   for (const auto &spec : request.reinstall) {
     if (dnf_backend_is_self_protected_transaction_spec(spec)) {
-      error_out = "DNF UI cannot reinstall the package that owns the running application while it is running.";
+      error_out = _("DNF UI cannot reinstall the package that owns the running application while it is running.");
       return false;
     }
   }
@@ -800,7 +801,7 @@ run_transaction_preview(TransactionSession *session)
   try {
     TransactionPreview preview;
     std::string error_out;
-    queue_transaction_progress(session, "Loading package base...");
+    queue_transaction_progress(session, _("Loading package base..."));
     auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
     DNFUI_TRACE("Transaction service preview start path=%s", session->object_path.c_str());
@@ -809,7 +810,7 @@ run_transaction_preview(TransactionSession *session)
 
     if (test_force_empty_upgrade_all_preview_requested(session->request)) {
       // Finish with an empty preview so tests can cover the no-updates path.
-      queue_transaction_progress(session, "No package updates are available.");
+      queue_transaction_progress(session, _("No package updates are available."));
       {
         std::lock_guard<std::mutex> lock(session->state_mutex);
         session->preview = preview;
@@ -825,19 +826,19 @@ run_transaction_preview(TransactionSession *session)
         // removed outside the GUI can leave its cached Base out of date. Rebuild it
         // before each preview so resolve and apply requests always use the current
         // rpmdb and repository metadata snapshot.
-        queue_transaction_progress(session, "Refreshing backend state...");
+        queue_transaction_progress(session, _("Refreshing backend state..."));
         BaseManager::instance().rebuild();
       } else {
         // Remove-only requests are local-first and should stay usable without
         // waiting on remote repository availability.
-        queue_transaction_progress(session, "Refreshing installed package state...");
+        queue_transaction_progress(session, _("Refreshing installed package state..."));
         BaseManager::instance().rebuild_system_only();
       }
     } catch (const std::exception &e) {
       DNFUI_TRACE(
           "Transaction service preview refresh failed path=%s error=%s", session->object_path.c_str(), e.what());
       queue_transaction_progress(session,
-                                 "Backend refresh failed; retrying preview with currently available package state.");
+                                 _("Backend refresh failed; retrying preview with currently available package state."));
       if (!transaction_request_needs_available_repos(session->request)) {
         BaseManager::instance().ensure_system_only_initialized_if_needed();
       }
@@ -853,7 +854,7 @@ run_transaction_preview(TransactionSession *session)
 
     if (session->cancelled.load()) {
       DNFUI_TRACE("Transaction service preview cancelled path=%s", session->object_path.c_str());
-      queue_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
+      queue_transaction_finished(session, TransactionStage::CANCELLED, false, _("Transaction preview was cancelled."));
       return;
     }
 
@@ -878,7 +879,7 @@ run_transaction_preview(TransactionSession *session)
     queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, e.what());
   } catch (...) {
     DNFUI_TRACE("Transaction service preview exception path=%s error=unknown", session->object_path.c_str());
-    queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, "Transaction preview failed.");
+    queue_transaction_finished(session, TransactionStage::PREVIEW_FAILED, false, _("Transaction preview failed."));
   }
 }
 
@@ -895,7 +896,7 @@ start_transaction_preview(gpointer user_data)
 
   if (!try_acquire_preview_worker(session->service)) {
     queue_transaction_finished(
-        session, TransactionStage::PREVIEW_FAILED, false, "Too many transaction previews are already running.");
+        session, TransactionStage::PREVIEW_FAILED, false, _("Too many transaction previews are already running."));
     return G_SOURCE_REMOVE;
   }
 
@@ -948,7 +949,7 @@ run_transaction_apply(TransactionSession *session)
 
   try {
     std::string error_out;
-    queue_transaction_progress(session, "Loading package base...");
+    queue_transaction_progress(session, _("Loading package base..."));
     auto progress_cb = [session](const std::string &line) { queue_transaction_progress(session, line); };
 
     DNFUI_TRACE("Transaction service apply start path=%s", session->object_path.c_str());
@@ -964,20 +965,22 @@ run_transaction_apply(TransactionSession *session)
     bool success = false;
 
     if (ok) {
-      details = "Transaction applied successfully.";
+      details = _("Transaction applied successfully.");
       stage = TransactionStage::APPLY_SUCCEEDED;
       success = true;
 
       try {
         if (transaction_request_needs_available_repos(session->request)) {
-          queue_transaction_progress(session, "Refreshing backend state...");
+          queue_transaction_progress(session, _("Refreshing backend state..."));
           BaseManager::instance().rebuild();
         } else {
-          queue_transaction_progress(session, "Refreshing installed package state...");
+          queue_transaction_progress(session, _("Refreshing installed package state..."));
           BaseManager::instance().rebuild_system_only();
         }
       } catch (const std::exception &e) {
-        details += "\nBackend refresh failed: " + std::string(e.what());
+        details += "\n";
+        details += _("Backend refresh failed: ");
+        details += e.what();
       }
     } else {
       details = error_out;
@@ -990,7 +993,7 @@ run_transaction_apply(TransactionSession *session)
     queue_transaction_finished(session, TransactionStage::APPLY_FAILED, false, e.what());
   } catch (...) {
     DNFUI_TRACE("Transaction service apply exception path=%s error=unknown", session->object_path.c_str());
-    queue_transaction_finished(session, TransactionStage::APPLY_FAILED, false, "Transaction apply failed.");
+    queue_transaction_finished(session, TransactionStage::APPLY_FAILED, false, _("Transaction apply failed."));
   }
 }
 
@@ -1035,12 +1038,12 @@ transaction_apply_should_stop_before_work(TransactionSession *session, std::stri
   details_out.clear();
 
   if (session->service->shutting_down.load()) {
-    details_out = "Transaction service is shutting down.";
+    details_out = _("Transaction service is shutting down.");
     return true;
   }
 
   if (session->release_requested.load() || session->cancelled.load()) {
-    details_out = "Transaction apply was cancelled before it started.";
+    details_out = _("Transaction apply was cancelled before it started.");
     return true;
   }
 
@@ -1067,12 +1070,13 @@ on_transaction_method_call(GDBusConnection *,
   TransactionSession *session = static_cast<TransactionSession *>(user_data);
   if (!session) {
     g_dbus_method_invocation_return_error(
-        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction session is not available.");
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", _("Transaction session is not available."));
     return;
   }
 
   if (g_strcmp0(interface_name, kTransactionInterface) != 0) {
-    g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "Unknown method.");
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "%s", _("Unknown method."));
     return;
   }
 
@@ -1091,7 +1095,7 @@ on_transaction_method_call(GDBusConnection *,
 
     if (has_pending_apply) {
       g_dbus_method_invocation_return_error(
-          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Cannot cancel while authorization is pending.");
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", _("Cannot cancel while authorization is pending."));
       return;
     }
 
@@ -1099,7 +1103,8 @@ on_transaction_method_call(GDBusConnection *,
       g_dbus_method_invocation_return_error(invocation,
                                             G_DBUS_ERROR,
                                             G_DBUS_ERROR_NOT_SUPPORTED,
-                                            "Cancellation is not supported while apply is running.");
+                                            "%s",
+                                            _("Cancellation is not supported while apply is running."));
       return;
     }
 
@@ -1121,8 +1126,8 @@ on_transaction_method_call(GDBusConnection *,
       session->finished = false;
     }
 
-    emit_transaction_progress(session, "Transaction preview was cancelled.");
-    emit_transaction_finished(session, TransactionStage::CANCELLED, false, "Transaction preview was cancelled.");
+    emit_transaction_progress(session, _("Transaction preview was cancelled."));
+    emit_transaction_finished(session, TransactionStage::CANCELLED, false, _("Transaction preview was cancelled."));
     g_dbus_method_invocation_return_value(invocation, nullptr);
     return;
   }
@@ -1137,14 +1142,17 @@ on_transaction_method_call(GDBusConnection *,
     }
 
     if (!preview_ready) {
-      g_dbus_method_invocation_return_error(
-          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview must succeed before apply can start.");
+      g_dbus_method_invocation_return_error(invocation,
+                                            G_DBUS_ERROR,
+                                            G_DBUS_ERROR_FAILED,
+                                            "%s",
+                                            _("Transaction preview must succeed before apply can start."));
       return;
     }
 
     if (preview_empty) {
       g_dbus_method_invocation_return_error(
-          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "No package changes are available.");
+          invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", _("No package changes are available."));
       return;
     }
 
@@ -1177,7 +1185,9 @@ on_transaction_method_call(GDBusConnection *,
       g_dbus_method_invocation_return_error(invocation,
                                             G_DBUS_ERROR,
                                             G_DBUS_ERROR_FAILED,
-                                            "Transaction request cannot be released while authorization is pending.");
+                                            "%s",
+                                            _("Transaction request cannot be released while authorization is "
+                                              "pending."));
       return;
     }
 
@@ -1185,7 +1195,8 @@ on_transaction_method_call(GDBusConnection *,
       g_dbus_method_invocation_return_error(invocation,
                                             G_DBUS_ERROR,
                                             G_DBUS_ERROR_FAILED,
-                                            "Transaction request cannot be released while work is still running.");
+                                            "%s",
+                                            _("Transaction request cannot be released while work is still running."));
       return;
     }
 
@@ -1201,7 +1212,7 @@ on_transaction_method_call(GDBusConnection *,
 
       if (session->stage != TransactionStage::PREVIEW_READY || !session->finished.load() || !session->success) {
         g_dbus_method_invocation_return_error(
-            invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction preview is not available.");
+            invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", _("Transaction preview is not available."));
         return;
       }
 
@@ -1259,7 +1270,8 @@ on_transaction_method_call(GDBusConnection *,
     return;
   }
 
-  g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "Unknown method.");
+  g_dbus_method_invocation_return_error(
+      invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "%s", _("Unknown method."));
 }
 
 static const GDBusInterfaceVTable kTransactionVTable = {
@@ -1309,7 +1321,7 @@ get_invocation_sender(GDBusMethodInvocation *invocation, std::string &sender_out
   sender_out.clear();
   const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
   if (!sender || !*sender) {
-    error_out = "Could not determine the client bus name.";
+    error_out = _("Could not determine the client bus name.");
     return false;
   }
 
@@ -1330,7 +1342,7 @@ create_transaction_session(TransactionService *service,
 {
   error_out.clear();
   if (!service || !service->connection || !service->transaction_node_info) {
-    error_out = "Transaction service is not ready.";
+    error_out = _("Transaction service is not ready.");
     return nullptr;
   }
 
@@ -1354,7 +1366,7 @@ create_transaction_session(TransactionService *service,
                                                                nullptr,
                                                                &error);
   if (session->registration_id == 0) {
-    error_out = error ? error->message : "Failed to register transaction object.";
+    error_out = error ? error->message : _("Failed to register transaction object.");
     g_clear_error(&error);
     return nullptr;
   }
@@ -1395,13 +1407,15 @@ on_manager_method_call(GDBusConnection *,
 {
   TransactionService *service = static_cast<TransactionService *>(user_data);
   if (!service) {
-    g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Service is not available.");
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "%s", _("Service is not available."));
     return;
   }
 
   if (g_strcmp0(interface_name, kManagerInterface) != 0 ||
       (g_strcmp0(method_name, "StartTransaction") != 0 && g_strcmp0(method_name, "StartUpgradeAllTransaction") != 0)) {
-    g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "Unknown method.");
+    g_dbus_method_invocation_return_error(
+        invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD, "%s", _("Unknown method."));
     return;
   }
 
@@ -1495,7 +1509,10 @@ on_bus_acquired(GDBusConnection *connection, const gchar *, gpointer user_data)
                                                                        &error);
 
   if (service->manager_registration_id == 0) {
-    std::fprintf(stderr, "Failed to register transaction service object: %s\n", error ? error->message : "unknown");
+    std::fputs(dnfui_i18n_format(_("Failed to register transaction service object: %s\n"),
+                                 error ? error->message : _("unknown"))
+                   .c_str(),
+               stderr);
     g_clear_error(&error);
     if (service->loop) {
       g_main_loop_quit(service->loop);
@@ -1544,8 +1561,11 @@ cleanup_service(TransactionService &service)
     if (pending_apply_invocation) {
       keep_alive_until_exit = true;
       DNFUI_TRACE("Transaction service cancelling pending authorization during shutdown path=%s", path.c_str());
-      g_dbus_method_invocation_return_error(
-          pending_apply_invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Transaction service is shutting down.");
+      g_dbus_method_invocation_return_error(pending_apply_invocation,
+                                            G_DBUS_ERROR,
+                                            G_DBUS_ERROR_FAILED,
+                                            "%s",
+                                            _("Transaction service is shutting down."));
       g_object_unref(pending_apply_invocation);
     }
 
@@ -1620,7 +1640,10 @@ transaction_service_run(const TransactionServiceOptions &options)
   GError *error = nullptr;
   service->manager_node_info = g_dbus_node_info_new_for_xml(kTransactionServiceManagerIntrospectionXml, &error);
   if (!service->manager_node_info) {
-    std::fprintf(stderr, "Failed to parse manager introspection XML: %s\n", error ? error->message : "unknown");
+    std::fputs(
+        dnfui_i18n_format(_("Failed to parse manager introspection XML: %s\n"), error ? error->message : _("unknown"))
+            .c_str(),
+        stderr);
     g_clear_error(&error);
     cleanup_service(*service);
     return 1;
@@ -1628,7 +1651,10 @@ transaction_service_run(const TransactionServiceOptions &options)
 
   service->transaction_node_info = g_dbus_node_info_new_for_xml(kTransactionServiceRequestIntrospectionXml, &error);
   if (!service->transaction_node_info) {
-    std::fprintf(stderr, "Failed to parse transaction introspection XML: %s\n", error ? error->message : "unknown");
+    std::fputs(dnfui_i18n_format(_("Failed to parse transaction introspection XML: %s\n"),
+                                 error ? error->message : _("unknown"))
+                   .c_str(),
+               stderr);
     g_clear_error(&error);
     cleanup_service(*service);
     return 1;

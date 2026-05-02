@@ -6,9 +6,11 @@
 #include "service/transaction_service_preview_formatter.hpp"
 
 #include "dnf_backend/dnf_backend.hpp"
+#include "i18n.hpp"
 
 #include <glib.h>
 
+#include <cstdio>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -20,7 +22,7 @@ static std::string
 format_transaction_preview_space_change(long long delta_bytes)
 {
   if (delta_bytes == 0) {
-    return "Disk space usage will be unchanged.";
+    return _("Disk space usage will be unchanged.");
   }
 
   unsigned long long abs_bytes =
@@ -29,9 +31,9 @@ format_transaction_preview_space_change(long long delta_bytes)
   std::string line;
 
   if (delta_bytes > 0) {
-    line = std::string(formatted) + " extra disk space will be used.";
+    line = dnfui_i18n_format(_("%s extra disk space will be used."), formatted);
   } else {
-    line = std::string(formatted) + " of disk space will be freed.";
+    line = dnfui_i18n_format(_("%s of disk space will be freed."), formatted);
   }
 
   g_free(formatted);
@@ -66,28 +68,28 @@ format_transaction_preview_details(const TransactionPreview &preview)
   std::ostringstream summary;
 
   if (preview.empty()) {
-    summary << "No package changes are available.\n";
+    summary << _("No package changes are available.") << "\n";
   }
 
-  auto append_count_line = [&](size_t count, const char *verb) {
+  auto append_count_line = [&](size_t count, const char *singular, const char *plural) {
     if (count == 0) {
       return;
     }
-    summary << count << " package" << (count == 1 ? "" : "s") << " will be " << verb << ".\n";
+    summary << dnfui_i18n_format_count(count, singular, plural) << "\n";
   };
 
-  append_count_line(preview.install.size(), "installed");
-  append_count_line(preview.upgrade.size(), "upgraded");
-  append_count_line(preview.downgrade.size(), "downgraded");
-  append_count_line(preview.reinstall.size(), "reinstalled");
-  append_count_line(preview.remove.size(), "removed");
+  append_count_line(preview.install.size(), "%zu package will be installed.", "%zu packages will be installed.");
+  append_count_line(preview.upgrade.size(), "%zu package will be upgraded.", "%zu packages will be upgraded.");
+  append_count_line(preview.downgrade.size(), "%zu package will be downgraded.", "%zu packages will be downgraded.");
+  append_count_line(preview.reinstall.size(), "%zu package will be reinstalled.", "%zu packages will be reinstalled.");
+  append_count_line(preview.remove.size(), "%zu package will be removed.", "%zu packages will be removed.");
   summary << format_transaction_preview_space_change(preview.disk_space_delta) << "\n\n";
 
-  append_transaction_preview_section(summary, "To be installed", preview.install);
-  append_transaction_preview_section(summary, "To be upgraded", preview.upgrade);
-  append_transaction_preview_section(summary, "To be downgraded", preview.downgrade);
-  append_transaction_preview_section(summary, "To be reinstalled", preview.reinstall);
-  append_transaction_preview_section(summary, "To be removed", preview.remove);
+  append_transaction_preview_section(summary, _("To be installed"), preview.install);
+  append_transaction_preview_section(summary, _("To be upgraded"), preview.upgrade);
+  append_transaction_preview_section(summary, _("To be downgraded"), preview.downgrade);
+  append_transaction_preview_section(summary, _("To be reinstalled"), preview.reinstall);
+  append_transaction_preview_section(summary, _("To be removed"), preview.remove);
 
   return summary.str();
 }

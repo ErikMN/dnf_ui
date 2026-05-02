@@ -6,6 +6,7 @@
 // -----------------------------------------------------------------------------
 #include "ui_helpers.hpp"
 
+#include "i18n.hpp"
 #include "package_info_controller.hpp"
 #include "package_table_context_menu.hpp"
 #include "package_table_status.hpp"
@@ -63,13 +64,13 @@ fill_package_item_status(SearchWidgets *widgets, PackageItem &item)
     if (a.nevra == item.row.nevra) {
       switch (a.type) {
       case PendingAction::INSTALL:
-        item.status_text = "Pending Install";
+        item.status_text = _("Pending Install");
         break;
       case PendingAction::REINSTALL:
-        item.status_text = "Pending Reinstall";
+        item.status_text = _("Pending Reinstall");
         break;
       case PendingAction::REMOVE:
-        item.status_text = "Pending Removal";
+        item.status_text = _("Pending Removal");
         break;
       }
       return;
@@ -602,12 +603,14 @@ package_table_fill_package_view(SearchWidgets *widgets, const std::vector<Packag
   gtk_column_view_set_show_row_separators(view, TRUE);
   gtk_column_view_set_show_column_separators(view, TRUE);
 
-  gtk_column_view_append_column(view, create_text_column(widgets, "Status", PackageColumnKind::STATUS, 160, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Package", PackageColumnKind::PACKAGE, 180, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Version", PackageColumnKind::VERSION, 150, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Arch", PackageColumnKind::ARCH, 95, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Repo", PackageColumnKind::REPO, 130, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, "Summary", PackageColumnKind::SUMMARY, 0, TRUE));
+  gtk_column_view_append_column(view, create_text_column(widgets, _("Status"), PackageColumnKind::STATUS, 160, FALSE));
+  gtk_column_view_append_column(view,
+                                create_text_column(widgets, _("Package"), PackageColumnKind::PACKAGE, 180, FALSE));
+  gtk_column_view_append_column(view,
+                                create_text_column(widgets, _("Version"), PackageColumnKind::VERSION, 150, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, _("Arch"), PackageColumnKind::ARCH, 95, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, _("Repo"), PackageColumnKind::REPO, 130, FALSE));
+  gtk_column_view_append_column(view, create_text_column(widgets, _("Summary"), PackageColumnKind::SUMMARY, 0, TRUE));
 
   // Wrap the package list in a GTK sort model so column header clicks reorder it.
   GtkSortListModel *sort_model = gtk_sort_list_model_new(G_LIST_MODEL(store), gtk_column_view_get_sorter(view));
@@ -693,9 +696,8 @@ package_table_fill_package_view(SearchWidgets *widgets, const std::vector<Packag
   widgets->results.listbox = nullptr;
 
   // Update count label
-  char count_msg[128];
-  snprintf(count_msg, sizeof(count_msg), "Items: %zu", items.size());
-  gtk_label_set_text(widgets->results.count_label, count_msg);
+  std::string count_msg = dnfui_i18n_format_count(items.size(), "Item: %zu", "Items: %zu");
+  gtk_label_set_text(widgets->results.count_label, count_msg.c_str());
 
   // Restore selection when the same package is still present after a refresh.
   bool restored = false;

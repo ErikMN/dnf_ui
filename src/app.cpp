@@ -9,6 +9,7 @@
 #include "base_manager.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
+#include "i18n.hpp"
 #include "ui/main_window.hpp"
 #include "ui/ui_helpers.hpp"
 #include "ui/widgets.hpp"
@@ -69,6 +70,8 @@ base_repo_state_trace_name(BaseRepoState state)
 int
 app_run_dnfui(int argc, char **argv)
 {
+  dnfui_i18n_init();
+
   GtkApplication *app = gtk_application_new("com.fedora.dnfui", G_APPLICATION_DEFAULT_FLAGS);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
 
@@ -129,7 +132,7 @@ on_installed_refresh_task(GTask *task, gpointer, gpointer, GCancellable *)
   } catch (const std::exception &e) {
     g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
   } catch (...) {
-    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "Installed package refresh failed.");
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", _("Installed package refresh failed."));
   }
 }
 
@@ -212,14 +215,14 @@ static void
 on_backend_warmup_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
   if (g_cancellable_is_cancelled(cancellable)) {
-    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Backend warm up was cancelled.");
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Backend warm up was cancelled."));
     return;
   }
 
   try {
     BaseManager::instance().acquire_read();
     if (g_cancellable_is_cancelled(cancellable)) {
-      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "Backend warm up was cancelled.");
+      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Backend warm up was cancelled."));
       return;
     }
     BaseRepoState repo_state = BaseManager::instance().current_repo_state();
@@ -228,7 +231,7 @@ on_backend_warmup_task(GTask *task, gpointer, gpointer, GCancellable *cancellabl
   } catch (const std::exception &e) {
     g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
   } catch (...) {
-    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "Backend warm up failed.");
+    g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", _("Backend warm up failed."));
   }
 }
 
@@ -258,11 +261,11 @@ on_backend_warmup_task_finished(GObject *, GAsyncResult *result, gpointer user_d
   } else {
     DNFUI_TRACE("Backend warm up task done: %s", base_repo_state_trace_name(*repo_state));
     if (*repo_state == BaseRepoState::LIVE_METADATA) {
-      ui_helpers_set_status(widgets->query.status_label, "Ready. Live repository metadata loaded.", "gray");
+      ui_helpers_set_status(widgets->query.status_label, _("Ready. Live repository metadata loaded."), "gray");
     } else if (*repo_state == BaseRepoState::CACHED_METADATA) {
-      ui_helpers_set_status(widgets->query.status_label, "Ready. Using cached repository metadata.", "blue");
+      ui_helpers_set_status(widgets->query.status_label, _("Ready. Using cached repository metadata."), "blue");
     } else {
-      ui_helpers_set_status(widgets->query.status_label, "Ready. Showing installed packages only.", "blue");
+      ui_helpers_set_status(widgets->query.status_label, _("Ready. Showing installed packages only."), "blue");
     }
   }
 

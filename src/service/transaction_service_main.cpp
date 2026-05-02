@@ -6,6 +6,8 @@
 // -----------------------------------------------------------------------------
 #include "transaction_service.hpp"
 
+#include "i18n.hpp"
+
 #include <cstdio>
 #include <cstring>
 
@@ -15,6 +17,8 @@
 int
 main(int argc, char **argv)
 {
+  dnfui_i18n_init();
+
   TransactionServiceOptions options;
 
   for (int i = 1; i < argc; ++i) {
@@ -23,10 +27,10 @@ main(int argc, char **argv)
     } else if (std::strcmp(argv[i], "--session") == 0) {
       options.bus_type = G_BUS_TYPE_SESSION;
     } else if (std::strcmp(argv[i], "--help") == 0) {
-      std::printf("Usage: dnfui-service [--session] [--system]\n");
+      std::puts(_("Usage: dnfui-service [--session] [--system]"));
       return 0;
     } else {
-      std::fprintf(stderr, "Unknown option: %s\n", argv[i]);
+      std::fputs(dnfui_i18n_format(_("Unknown option: %s\n"), argv[i]).c_str(), stderr);
       return 1;
     }
   }

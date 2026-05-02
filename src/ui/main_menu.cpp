@@ -6,6 +6,7 @@
 // -----------------------------------------------------------------------------
 #include "main_menu.hpp"
 
+#include "i18n.hpp"
 #include "package_query_controller.hpp"
 #include "ui_helpers.hpp"
 #include "widgets.hpp"
@@ -47,7 +48,7 @@ on_menu_clear_cache(GSimpleAction *, GVariant *, gpointer user_data)
   }
 
   package_query_clear_search_cache();
-  ui_helpers_set_status(data->widgets->query.status_label, "Search cache cleared.", "green");
+  ui_helpers_set_status(data->widgets->query.status_label, _("Search cache cleared."), "green");
 }
 
 // -----------------------------------------------------------------------------
@@ -82,15 +83,15 @@ on_menu_about(GSimpleAction *, GVariant *, gpointer user_data)
 
   gtk_show_about_dialog(GTK_WINDOW(data->window),
                         "program-name",
-                        "DNF UI",
+                        _("DNF UI"),
                         "version",
                         DNFUI_VERSION,
                         "comments",
-                        "Graphical package manager frontend for Fedora.",
+                        _("Graphical package manager frontend for Fedora."),
                         "website",
                         "https://github.com/ErikMN/dnf_ui",
                         "website-label",
-                        "GitHub repository",
+                        _("GitHub repository"),
                         "authors",
                         authors,
                         "logo-icon-name",
@@ -141,25 +142,25 @@ main_menu_create()
   GMenu *menu_bar = g_menu_new();
 
   GMenu *file_menu = g_menu_new();
-  g_menu_append(file_menu, "Quit", "win.quit");
-  g_menu_append_submenu(menu_bar, "File", G_MENU_MODEL(file_menu));
+  g_menu_append(file_menu, _("Quit"), "win.quit");
+  g_menu_append_submenu(menu_bar, _("File"), G_MENU_MODEL(file_menu));
   g_object_unref(file_menu);
 
   GMenu *view_menu = g_menu_new();
-  g_menu_append(view_menu, "History Panel", "win.show-history");
-  g_menu_append(view_menu, "Package Info Panel", "win.show-info");
-  g_menu_append_submenu(menu_bar, "View", G_MENU_MODEL(view_menu));
+  g_menu_append(view_menu, _("History Panel"), "win.show-history");
+  g_menu_append(view_menu, _("Package Info Panel"), "win.show-info");
+  g_menu_append_submenu(menu_bar, _("View"), G_MENU_MODEL(view_menu));
   g_object_unref(view_menu);
 
   GMenu *package_menu = g_menu_new();
-  g_menu_append(package_menu, "Clear List", "win.clear-list");
-  g_menu_append(package_menu, "Clear Search Cache", "win.clear-cache");
-  g_menu_append_submenu(menu_bar, "Package", G_MENU_MODEL(package_menu));
+  g_menu_append(package_menu, _("Clear List"), "win.clear-list");
+  g_menu_append(package_menu, _("Clear Search Cache"), "win.clear-cache");
+  g_menu_append_submenu(menu_bar, _("Package"), G_MENU_MODEL(package_menu));
   g_object_unref(package_menu);
 
   GMenu *help_menu = g_menu_new();
-  g_menu_append(help_menu, "About DNF UI", "win.about");
-  g_menu_append_submenu(menu_bar, "Help", G_MENU_MODEL(help_menu));
+  g_menu_append(help_menu, _("About DNF UI"), "win.about");
+  g_menu_append_submenu(menu_bar, _("Help"), G_MENU_MODEL(help_menu));
   g_object_unref(help_menu);
 
   GtkWidget *menu = gtk_popover_menu_bar_new_from_model(G_MENU_MODEL(menu_bar));

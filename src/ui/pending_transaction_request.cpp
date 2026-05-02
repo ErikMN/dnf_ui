@@ -7,6 +7,7 @@
 #include "pending_transaction_request.hpp"
 
 #include "dnf_backend/dnf_backend.hpp"
+#include "i18n.hpp"
 
 // -----------------------------------------------------------------------------
 // Split the pending queue into install, remove, and reinstall transaction specs.
@@ -58,8 +59,8 @@ pending_transaction_validate_request(const TransactionRequest &request, std::str
     // Re-check remove specs at apply time so self-protection still holds even
     // if outdated UI state or future code paths bypass button sensitivity.
     if (dnf_backend_is_self_protected_transaction_spec(spec)) {
-      error_out = "DNF UI cannot remove the package that owns the running application. Close DNF UI and remove it from "
-                  "another tool.";
+      error_out = _("DNF UI cannot remove the package that owns the running application. Close DNF UI and remove it "
+                    "from another tool.");
       return false;
     }
   }
@@ -68,7 +69,7 @@ pending_transaction_validate_request(const TransactionRequest &request, std::str
     // Re-check reinstall specs for the same reason: the running app must never
     // ask the backend to modify the RPM that owns the current executable.
     if (dnf_backend_is_self_protected_transaction_spec(spec)) {
-      error_out = "DNF UI cannot reinstall the package that owns the running application while it is running.";
+      error_out = _("DNF UI cannot reinstall the package that owns the running application while it is running.");
       return false;
     }
   }
