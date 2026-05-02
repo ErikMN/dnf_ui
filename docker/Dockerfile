@@ -23,4 +23,9 @@ RUN dnf install -y \
     systemd-rpm-macros \
     dbus-daemon \
     dbus-glib \
+    procps-ng \
+    psmisc \
+    valgrind \
+    heaptrack \
+    perf \
     && dnf clean all
