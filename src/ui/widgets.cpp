@@ -11,9 +11,14 @@
 #include "ui_helpers.hpp"
 #include "widgets_internal.hpp"
 
+#include <atomic>
+
 namespace {
 
 constexpr const char *kTaskSearchWidgetsHoldKey = "dnfui-task-search-widgets-hold";
+
+// Prevent starting more than one repository refresh task at the same time.
+std::atomic<bool> repository_refresh_running { false };
 
 }
 
@@ -156,6 +161,7 @@ widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
   GTask *task = G_TASK(res);
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
   if (widgets_task_should_skip_completion(task, widgets)) {
+    repository_refresh_running = false;
     return;
   }
 
@@ -167,6 +173,8 @@ widgets_on_rebuild_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
   // Refresh temporarily disables the main Search button while the rebuild runs.
   // Restore it once the background refresh finishes so the query UI unlocks.
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), TRUE);
+
+  repository_refresh_running = false;
 
   if (refresh_state) {
     // Search caches are bound to the old Base generation and must be dropped
@@ -200,6 +208,15 @@ void
 widgets_on_refresh_button_clicked(GtkButton *, gpointer user_data)
 {
   SearchWidgets *widgets = static_cast<SearchWidgets *>(user_data);
+  if (!widgets) {
+    return;
+  }
+
+  bool expected = false;
+  if (!repository_refresh_running.compare_exchange_strong(expected, true)) {
+    ui_helpers_set_status(widgets->query.status_label, _("Repository refresh is already running."), "gray");
+    return;
+  }
 
   // Once a rebuild starts, stop serving cached search results so the UI does
   // not reuse rows from repository state that is changing.
