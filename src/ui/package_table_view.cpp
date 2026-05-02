@@ -441,7 +441,10 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
                    }),
                    nullptr);
 
-  GtkColumnViewColumn *column = gtk_column_view_column_new(title, factory);
+  GtkColumnViewColumn *column = gtk_column_view_column_new(title, nullptr);
+  gtk_column_view_column_set_factory(column, factory);
+  g_object_unref(factory);
+
   g_object_set_data(G_OBJECT(column), "package-column-kind", GINT_TO_POINTER(static_cast<int>(kind)));
   gtk_column_view_column_set_resizable(column, TRUE);
   gtk_column_view_column_set_expand(column, expand);
@@ -623,7 +626,10 @@ package_table_fill_package_view(SearchWidgets *widgets, const std::vector<Packag
   append_package_column(view, create_text_column(widgets, _("Summary"), PackageColumnKind::SUMMARY, 0, TRUE));
 
   // Wrap the package list in a GTK sort model so column header clicks reorder it.
-  GtkSortListModel *sort_model = gtk_sort_list_model_new(G_LIST_MODEL(store), gtk_column_view_get_sorter(view));
+  GtkSortListModel *sort_model = gtk_sort_list_model_new(nullptr, nullptr);
+  gtk_sort_list_model_set_model(sort_model, G_LIST_MODEL(store));
+  gtk_sort_list_model_set_sorter(sort_model, gtk_column_view_get_sorter(view));
+  g_object_unref(store);
 
   GtkSingleSelection *sel = gtk_single_selection_new(nullptr);
   gtk_single_selection_set_autoselect(sel, FALSE);
