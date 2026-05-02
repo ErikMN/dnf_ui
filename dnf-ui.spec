@@ -43,7 +43,7 @@ system service with Polkit authorization.
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/com.fedora.dnfui.desktop
-appstreamcli validate --no-net packaging/com.fedora.dnfui.metainfo.xml
+appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/com.fedora.dnfui.metainfo.xml
 %meson_test
 
 %post

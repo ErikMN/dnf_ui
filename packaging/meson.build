@@ -16,8 +16,12 @@ i18n.merge_file(
   install_tag: 'runtime',
 )
 
-install_data(
-  'com.fedora.dnfui.metainfo.xml',
+i18n.merge_file(
+  input: 'com.fedora.dnfui.metainfo.xml.in',
+  output: 'com.fedora.dnfui.metainfo.xml',
+  type: 'xml',
+  po_dir: '../po',
+  install: true,
   install_dir: metainfo_dir,
   install_tag: 'runtime',
 )
