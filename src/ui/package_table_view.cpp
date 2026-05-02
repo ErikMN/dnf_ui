@@ -445,14 +445,26 @@ create_text_column(SearchWidgets *widgets, const char *title, PackageColumnKind 
   g_object_set_data(G_OBJECT(column), "package-column-kind", GINT_TO_POINTER(static_cast<int>(kind)));
   gtk_column_view_column_set_resizable(column, TRUE);
   gtk_column_view_column_set_expand(column, expand);
-  gtk_column_view_column_set_sorter(
-      column,
-      GTK_SORTER(gtk_custom_sorter_new(column_sorter_compare, new ColumnSorterData { kind }, column_sorter_data_free)));
+
+  GtkSorter *sorter =
+      GTK_SORTER(gtk_custom_sorter_new(column_sorter_compare, new ColumnSorterData { kind }, column_sorter_data_free));
+  gtk_column_view_column_set_sorter(column, sorter);
+  g_object_unref(sorter);
 
   if (fixed_width > 0) {
     gtk_column_view_column_set_fixed_width(column, fixed_width);
   }
   return column;
+}
+
+// -----------------------------------------------------------------------------
+// Append one package table column and release the caller reference.
+// -----------------------------------------------------------------------------
+static void
+append_package_column(GtkColumnView *view, GtkColumnViewColumn *column)
+{
+  gtk_column_view_append_column(view, column);
+  g_object_unref(column);
 }
 
 // -----------------------------------------------------------------------------
@@ -603,14 +615,12 @@ package_table_fill_package_view(SearchWidgets *widgets, const std::vector<Packag
   gtk_column_view_set_show_row_separators(view, TRUE);
   gtk_column_view_set_show_column_separators(view, TRUE);
 
-  gtk_column_view_append_column(view, create_text_column(widgets, _("Status"), PackageColumnKind::STATUS, 160, FALSE));
-  gtk_column_view_append_column(view,
-                                create_text_column(widgets, _("Package"), PackageColumnKind::PACKAGE, 180, FALSE));
-  gtk_column_view_append_column(view,
-                                create_text_column(widgets, _("Version"), PackageColumnKind::VERSION, 150, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, _("Arch"), PackageColumnKind::ARCH, 95, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, _("Repo"), PackageColumnKind::REPO, 130, FALSE));
-  gtk_column_view_append_column(view, create_text_column(widgets, _("Summary"), PackageColumnKind::SUMMARY, 0, TRUE));
+  append_package_column(view, create_text_column(widgets, _("Status"), PackageColumnKind::STATUS, 160, FALSE));
+  append_package_column(view, create_text_column(widgets, _("Package"), PackageColumnKind::PACKAGE, 180, FALSE));
+  append_package_column(view, create_text_column(widgets, _("Version"), PackageColumnKind::VERSION, 150, FALSE));
+  append_package_column(view, create_text_column(widgets, _("Arch"), PackageColumnKind::ARCH, 95, FALSE));
+  append_package_column(view, create_text_column(widgets, _("Repo"), PackageColumnKind::REPO, 130, FALSE));
+  append_package_column(view, create_text_column(widgets, _("Summary"), PackageColumnKind::SUMMARY, 0, TRUE));
 
   // Wrap the package list in a GTK sort model so column header clicks reorder it.
   GtkSortListModel *sort_model = gtk_sort_list_model_new(G_LIST_MODEL(store), gtk_column_view_get_sorter(view));
@@ -724,6 +734,7 @@ package_table_fill_package_view(SearchWidgets *widgets, const std::vector<Packag
   }
 
   g_object_unref(sort_model);
+  g_object_unref(sel);
 }
 
 // -----------------------------------------------------------------------------
