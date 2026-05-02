@@ -42,7 +42,7 @@ system service with Polkit authorization.
 %meson_install
 
 %check
-desktop-file-validate packaging/com.fedora.dnfui.desktop
+desktop-file-validate %{buildroot}%{_datadir}/applications/com.fedora.dnfui.desktop
 appstreamcli validate --no-net packaging/com.fedora.dnfui.metainfo.xml
 %meson_test
 

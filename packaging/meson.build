@@ -1,11 +1,17 @@
+i18n = import('i18n')
+
 install_data(
   'com.fedora.dnfui.policy',
   install_dir: polkit_action_dir,
   install_tag: 'transaction-service',
 )
 
-install_data(
-  'com.fedora.dnfui.desktop',
+i18n.merge_file(
+  input: 'com.fedora.dnfui.desktop.in',
+  output: 'com.fedora.dnfui.desktop',
+  type: 'desktop',
+  po_dir: '../po',
+  install: true,
   install_dir: desktop_file_dir,
   install_tag: 'runtime',
 )
