@@ -14,6 +14,10 @@
 #include <iostream>
 #include <stdexcept>
 
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
+
 namespace {
 
 enum class RepoLoadMode {
@@ -266,6 +270,32 @@ BaseManager::rebuild_system_only()
   base_ptr = rebuilt_base;
   repo_state = BaseRepoState::INSTALLED_ONLY;
   generation.fetch_add(1, std::memory_order_relaxed);
+}
+
+// -----------------------------------------------------------------------------
+// Drop the cached Base so memory-heavy metadata does not stay resident after
+// short-lived backend work.
+// -----------------------------------------------------------------------------
+void
+BaseManager::drop_cached_base()
+{
+  bool dropped = false;
+  {
+    std::unique_lock lock(base_mutex);
+    if (!base_ptr) {
+      return;
+    }
+
+    base_ptr.reset();
+    dropped = true;
+  }
+
+#ifdef __GLIBC__
+  if (dropped) {
+    // Return freed libdnf metadata pages to the OS when glibc supports it.
+    malloc_trim(0);
+  }
+#endif
 }
 
 // -----------------------------------------------------------------------------
