@@ -70,10 +70,9 @@ package_table_show_context_menu(GtkWidget *anchor,
   // while remove and reinstall use the installed row.
   // Keep the running app visible in the table, but block context-menu actions
   // that would modify the package currently owning this executable.
-  bool self_protected =
-      action_rows.has_installed_row && dnf_backend_is_package_self_protected(action_rows.installed_row);
-  bool install_blocked = pending_transaction_install_action_blocked_by_self_protection(action_rows, self_protected);
-  bool can_reinstall = action_rows.can_try_reinstall && !self_protected;
+  bool install_blocked =
+      pending_transaction_install_action_blocked_by_self_protection(action_rows, action_rows.self_protected);
+  bool can_reinstall = action_rows.can_try_reinstall && !action_rows.self_protected;
 
   PendingAction::Type pending_install_type;
   bool has_pending_install = action_rows.has_install_row &&
@@ -111,7 +110,7 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              remove_label,
-                             action_rows.has_installed_row && !self_protected,
+                             action_rows.has_installed_row && !action_rows.self_protected,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));

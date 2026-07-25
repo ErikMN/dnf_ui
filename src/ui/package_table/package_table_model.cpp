@@ -28,20 +28,23 @@ package_row_quark()
 // Snapshot the visible status text and its sort order for one package row.
 // -----------------------------------------------------------------------------
 void
-package_table_fill_item_status(MainWindowUiState *widgets, PackageItem &item)
+package_table_fill_item_status(MainWindowUiState *widgets,
+                               PackageItem &item,
+                               const InstalledPackageResolution &resolution)
 {
   // Keep Status sorting tied to the stable package state so marking a pending
   // action does not move the row away from the user in the current view.
-  PackageInstallState install_state =
-      item.upgrade_target() ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(item.row);
+  PackageInstallState install_state = item.upgrade_target() ? PackageInstallState::UPGRADEABLE : resolution.state;
   item.status_rank = dnf_backend_get_install_state_sort_rank(install_state);
 
   PackageTableRow table_row {
     .row = item.row,
     .daemon_upgrade = item.daemon_upgrade,
   };
+  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_resolved_selection(
+      item.row, item.upgrade_target(), table_row.upgrade_generation(), resolution);
   PendingAction::Type action_type;
-  if (package_table_pending_action_for_row(widgets, table_row, action_type)) {
+  if (package_table_pending_action_for_resolved_row(widgets, table_row, action_rows, action_type)) {
     item.status_text = package_table_pending_action_status_text(action_type, install_state);
     return;
   }
@@ -53,7 +56,7 @@ package_table_fill_item_status(MainWindowUiState *widgets, PackageItem &item)
 // Snapshot display values that depend on installed-package state.
 // -----------------------------------------------------------------------------
 void
-package_table_fill_item_display_values(PackageItem &item)
+package_table_fill_item_display_values(PackageItem &item, const InstalledPackageResolution &resolution)
 {
   PackageTableDisplayValues values {
     .version = item.row.version,
@@ -64,10 +67,9 @@ package_table_fill_item_display_values(PackageItem &item)
   };
 
   if (const TransactionServiceUpgradeTarget *upgrade_target = item.upgrade_target()) {
-    PackageRow installed_row;
-    if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row)) {
-      values.version = installed_row.version;
-      values.release = installed_row.release;
+    if (resolution.has_installed_row) {
+      values.version = resolution.installed_row.version;
+      values.release = resolution.installed_row.release;
     } else {
       values.version.clear();
       values.release.clear();
@@ -80,17 +82,14 @@ package_table_fill_item_display_values(PackageItem &item)
     return;
   }
 
-  PackageRow installed_row;
-  if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row)) {
-    if (installed_row.nevra != item.row.nevra) {
-      // The table column is named Version, so keep it aligned with the Info tab Version field.
-      values.version = installed_row.version;
-      values.release = installed_row.release;
-    }
-    values.repo = installed_row.repo;
+  if (!resolution.exact_installed && resolution.has_installed_row) {
+    // The table column is named Version, so keep it aligned with the Info tab Version field.
+    values.version = resolution.installed_row.version;
+    values.release = resolution.installed_row.release;
+    values.repo = resolution.installed_row.repo;
   }
 
-  if (dnf_backend_get_package_install_state(item.row) == PackageInstallState::UPGRADEABLE) {
+  if (resolution.state == PackageInstallState::UPGRADEABLE) {
     values.update_version =
         item.row.repo_candidate_version.empty() ? item.row.version : item.row.repo_candidate_version;
     values.update_release =
@@ -121,8 +120,9 @@ make_package_object(MainWindowUiState *widgets, const PackageRow &row)
   GObject *obj = G_OBJECT(g_object_new(G_TYPE_OBJECT, nullptr));
   auto *item = new PackageItem;
   item->row = row;
-  package_table_fill_item_display_values(*item);
-  package_table_fill_item_status(widgets, *item);
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item->row);
+  package_table_fill_item_display_values(*item, resolution);
+  package_table_fill_item_status(widgets, *item, resolution);
   g_object_set_qdata_full(obj, package_row_quark(), item, +[](gpointer p) { delete static_cast<PackageItem *>(p); });
 
   return obj;
@@ -135,8 +135,9 @@ make_package_object(MainWindowUiState *widgets, const PackageTableRow &row)
   auto *item = new PackageItem;
   item->row = row.row;
   item->daemon_upgrade = row.daemon_upgrade;
-  package_table_fill_item_display_values(*item);
-  package_table_fill_item_status(widgets, *item);
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item->row);
+  package_table_fill_item_display_values(*item, resolution);
+  package_table_fill_item_status(widgets, *item, resolution);
   g_object_set_qdata_full(obj, package_row_quark(), item, +[](gpointer p) { delete static_cast<PackageItem *>(p); });
 
   return obj;

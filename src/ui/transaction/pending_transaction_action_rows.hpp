@@ -23,6 +23,8 @@ struct PendingTransactionActionRows {
   bool install_is_upgrade = false;
   bool has_install_row = false;
   bool has_installed_row = false;
+  // True when the installed package that would be modified owns the running app.
+  bool self_protected = false;
   // Fast UI check only. This does not prove that reinstall is available from repositories.
   bool can_try_reinstall = false;
   std::string upgrade_spec;
@@ -36,6 +38,11 @@ PendingTransactionActionRows
 pending_transaction_action_rows_for_selection(const PackageRow &selected,
                                               const TransactionServiceUpgradeTarget *upgrade_target,
                                               uint64_t upgrade_generation);
+PendingTransactionActionRows
+pending_transaction_action_rows_for_resolved_selection(const PackageRow &selected,
+                                                       const TransactionServiceUpgradeTarget *upgrade_target,
+                                                       uint64_t upgrade_generation,
+                                                       const InstalledPackageResolution &installed_resolution);
 // -----------------------------------------------------------------------------
 // Add or replace one pending upgrade action from a package row with an optional daemon target.
 // Returns false when the row is not an upgrade candidate.

@@ -36,11 +36,11 @@ require_stored_status_matches_pending_action(MainWindowUiState &widgets, Package
   PendingAction::Type action_type;
   REQUIRE(package_table_pending_action_for_row(&widgets, table_row, action_type));
 
-  PackageInstallState install_state =
-      item.upgrade_target() ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(item.row);
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
+  PackageInstallState install_state = item.upgrade_target() ? PackageInstallState::UPGRADEABLE : resolution.state;
   REQUIRE(std::string(package_table_pending_action_status_text(action_type, install_state)) == expected_text);
 
-  package_table_fill_item_status(&widgets, item);
+  package_table_fill_item_status(&widgets, item, resolution);
   REQUIRE(item.status_text == expected_text);
   REQUIRE(package_table_column_text(item, PackageColumnKind::STATUS) == expected_text);
 }
@@ -127,6 +127,31 @@ TEST_CASE("Package table pending reinstall status uses resolved installed row")
   item.row = update;
 
   require_stored_status_matches_pending_action(widgets, item, "Pending Reinstall");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that pending status does not leak between two exact installed EVRs.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table pending status keeps exact installed NEVRAs separate")
+{
+  reset_backend_globals();
+
+  PackageRow older = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_status_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ older, newer });
+
+  MainWindowUiState widgets;
+  widgets.transaction.actions = {
+    { PendingAction::REMOVE, newer.nevra, newer.nevra },
+  };
+
+  PackageTableRow table_row {
+    .row = older,
+    .daemon_upgrade = {},
+  };
+
+  PendingAction::Type action_type;
+  REQUIRE_FALSE(package_table_pending_action_for_row(&widgets, table_row, action_type));
 }
 
 // -----------------------------------------------------------------------------

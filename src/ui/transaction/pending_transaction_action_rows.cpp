@@ -65,18 +65,23 @@ remove_pending_upgrade_by_transaction_spec(std::vector<PendingAction> &actions, 
 // Resolve package IDs for action buttons without running libdnf queries.
 // -----------------------------------------------------------------------------
 PendingTransactionActionRows
-pending_transaction_action_rows_for_selection(const PackageRow &selected,
-                                              const TransactionServiceUpgradeTarget *upgrade_target,
-                                              uint64_t upgrade_generation)
+pending_transaction_action_rows_for_resolved_selection(const PackageRow &selected,
+                                                       const TransactionServiceUpgradeTarget *upgrade_target,
+                                                       uint64_t upgrade_generation,
+                                                       const InstalledPackageResolution &installed_resolution)
 {
   PendingTransactionActionRows rows;
-  rows.state = upgrade_target ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(selected);
+  rows.state = upgrade_target ? PackageInstallState::UPGRADEABLE : installed_resolution.state;
   rows.install_is_upgrade = rows.state == PackageInstallState::UPGRADEABLE;
   rows.install_row = selected;
   rows.installed_row = selected;
-
-  const bool selected_is_installed = dnf_backend_is_package_installed_exact(selected);
-  rows.has_installed_row = selected_is_installed;
+  rows.has_installed_row = installed_resolution.exact_installed;
+  rows.self_protected = installed_resolution.exact_installed && installed_resolution.self_protected;
+  if (!installed_resolution.exact_installed && installed_resolution.has_installed_row) {
+    rows.has_installed_row = true;
+    rows.installed_row = installed_resolution.installed_row;
+    rows.self_protected = installed_resolution.self_protected;
+  }
 
   // Upgrade actions need the available package ID, not always the visible row ID.
   if (rows.install_is_upgrade) {
@@ -84,12 +89,13 @@ pending_transaction_action_rows_for_selection(const PackageRow &selected,
       rows.has_install_row = DaemonUpgradeState::instance().is_current_target(*upgrade_target, upgrade_generation);
       rows.install_row.nevra = upgrade_target->nevra.empty() ? selected.nevra : upgrade_target->nevra;
       rows.upgrade_spec = upgrade_target->upgrade_spec();
-      rows.has_installed_row = dnf_backend_get_installed_package_row_by_name_arch(selected, rows.installed_row);
+      rows.has_installed_row = installed_resolution.has_installed_row;
+      rows.self_protected = rows.has_installed_row && installed_resolution.self_protected;
       rows.can_try_reinstall = rows.has_installed_row;
       return rows;
     }
 
-    if (selected_is_installed) {
+    if (installed_resolution.exact_installed) {
       // Installed-list rows store the matching available upgrade package ID when the backend annotates them.
       rows.has_install_row = !selected.repo_candidate_nevra.empty();
       rows.install_row.nevra = selected.repo_candidate_nevra;
@@ -97,7 +103,8 @@ pending_transaction_action_rows_for_selection(const PackageRow &selected,
       // Upgradable-list rows are already the available upgrade package.
       // The installed package ID comes from the installed snapshot.
       rows.has_install_row = true;
-      rows.has_installed_row = dnf_backend_get_installed_package_row_by_name_arch(selected, rows.installed_row);
+      rows.has_installed_row = installed_resolution.has_installed_row;
+      rows.self_protected = rows.has_installed_row && installed_resolution.self_protected;
     }
     rows.upgrade_spec = upgrade_transaction_spec(rows.has_installed_row ? rows.installed_row : selected);
     rows.can_try_reinstall = rows.has_installed_row;
@@ -114,6 +121,16 @@ pending_transaction_action_rows_for_selection(const PackageRow &selected,
       rows.state != PackageInstallState::INSTALLED_NEWER_THAN_REPO;
 
   return rows;
+}
+
+PendingTransactionActionRows
+pending_transaction_action_rows_for_selection(const PackageRow &selected,
+                                              const TransactionServiceUpgradeTarget *upgrade_target,
+                                              uint64_t upgrade_generation)
+{
+  InstalledPackageResolution installed_resolution = dnf_backend_resolve_installed_package(selected);
+  return pending_transaction_action_rows_for_resolved_selection(
+      selected, upgrade_target, upgrade_generation, installed_resolution);
 }
 
 // -----------------------------------------------------------------------------

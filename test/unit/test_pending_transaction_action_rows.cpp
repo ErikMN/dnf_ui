@@ -133,6 +133,24 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
 }
 
 // -----------------------------------------------------------------------------
+// Verify that exact installed rows keep their own NEVRA when another installed EVR exists.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows keep exact installed row")
+{
+  reset_backend_globals();
+
+  PackageRow older = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ older, newer });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
+
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == older.nevra);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that daemon upgrade targets are used only while their snapshot is current.
 // -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction action rows resolve daemon upgrade target")

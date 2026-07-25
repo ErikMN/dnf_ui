@@ -155,6 +155,9 @@ It stores:
 The installed snapshot lets the UI classify package rows without doing a fresh
 libdnf5 query for every table update.
 
+When one UI decision needs several installed-state answers for the same row,
+the backend resolves them together from one snapshot.
+
 The same snapshot also lets the UI resolve the installed package behind an
 upgradable repository candidate. Upgrade actions keep the visible update NEVRA
 for UI navigation, but send a package name and architecture spec to

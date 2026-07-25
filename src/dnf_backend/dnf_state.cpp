@@ -72,6 +72,60 @@ self_protected_file_path()
   return {};
 }
 
+// -----------------------------------------------------------------------------
+// Resolve all installed-state values for one row while holding g_installed_mutex.
+// -----------------------------------------------------------------------------
+InstalledPackageResolution
+resolve_installed_package_locked(const PackageRow &row)
+{
+  InstalledPackageResolution resolution;
+  resolution.exact_installed = g_installed_nevras.count(row.nevra) > 0;
+  resolution.self_protected = g_self_protected_package_names.count(row.name) > 0;
+
+  auto installed_it = g_installed_rows_by_name_arch.find(row.name_arch_key());
+  if (installed_it != g_installed_rows_by_name_arch.end()) {
+    resolution.has_installed_row = true;
+    resolution.installed_row = installed_it->second;
+  }
+
+  if (resolution.exact_installed) {
+    switch (row.repo_candidate_relation) {
+    case PackageRepoCandidateRelation::UNKNOWN:
+      // Annotation was not run or failed. The package is known-installed, but the repo relation is unknown.
+      // Without a successful repo query, use INSTALLED so the UI does not misrepresent the package state.
+    case PackageRepoCandidateRelation::SAME:
+      resolution.state = PackageInstallState::INSTALLED;
+      break;
+    case PackageRepoCandidateRelation::NONE:
+      resolution.state = PackageInstallState::LOCAL_ONLY;
+      break;
+    case PackageRepoCandidateRelation::NEWER:
+      resolution.state = PackageInstallState::UPGRADEABLE;
+      break;
+    case PackageRepoCandidateRelation::OLDER:
+      resolution.state = PackageInstallState::INSTALLED_NEWER_THAN_REPO;
+      break;
+    default:
+      resolution.state = PackageInstallState::INSTALLED;
+      break;
+    }
+    return resolution;
+  }
+
+  if (!resolution.has_installed_row) {
+    resolution.state = PackageInstallState::AVAILABLE;
+    return resolution;
+  }
+
+  if (libdnf5::rpm::evrcmp(row, resolution.installed_row) > 0) {
+    resolution.state = PackageInstallState::UPGRADEABLE;
+  } else {
+    resolution.state = PackageInstallState::INSTALLED_NEWER_THAN_REPO;
+  }
+
+  return resolution;
+}
+
 } // namespace
 
 namespace dnf_backend_internal {
@@ -255,34 +309,17 @@ PackageInstallState
 dnf_backend_get_package_install_state(const PackageRow &row)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  if (g_installed_nevras.count(row.nevra) > 0) {
-    switch (row.repo_candidate_relation) {
-    case PackageRepoCandidateRelation::UNKNOWN:
-      // Annotation was not run or failed. The package is known-installed, but the repo relation is unknown.
-      // Without a successful repo query, use INSTALLED so the UI does not misrepresent the package state.
-    case PackageRepoCandidateRelation::SAME:
-      return PackageInstallState::INSTALLED;
-    case PackageRepoCandidateRelation::NONE:
-      return PackageInstallState::LOCAL_ONLY;
-    case PackageRepoCandidateRelation::NEWER:
-      return PackageInstallState::UPGRADEABLE;
-    case PackageRepoCandidateRelation::OLDER:
-      return PackageInstallState::INSTALLED_NEWER_THAN_REPO;
-    default:
-      return PackageInstallState::INSTALLED;
-    }
-  }
+  return resolve_installed_package_locked(row).state;
+}
 
-  auto it = g_installed_rows_by_name_arch.find(row.name_arch_key());
-  if (it == g_installed_rows_by_name_arch.end()) {
-    return PackageInstallState::AVAILABLE;
-  }
-
-  if (libdnf5::rpm::evrcmp(row, it->second) > 0) {
-    return PackageInstallState::UPGRADEABLE;
-  }
-
-  return PackageInstallState::INSTALLED_NEWER_THAN_REPO;
+// -----------------------------------------------------------------------------
+// Resolve installed-package state for one visible row from one installed snapshot.
+// -----------------------------------------------------------------------------
+InstalledPackageResolution
+dnf_backend_resolve_installed_package(const PackageRow &row)
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  return resolve_installed_package_locked(row);
 }
 
 // -----------------------------------------------------------------------------

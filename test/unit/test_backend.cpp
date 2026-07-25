@@ -552,6 +552,132 @@ TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that installed package resolution returns one coherent installed-state result.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed package resolution reports exact installed rows")
+{
+  reset_backend_globals();
+
+  PackageRow row;
+  row.nevra = "demo-1.0-1.x86_64";
+  row.name = "demo";
+  row.version = "1.0";
+  row.release = "1";
+  row.arch = "x86_64";
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ row });
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(row);
+
+  REQUIRE(resolution.state == PackageInstallState::INSTALLED);
+  REQUIRE(resolution.exact_installed);
+  REQUIRE(resolution.has_installed_row);
+  REQUIRE(resolution.installed_row.nevra == row.nevra);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installed package resolution reports available rows.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed package resolution reports available rows")
+{
+  reset_backend_globals();
+
+  PackageRow row;
+  row.nevra = "demo-1.0-1.x86_64";
+  row.name = "demo";
+  row.version = "1.0";
+  row.release = "1";
+  row.arch = "x86_64";
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(row);
+
+  REQUIRE(resolution.state == PackageInstallState::AVAILABLE);
+  REQUIRE_FALSE(resolution.exact_installed);
+  REQUIRE_FALSE(resolution.has_installed_row);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installed package resolution reports available updates.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed package resolution reports upgradeable rows")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  installed_row.nevra = "demo-1.0-1.x86_64";
+  installed_row.name = "demo";
+  installed_row.version = "1.0";
+  installed_row.release = "1";
+  installed_row.arch = "x86_64";
+
+  PackageRow update_row = installed_row;
+  update_row.nevra = "demo-2.0-1.x86_64";
+  update_row.version = "2.0";
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed_row });
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(update_row);
+
+  REQUIRE(resolution.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE_FALSE(resolution.exact_installed);
+  REQUIRE(resolution.has_installed_row);
+  REQUIRE(resolution.installed_row.nevra == installed_row.nevra);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installed package resolution reports installed rows newer than the selected repo row.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed package resolution reports installed-newer rows")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  installed_row.nevra = "demo-2.0-1.x86_64";
+  installed_row.name = "demo";
+  installed_row.version = "2.0";
+  installed_row.release = "1";
+  installed_row.arch = "x86_64";
+
+  PackageRow older_repo_row = installed_row;
+  older_repo_row.nevra = "demo-1.0-1.x86_64";
+  older_repo_row.version = "1.0";
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed_row });
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(older_repo_row);
+
+  REQUIRE(resolution.state == PackageInstallState::INSTALLED_NEWER_THAN_REPO);
+  REQUIRE_FALSE(resolution.exact_installed);
+  REQUIRE(resolution.has_installed_row);
+  REQUIRE(resolution.installed_row.nevra == installed_row.nevra);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installed package resolution reports local-only exact installed rows.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed package resolution reports local-only rows")
+{
+  reset_backend_globals();
+
+  PackageRow row;
+  row.nevra = "demo-1.0-1.x86_64";
+  row.name = "demo";
+  row.version = "1.0";
+  row.release = "1";
+  row.arch = "x86_64";
+  row.repo_candidate_relation = PackageRepoCandidateRelation::NONE;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ row });
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(row);
+
+  REQUIRE(resolution.state == PackageInstallState::LOCAL_ONLY);
+  REQUIRE(resolution.exact_installed);
+  REQUIRE(resolution.has_installed_row);
+  REQUIRE(resolution.installed_row.nevra == row.nevra);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that install-state sorting keeps installed-like rows before available.
 // -----------------------------------------------------------------------------
 TEST_CASE("Default install state sort keeps installed rows first")

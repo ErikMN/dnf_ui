@@ -30,7 +30,8 @@ make_table_test_item(const PackageRow &row)
 {
   PackageItem item {};
   item.row = row;
-  package_table_fill_item_display_values(item);
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
+  package_table_fill_item_display_values(item, resolution);
   return item;
 }
 
@@ -122,6 +123,27 @@ TEST_CASE("Package table Release column shows package release")
   PackageItem item = make_table_test_item(update);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::RELEASE) == "1.fc44");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that exact installed rows display themselves when another installed EVR exists.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table exact installed row displays its own version")
+{
+  reset_backend_globals();
+
+  PackageRow older = make_table_test_row("demo-1.0-1.fc44.x86_64", "demo", "1.0", "1.fc44", "x86_64");
+  older.repo = "@System";
+  PackageRow newer = make_table_test_row("demo-2.0-1.fc44.x86_64", "demo", "2.0", "1.fc44", "x86_64");
+  newer.repo = "@System";
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ older, newer });
+
+  PackageItem item = make_table_test_item(older);
+
+  REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION) == older.version);
+  REQUIRE(package_table_column_text(item, PackageColumnKind::RELEASE) == older.release);
+  REQUIRE(package_table_column_text(item, PackageColumnKind::REPO) == older.repo);
 }
 
 // -----------------------------------------------------------------------------
@@ -230,7 +252,8 @@ TEST_CASE("Package table update columns use daemon upgrade target")
   item.daemon_upgrade = std::make_shared<DaemonUpgradeRowContext>(DaemonUpgradeRowContext {
       .target = target,
   });
-  package_table_fill_item_display_values(item);
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
+  package_table_fill_item_display_values(item, resolution);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION).empty());
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION) == "1.2.5");
@@ -265,7 +288,8 @@ TEST_CASE("Package table daemon upgrade rows use installed version when availabl
   item.daemon_upgrade = std::make_shared<DaemonUpgradeRowContext>(DaemonUpgradeRowContext {
       .target = target,
   });
-  package_table_fill_item_display_values(item);
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
+  package_table_fill_item_display_values(item, resolution);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION) == "1.2.4");
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION) == "1.2.5");

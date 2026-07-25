@@ -124,6 +124,15 @@ enum class PackageInstallState {
   INSTALLED_NEWER_THAN_REPO,
 };
 
+struct InstalledPackageResolution {
+  PackageInstallState state = PackageInstallState::AVAILABLE;
+  bool exact_installed = false;
+  // Newest installed row for the same package name and architecture, if one exists.
+  bool has_installed_row = false;
+  bool self_protected = false;
+  PackageRow installed_row;
+};
+
 // Resolved transaction preview used by the confirmation dialog before apply.
 // The model must fully describe every resolved transaction action.
 // Callers must never receive a partial preview when the backend cannot represent the whole
@@ -268,6 +277,11 @@ bool dnf_backend_refresh_installed_nevras();
 // Classify one visible package row for UI status badges and action gating.
 // -----------------------------------------------------------------------------
 PackageInstallState dnf_backend_get_package_install_state(const PackageRow &row);
+
+// -----------------------------------------------------------------------------
+// Resolve installed-package state for one visible row from one installed snapshot.
+// -----------------------------------------------------------------------------
+InstalledPackageResolution dnf_backend_resolve_installed_package(const PackageRow &row);
 
 // -----------------------------------------------------------------------------
 // Return the default package-table sort priority for one package state.

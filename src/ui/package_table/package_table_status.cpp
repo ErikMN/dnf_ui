@@ -80,18 +80,11 @@ pending_action_matches_row(const PendingAction &action,
 // Return the pending action for one package table row.
 // -----------------------------------------------------------------------------
 bool
-package_table_pending_action_for_row(MainWindowUiState *widgets,
-                                     const PackageTableRow &row,
-                                     PendingAction::Type &out_type)
+package_table_pending_action_for_resolved_row(MainWindowUiState *widgets,
+                                              const PackageTableRow &row,
+                                              const PendingTransactionActionRows &action_rows,
+                                              PendingAction::Type &out_type)
 {
-  const TransactionServiceUpgradeTarget *upgrade_target = row.upgrade_target();
-  PackageInstallState install_state =
-      upgrade_target ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(row.row);
-  PendingTransactionActionRows action_rows;
-  if (install_state == PackageInstallState::UPGRADEABLE) {
-    action_rows = pending_transaction_action_rows_for_selection(row.row, upgrade_target, row.upgrade_generation());
-  }
-
   for (const auto &action : widgets->transaction.actions) {
     if (pending_action_matches_row(action, row, action_rows)) {
       out_type = action.type;
@@ -100,6 +93,16 @@ package_table_pending_action_for_row(MainWindowUiState *widgets,
   }
 
   return false;
+}
+
+bool
+package_table_pending_action_for_row(MainWindowUiState *widgets,
+                                     const PackageTableRow &row,
+                                     PendingAction::Type &out_type)
+{
+  PendingTransactionActionRows action_rows =
+      pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
+  return package_table_pending_action_for_resolved_row(widgets, row, action_rows, out_type);
 }
 
 // -----------------------------------------------------------------------------
@@ -124,8 +127,8 @@ package_table_pending_action_status_text(PendingAction::Type action_type, Packag
 // -----------------------------------------------------------------------------
 // Return the CSS class for one pending action.
 // -----------------------------------------------------------------------------
-static const char *
-pending_css_class(PendingAction::Type action_type)
+const char *
+package_table_pending_action_css_class_for_type(PendingAction::Type action_type)
 {
   switch (action_type) {
   case PendingAction::INSTALL:
@@ -146,12 +149,14 @@ pending_css_class(PendingAction::Type action_type)
 const char *
 package_table_pending_action_css_class(MainWindowUiState *widgets, const PackageTableRow &row)
 {
+  PendingTransactionActionRows action_rows =
+      pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
   PendingAction::Type action_type;
-  if (!package_table_pending_action_for_row(widgets, row, action_type)) {
+  if (!package_table_pending_action_for_resolved_row(widgets, row, action_rows, action_type)) {
     return nullptr;
   }
 
-  return pending_css_class(action_type);
+  return package_table_pending_action_css_class_for_type(action_type);
 }
 
 // -----------------------------------------------------------------------------
@@ -225,16 +230,18 @@ package_table_clear_pending_action_css(GtkWidget *cell)
 // Apply text and CSS for one Status cell.
 // -----------------------------------------------------------------------------
 void
-package_table_update_status_label(GtkWidget *cell, MainWindowUiState *widgets, const PackageTableRow &row)
+package_table_update_resolved_status_label(GtkWidget *cell,
+                                           MainWindowUiState *widgets,
+                                           const PackageTableRow &row,
+                                           const PendingTransactionActionRows &action_rows)
 {
-  const TransactionServiceUpgradeTarget *upgrade_target = row.upgrade_target();
-  PackageInstallState install_state =
-      upgrade_target ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(row.row);
+  PackageInstallState install_state = action_rows.state;
 
   const char *text = package_table_status_text(install_state);
   const char *icon_name = status_icon_name(install_state);
   PendingAction::Type action_type;
-  if (package_table_pending_action_for_row(widgets, row, action_type)) {
+  bool has_pending_action = package_table_pending_action_for_resolved_row(widgets, row, action_rows, action_type);
+  if (has_pending_action) {
     text = package_table_pending_action_status_text(action_type, install_state);
     icon_name = pending_icon_name(action_type, install_state);
   }
@@ -249,7 +256,8 @@ package_table_update_status_label(GtkWidget *cell, MainWindowUiState *widgets, c
     gtk_widget_set_visible(icon, icon_name != nullptr);
   }
 
-  if (const char *pending_class = package_table_pending_action_css_class(widgets, row)) {
+  if (has_pending_action) {
+    const char *pending_class = package_table_pending_action_css_class_for_type(action_type);
     gtk_widget_add_css_class(cell, pending_class);
   } else {
     if (install_state == PackageInstallState::LOCAL_ONLY) {
@@ -264,6 +272,14 @@ package_table_update_status_label(GtkWidget *cell, MainWindowUiState *widgets, c
       gtk_widget_add_css_class(cell, "package-status-available");
     }
   }
+}
+
+void
+package_table_update_status_label(GtkWidget *cell, MainWindowUiState *widgets, const PackageTableRow &row)
+{
+  PendingTransactionActionRows action_rows =
+      pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
+  package_table_update_resolved_status_label(cell, widgets, row, action_rows);
 }
 
 // -----------------------------------------------------------------------------

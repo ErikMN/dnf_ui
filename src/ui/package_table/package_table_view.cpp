@@ -20,7 +20,10 @@
 #include <string>
 #include <vector>
 
-static void update_pending_action_css_for_cell(GtkWidget *cell, MainWindowUiState *widgets, const PackageTableRow &row);
+static void update_pending_action_css_for_cell(GtkWidget *cell,
+                                               MainWindowUiState *widgets,
+                                               const PackageTableRow &row,
+                                               const PendingTransactionActionRows &action_rows);
 
 // -----------------------------------------------------------------------------
 // Refresh stored package status values without changing the GTK model.
@@ -44,7 +47,8 @@ refresh_model_status_values(GtkColumnView *view, MainWindowUiState *widgets)
     GObject *obj = G_OBJECT(g_list_model_get_item(items_model, i));
     PackageItem *item = mutable_package_item_from_object(obj);
     if (item) {
-      package_table_fill_item_status(widgets, *item);
+      InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item->row);
+      package_table_fill_item_status(widgets, *item, resolution);
     }
     g_object_unref(obj);
   }
@@ -62,9 +66,11 @@ refresh_visible_status_labels(GtkWidget *widget, MainWindowUiState *widgets)
 
   PackageTableRow *row = static_cast<PackageTableRow *>(g_object_get_data(G_OBJECT(widget), "package-context-row"));
   if (row) {
-    update_pending_action_css_for_cell(widget, widgets, *row);
+    PendingTransactionActionRows action_rows =
+        pending_transaction_action_rows_for_selection(row->row, row->upgrade_target(), row->upgrade_generation());
+    update_pending_action_css_for_cell(widget, widgets, *row, action_rows);
     if (g_object_get_data(G_OBJECT(widget), "package-status-cell")) {
-      package_table_update_status_label(widget, widgets, *row);
+      package_table_update_resolved_status_label(widget, widgets, *row, action_rows);
     }
   }
 
@@ -188,13 +194,19 @@ clear_pending_row_css_for_cell(GtkWidget *cell)
 // Return the pending row CSS class for one package row.
 // -----------------------------------------------------------------------------
 static const char *
-pending_row_css_class(MainWindowUiState *widgets, const PackageTableRow &row)
+pending_row_css_class(MainWindowUiState *widgets,
+                      const PackageTableRow &row,
+                      const PendingTransactionActionRows &action_rows)
 {
-  const char *status_class = package_table_pending_action_css_class(widgets, row);
-  if (!status_class) {
+  PendingAction::Type action_type;
+  if (!package_table_pending_action_for_resolved_row(widgets, row, action_rows, action_type)) {
     return nullptr;
   }
 
+  const char *status_class = package_table_pending_action_css_class_for_type(action_type);
+  if (!status_class) {
+    return nullptr;
+  }
   if (std::string(status_class) == "package-status-pending-install") {
     return "package-row-pending-install";
   }
@@ -212,9 +224,12 @@ pending_row_css_class(MainWindowUiState *widgets, const PackageTableRow &row)
 // Apply pending action color to one table cell.
 // -----------------------------------------------------------------------------
 static void
-update_pending_action_css_for_cell(GtkWidget *cell, MainWindowUiState *widgets, const PackageTableRow &row)
+update_pending_action_css_for_cell(GtkWidget *cell,
+                                   MainWindowUiState *widgets,
+                                   const PackageTableRow &row,
+                                   const PendingTransactionActionRows &action_rows)
 {
-  const char *pending_class = pending_row_css_class(widgets, row);
+  const char *pending_class = pending_row_css_class(widgets, row, action_rows);
   GtkWidget *target = table_cell_color_target(cell);
 
   clear_pending_row_css(cell);
@@ -521,9 +536,11 @@ create_text_column(MainWindowUiState *widgets, const PackageTableColumnDefinitio
                            delete static_cast<PackageTableRow *>(p);
                          });
 
-                     update_pending_action_css_for_cell(frame, widgets, table_row);
+                     PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
+                         table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
+                     update_pending_action_css_for_cell(frame, widgets, table_row, action_rows);
                      if (kind == PackageColumnKind::STATUS) {
-                       package_table_update_status_label(cell, widgets, table_row);
+                       package_table_update_resolved_status_label(cell, widgets, table_row, action_rows);
                      } else {
                        std::string text = package_table_column_text(*package_item, kind);
                        gtk_label_set_text(GTK_LABEL(label), text.c_str());

@@ -8,6 +8,7 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 #include "ui/package_table/package_table_view.hpp"
+#include "ui/transaction/pending_transaction_action_rows.hpp"
 #include "ui/transaction/pending_transaction_state.hpp"
 
 #include <gtk/gtk.h>
@@ -24,11 +25,19 @@ const char *package_table_status_text(PackageInstallState state);
 bool package_table_pending_action_for_row(MainWindowUiState *widgets,
                                           const PackageTableRow &row,
                                           PendingAction::Type &out_type);
+bool package_table_pending_action_for_resolved_row(MainWindowUiState *widgets,
+                                                   const PackageTableRow &row,
+                                                   const PendingTransactionActionRows &action_rows,
+                                                   PendingAction::Type &out_type);
 // -----------------------------------------------------------------------------
 // Return display text for one pending package action.
 // -----------------------------------------------------------------------------
 const char *package_table_pending_action_status_text(PendingAction::Type action_type,
                                                      PackageInstallState install_state);
+// -----------------------------------------------------------------------------
+// Return the Status-cell CSS class for one pending action type.
+// -----------------------------------------------------------------------------
+const char *package_table_pending_action_css_class_for_type(PendingAction::Type action_type);
 // Remove all status CSS classes from a Status cell.
 // -----------------------------------------------------------------------------
 void package_table_clear_status_css(GtkWidget *cell);
@@ -44,6 +53,10 @@ const char *package_table_pending_action_css_class(MainWindowUiState *widgets, c
 // Update one package Status cell for the current table row state.
 // -----------------------------------------------------------------------------
 void package_table_update_status_label(GtkWidget *cell, MainWindowUiState *widgets, const PackageTableRow &row);
+void package_table_update_resolved_status_label(GtkWidget *cell,
+                                                MainWindowUiState *widgets,
+                                                const PackageTableRow &row,
+                                                const PendingTransactionActionRows &action_rows);
 
 // -----------------------------------------------------------------------------
 // EOF

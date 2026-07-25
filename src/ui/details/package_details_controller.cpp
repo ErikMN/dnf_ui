@@ -236,25 +236,26 @@ package_details_cancel_active_load(MainWindowUiState *widgets)
 // Enable only the transaction actions that make sense for the selected row.
 // -----------------------------------------------------------------------------
 static void
-update_selected_package_actions(MainWindowUiState *widgets, const PackageTableRow &selected)
+update_selected_package_actions(MainWindowUiState *widgets,
+                                const PackageTableRow &selected,
+                                const InstalledPackageResolution &resolution)
 {
-  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
-      selected.row, selected.upgrade_target(), selected.upgrade_generation());
+  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_resolved_selection(
+      selected.row, selected.upgrade_target(), selected.upgrade_generation(), resolution);
 
   // Install and upgrade use the available package row.
   // Remove and reinstall use the installed package row.
   // Self-protected packages stay viewable, but the running app must not remove
   // or replace the RPM that owns its current executable.
-  bool self_protected =
-      action_rows.has_installed_row && dnf_backend_is_package_self_protected(action_rows.installed_row);
-  bool install_blocked = pending_transaction_install_action_blocked_by_self_protection(action_rows, self_protected);
+  bool install_blocked =
+      pending_transaction_install_action_blocked_by_self_protection(action_rows, action_rows.self_protected);
 
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button),
                            action_rows.has_install_row && !install_blocked);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button),
-                           action_rows.has_installed_row && !self_protected);
+                           action_rows.has_installed_row && !action_rows.self_protected);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
-                           action_rows.can_try_reinstall && !self_protected);
+                           action_rows.can_try_reinstall && !action_rows.self_protected);
 
   const std::string install_nevra = action_rows.has_install_row ? action_rows.install_row.nevra : selected.row.nevra;
   const std::string installed_nevra =
@@ -531,12 +532,12 @@ package_details_load_selected_package_info(MainWindowUiState *widgets, const Pac
   package_details_cancel_active_load(widgets);
 
   std::string details_query_nevra = selected.row.nevra;
+  InstalledPackageResolution selected_resolution = dnf_backend_resolve_installed_package(selected.row);
   std::optional<PackageRow> upgrade_row_override;
   if (selected.upgrade_target()) {
     upgrade_row_override = selected.row;
-    PackageRow installed_row;
-    if (dnf_backend_get_installed_package_row_by_name_arch(selected.row, installed_row)) {
-      details_query_nevra = installed_row.nevra;
+    if (selected_resolution.has_installed_row) {
+      details_query_nevra = selected_resolution.installed_row.nevra;
     }
   }
 
@@ -549,15 +550,15 @@ package_details_load_selected_package_info(MainWindowUiState *widgets, const Pac
   set_details_text(widgets->results.deps_buffer, _("Open the Dependencies tab to load dependencies."));
   set_details_text(widgets->results.changelog_buffer, _("Open the Changelog tab to load the changelog."));
   ui_helpers_set_status(widgets->query.status_label, _("Fetching package info..."), "blue");
-  update_selected_package_actions(widgets, selected);
+  update_selected_package_actions(widgets, selected, selected_resolution);
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   GTask *task = widgets_task_new_for_main_window_ui_state(widgets, c, on_package_details_task_finished);
   widgets->results.package_details_cancellable = G_CANCELLABLE(g_object_ref(c));
 
   // Pass selected row state to the background task.
-  PackageInstallState selected_state = selected.upgrade_target() ? PackageInstallState::UPGRADEABLE
-                                                                 : dnf_backend_get_package_install_state(selected.row);
+  PackageInstallState selected_state =
+      selected.upgrade_target() ? PackageInstallState::UPGRADEABLE : selected_resolution.state;
 
   InfoTaskData *td = new InfoTaskData;
   td->selected_nevra = selected.row.nevra;
