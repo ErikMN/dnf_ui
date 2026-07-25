@@ -106,6 +106,28 @@ exact_package_reload_task_data_free(gpointer p)
   delete static_cast<ExactPackageReloadTaskData *>(p);
 }
 
+// -----------------------------------------------------------------------------
+// Finish a package-list request whose result belongs to an older Base generation.
+// -----------------------------------------------------------------------------
+static void
+package_query_finish_generation_rejected_request(MainWindowUiState *widgets,
+                                                 uint64_t request_id,
+                                                 PackageListRequestKind kind)
+{
+  bool request_matches = widgets->query_state.current_package_list_request_id == request_id &&
+      widgets->query_state.current_package_list_request_kind == kind;
+
+  widgets_spinner_release(widgets->query.spinner);
+  package_query_end_package_list_request(widgets, request_id, kind);
+  if (!request_matches) {
+    return;
+  }
+
+  widgets->query_state.reload_selected_nevra.clear();
+  ui_helpers_set_status(
+      widgets->query.status_label, _("Package state changed while loading. Run the operation again."), "blue");
+}
+
 struct QueryBackendBaseDropGuard {
   explicit QueryBackendBaseDropGuard(GCancellable *cancellable = nullptr)
       : cancellable(cancellable)
@@ -222,8 +244,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   // Drop outdated results if the backend Base changed while the worker was running.
   // This prevents showing rows that no longer match the current repository state.
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    widgets_spinner_release(widgets->query.spinner);
-    package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
+    package_query_finish_generation_rejected_request(widgets, td->request_id, PackageListRequestKind::LIST_INSTALLED);
     return;
   }
 
@@ -305,8 +326,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    widgets_spinner_release(widgets->query.spinner);
-    package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+    package_query_finish_generation_rejected_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
     return;
   }
 
@@ -460,8 +480,7 @@ on_list_upgradeable_task_finished(GObject *, GAsyncResult *res, gpointer user_da
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    widgets_spinner_release(widgets->query.spinner);
-    package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_UPGRADEABLE);
+    package_query_finish_generation_rejected_request(widgets, td->request_id, PackageListRequestKind::LIST_UPGRADEABLE);
     return;
   }
 
@@ -600,8 +619,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    widgets_spinner_release(widgets->query.spinner);
-    package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
+    package_query_finish_generation_rejected_request(widgets, td->request_id, PackageListRequestKind::SEARCH);
     return;
   }
 
@@ -704,8 +722,7 @@ on_exact_package_reload_task_finished(GObject *, GAsyncResult *res, gpointer use
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    widgets_spinner_release(widgets->query.spinner);
-    package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::EXACT_RELOAD);
+    package_query_finish_generation_rejected_request(widgets, td->request_id, PackageListRequestKind::EXACT_RELOAD);
     return;
   }
 
