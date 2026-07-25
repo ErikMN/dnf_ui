@@ -8,6 +8,7 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 #include "ui/package_table/package_table_view.hpp"
+#include "ui/transaction/pending_transaction_state.hpp"
 
 #include <gtk/gtk.h>
 
@@ -17,6 +18,17 @@ struct MainWindowUiState;
 // Return display text for one package install state.
 // -----------------------------------------------------------------------------
 const char *package_table_status_text(PackageInstallState state);
+// -----------------------------------------------------------------------------
+// Return the pending action for one package table row, including alternate rows resolved for upgrade candidates.
+// -----------------------------------------------------------------------------
+bool package_table_pending_action_for_row(MainWindowUiState *widgets,
+                                          const PackageTableRow &row,
+                                          PendingAction::Type &out_type);
+// -----------------------------------------------------------------------------
+// Return display text for one pending package action.
+// -----------------------------------------------------------------------------
+const char *package_table_pending_action_status_text(PendingAction::Type action_type,
+                                                     PackageInstallState install_state);
 // Remove all status CSS classes from a Status cell.
 // -----------------------------------------------------------------------------
 void package_table_clear_status_css(GtkWidget *cell);

@@ -12,6 +12,7 @@ dnfui_tests = executable(
     'unit/test_offline.cpp',
     'unit/test_pending_transaction_action_rows.cpp',
     'unit/test_package_table_sort.cpp',
+    'unit/test_package_table_status.cpp',
     'unit/test_package_table_export.cpp',
     'unit/test_package_query_cache.cpp',
     'unit/test_pending_transaction_request.cpp',

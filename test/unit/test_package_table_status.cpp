@@ -1,0 +1,164 @@
+#include <catch2/catch_test_macros.hpp>
+
+#include "test_utils.hpp"
+#include "ui/common/widgets.hpp"
+#include "ui/package_table/package_table_status.hpp"
+#include "ui/package_table/package_table_view_internal.hpp"
+
+#include <memory>
+
+static PackageRow
+make_status_test_row(const std::string &nevra,
+                     const std::string &name,
+                     const std::string &version,
+                     const std::string &release,
+                     const std::string &arch)
+{
+  PackageRow row;
+  row.nevra = nevra;
+  row.name = name;
+  row.version = version;
+  row.release = release;
+  row.arch = arch;
+  row.repo = "fedora";
+  row.summary = "Test package";
+  return row;
+}
+
+static void
+require_stored_status_matches_pending_action(MainWindowUiState &widgets, PackageItem &item, const char *expected_text)
+{
+  PackageTableRow table_row {
+    .row = item.row,
+    .daemon_upgrade = item.daemon_upgrade,
+  };
+
+  PendingAction::Type action_type;
+  REQUIRE(package_table_pending_action_for_row(&widgets, table_row, action_type));
+
+  PackageInstallState install_state =
+      item.upgrade_target() ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(item.row);
+  REQUIRE(std::string(package_table_pending_action_status_text(action_type, install_state)) == expected_text);
+
+  package_table_fill_item_status(&widgets, item);
+  REQUIRE(item.status_text == expected_text);
+  REQUIRE(package_table_column_text(item, PackageColumnKind::STATUS) == expected_text);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that pending installs use the same Status text in stored and visible paths.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table pending install status is shared")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageItem item;
+  item.row = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  widgets.transaction.actions = {
+    { PendingAction::INSTALL, item.row.nevra, item.row.nevra },
+  };
+
+  require_stored_status_matches_pending_action(widgets, item, "Pending Install");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an installed row can show a pending upgrade queued for its install row.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table pending upgrade status uses resolved install row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  MainWindowUiState widgets;
+  widgets.transaction.actions = {
+    { PendingAction::UPGRADE, installed.repo_candidate_nevra, "demo.x86_64" },
+  };
+
+  PackageItem item;
+  item.row = installed;
+
+  require_stored_status_matches_pending_action(widgets, item, "Pending Upgrade");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that update rows can show pending removal queued for the installed row.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table pending removal status uses resolved installed row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  PackageRow update = make_status_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  MainWindowUiState widgets;
+  widgets.transaction.actions = {
+    { PendingAction::REMOVE, installed.nevra, installed.nevra },
+  };
+
+  PackageItem item;
+  item.row = update;
+
+  require_stored_status_matches_pending_action(widgets, item, "Pending Removal");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that update rows can show pending reinstall queued for the installed row.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table pending reinstall status uses resolved installed row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  PackageRow update = make_status_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  MainWindowUiState widgets;
+  widgets.transaction.actions = {
+    { PendingAction::REINSTALL, installed.nevra, installed.nevra },
+  };
+
+  PackageItem item;
+  item.row = update;
+
+  require_stored_status_matches_pending_action(widgets, item, "Pending Reinstall");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that daemon upgrade rows use the same Status text for stored table data.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table daemon upgrade pending status is shared")
+{
+  reset_backend_globals();
+
+  TransactionServiceUpgradeTarget target;
+  target.name = "demo";
+  target.arch = "x86_64";
+  target.version = "2.0";
+  target.release = "1";
+  target.nevra = "demo-2.0-1.x86_64";
+  target.full_nevra = target.nevra;
+  target.repo_id = "updates";
+
+  MainWindowUiState widgets;
+  widgets.transaction.actions = {
+    { PendingAction::UPGRADE, target.nevra, target.upgrade_spec() },
+  };
+
+  PackageItem item;
+  item.row = make_status_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  item.daemon_upgrade = std::make_shared<DaemonUpgradeRowContext>(DaemonUpgradeRowContext {
+      .target = target,
+  });
+
+  require_stored_status_matches_pending_action(widgets, item, "Pending Upgrade");
+}
+
+// -----------------------------------------------------------------------------
+// EOF
+// -----------------------------------------------------------------------------

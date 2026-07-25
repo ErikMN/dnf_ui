@@ -5,7 +5,6 @@
 // -----------------------------------------------------------------------------
 #include "ui/package_table/package_table_view_internal.hpp"
 
-#include "i18n.hpp"
 #include "ui/package_table/package_table_status.hpp"
 #include "ui/common/widgets.hpp"
 
@@ -35,27 +34,14 @@ package_table_fill_item_status(MainWindowUiState *widgets, PackageItem &item)
       item.upgrade_target() ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(item.row);
   item.status_rank = dnf_backend_get_install_state_sort_rank(install_state);
 
-  for (const auto &a : widgets->transaction.actions) {
-    bool action_matches_row = a.nevra == item.row.nevra;
-    const TransactionServiceUpgradeTarget *upgrade_target = item.upgrade_target();
-    bool action_matches_target = upgrade_target && a.nevra == upgrade_target->nevra;
-    if (action_matches_row || action_matches_target) {
-      switch (a.type) {
-      case PendingAction::INSTALL:
-        item.status_text = _("Pending Install");
-        break;
-      case PendingAction::UPGRADE:
-        item.status_text = _("Pending Upgrade");
-        break;
-      case PendingAction::REINSTALL:
-        item.status_text = _("Pending Reinstall");
-        break;
-      case PendingAction::REMOVE:
-        item.status_text = _("Pending Removal");
-        break;
-      }
-      return;
-    }
+  PackageTableRow table_row {
+    .row = item.row,
+    .daemon_upgrade = item.daemon_upgrade,
+  };
+  PendingAction::Type action_type;
+  if (package_table_pending_action_for_row(widgets, table_row, action_type)) {
+    item.status_text = package_table_pending_action_status_text(action_type, install_state);
+    return;
   }
 
   item.status_text = package_table_status_text(install_state);

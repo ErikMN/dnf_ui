@@ -53,23 +53,88 @@ status_cell_icon(GtkWidget *cell)
 }
 
 // -----------------------------------------------------------------------------
-// Return the CSS class for a pending action NEVRA.
+// Return true when one pending action matches one package table row.
+// -----------------------------------------------------------------------------
+static bool
+pending_action_matches_row(const PendingAction &action,
+                           const PackageTableRow &row,
+                           const PendingTransactionActionRows &action_rows)
+{
+  if (action.nevra == row.row.nevra) {
+    return true;
+  }
+
+  const TransactionServiceUpgradeTarget *upgrade_target = row.upgrade_target();
+  if (upgrade_target && action.nevra == upgrade_target->nevra) {
+    return true;
+  }
+
+  if (action_rows.has_install_row && action.nevra == action_rows.install_row.nevra) {
+    return true;
+  }
+
+  return action_rows.has_installed_row && action.nevra == action_rows.installed_row.nevra;
+}
+
+// -----------------------------------------------------------------------------
+// Return the pending action for one package table row.
+// -----------------------------------------------------------------------------
+bool
+package_table_pending_action_for_row(MainWindowUiState *widgets,
+                                     const PackageTableRow &row,
+                                     PendingAction::Type &out_type)
+{
+  const TransactionServiceUpgradeTarget *upgrade_target = row.upgrade_target();
+  PackageInstallState install_state =
+      upgrade_target ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(row.row);
+  PendingTransactionActionRows action_rows;
+  if (install_state == PackageInstallState::UPGRADEABLE) {
+    action_rows = pending_transaction_action_rows_for_selection(row.row, upgrade_target, row.upgrade_generation());
+  }
+
+  for (const auto &action : widgets->transaction.actions) {
+    if (pending_action_matches_row(action, row, action_rows)) {
+      out_type = action.type;
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Return display text for one pending package action.
+// -----------------------------------------------------------------------------
+const char *
+package_table_pending_action_status_text(PendingAction::Type action_type, PackageInstallState install_state)
+{
+  switch (action_type) {
+  case PendingAction::INSTALL:
+  case PendingAction::UPGRADE:
+    return install_state == PackageInstallState::UPGRADEABLE ? _("Pending Upgrade") : _("Pending Install");
+  case PendingAction::REINSTALL:
+    return _("Pending Reinstall");
+  case PendingAction::REMOVE:
+    return _("Pending Removal");
+  }
+
+  return package_table_status_text(install_state);
+}
+
+// -----------------------------------------------------------------------------
+// Return the CSS class for one pending action.
 // -----------------------------------------------------------------------------
 static const char *
-pending_css_class(MainWindowUiState *widgets, const std::string &nevra, const std::string &alternate_nevra)
+pending_css_class(PendingAction::Type action_type)
 {
-  for (const auto &a : widgets->transaction.actions) {
-    if (a.nevra == nevra || (!alternate_nevra.empty() && a.nevra == alternate_nevra)) {
-      switch (a.type) {
-      case PendingAction::INSTALL:
-      case PendingAction::UPGRADE:
-        return "package-status-pending-install";
-      case PendingAction::REINSTALL:
-        return "package-status-pending-reinstall";
-      case PendingAction::REMOVE:
-        return "package-status-pending-remove";
-      }
-    }
+  switch (action_type) {
+  case PendingAction::INSTALL:
+  case PendingAction::UPGRADE:
+    return "package-status-pending-install";
+  case PendingAction::REINSTALL:
+    return "package-status-pending-reinstall";
+  case PendingAction::REMOVE:
+    return "package-status-pending-remove";
   }
 
   return nullptr;
@@ -81,24 +146,12 @@ pending_css_class(MainWindowUiState *widgets, const std::string &nevra, const st
 const char *
 package_table_pending_action_css_class(MainWindowUiState *widgets, const PackageTableRow &row)
 {
-  const TransactionServiceUpgradeTarget *upgrade_target = row.upgrade_target();
-  PackageInstallState install_state =
-      upgrade_target ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(row.row);
-  PendingTransactionActionRows action_rows;
-  if (install_state == PackageInstallState::UPGRADEABLE) {
-    action_rows = pending_transaction_action_rows_for_selection(row.row, upgrade_target, row.upgrade_generation());
+  PendingAction::Type action_type;
+  if (!package_table_pending_action_for_row(widgets, row, action_type)) {
+    return nullptr;
   }
 
-  std::string alternate_nevra;
-  if (upgrade_target && upgrade_target->nevra != row.row.nevra) {
-    alternate_nevra = upgrade_target->nevra;
-  } else if (action_rows.has_install_row && action_rows.install_row.nevra != row.row.nevra) {
-    alternate_nevra = action_rows.install_row.nevra;
-  } else if (action_rows.has_installed_row && action_rows.installed_row.nevra != row.row.nevra) {
-    alternate_nevra = action_rows.installed_row.nevra;
-  }
-
-  return pending_css_class(widgets, row.row.nevra, alternate_nevra);
+  return pending_css_class(action_type);
 }
 
 // -----------------------------------------------------------------------------
@@ -177,35 +230,13 @@ package_table_update_status_label(GtkWidget *cell, MainWindowUiState *widgets, c
   const TransactionServiceUpgradeTarget *upgrade_target = row.upgrade_target();
   PackageInstallState install_state =
       upgrade_target ? PackageInstallState::UPGRADEABLE : dnf_backend_get_package_install_state(row.row);
-  PendingTransactionActionRows action_rows;
-  if (install_state == PackageInstallState::UPGRADEABLE) {
-    action_rows = pending_transaction_action_rows_for_selection(row.row, upgrade_target, row.upgrade_generation());
-  }
 
   const char *text = package_table_status_text(install_state);
   const char *icon_name = status_icon_name(install_state);
-  for (const auto &a : widgets->transaction.actions) {
-    bool action_matches_visible_row = a.nevra == row.row.nevra;
-    bool action_matches_target = upgrade_target && a.nevra == upgrade_target->nevra;
-    bool action_matches_install_row = action_rows.has_install_row && a.nevra == action_rows.install_row.nevra;
-    bool action_matches_installed_row = action_rows.has_installed_row && a.nevra == action_rows.installed_row.nevra;
-    if (action_matches_visible_row || action_matches_target || action_matches_install_row ||
-        action_matches_installed_row) {
-      switch (a.type) {
-      case PendingAction::INSTALL:
-      case PendingAction::UPGRADE:
-        text = install_state == PackageInstallState::UPGRADEABLE ? _("Pending Upgrade") : _("Pending Install");
-        break;
-      case PendingAction::REINSTALL:
-        text = _("Pending Reinstall");
-        break;
-      case PendingAction::REMOVE:
-        text = _("Pending Removal");
-        break;
-      }
-      icon_name = pending_icon_name(a.type, install_state);
-      break;
-    }
+  PendingAction::Type action_type;
+  if (package_table_pending_action_for_row(widgets, row, action_type)) {
+    text = package_table_pending_action_status_text(action_type, install_state);
+    icon_name = pending_icon_name(action_type, install_state);
   }
 
   GtkWidget *label = status_cell_label(cell);
