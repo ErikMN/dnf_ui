@@ -2,6 +2,7 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 #include "test_utils.hpp"
+#include "ui/common/widgets.hpp"
 #include "ui/package_table/package_table_view_internal.hpp"
 
 #include <memory>
@@ -24,6 +25,30 @@ make_table_test_row(const std::string &nevra,
   return row;
 }
 
+static PackageItem
+make_table_test_item(const PackageRow &row)
+{
+  PackageItem item {};
+  item.row = row;
+  package_table_fill_item_display_values(item);
+  return item;
+}
+
+static int
+compare_table_test_rows(MainWindowUiState &widgets,
+                        const PackageRow &left,
+                        const PackageRow &right,
+                        PackageColumnKind kind)
+{
+  GObject *left_object = make_package_object(&widgets, left);
+  GObject *right_object = make_package_object(&widgets, right);
+  int result =
+      package_table_column_sorter_compare(left_object, right_object, GINT_TO_POINTER(static_cast<int>(kind) + 1));
+  g_object_unref(left_object);
+  g_object_unref(right_object);
+  return result;
+}
+
 // -----------------------------------------------------------------------------
 // Verify that the package table Version column matches the Info tab Version
 // field and does not include the package release.
@@ -32,8 +57,8 @@ TEST_CASE("Package table Version column shows only package version")
 {
   reset_backend_globals();
 
-  PackageItem item {};
-  item.row = make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64");
+  PackageItem item =
+      make_table_test_item(make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64"));
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION) == "1.2.3");
 }
@@ -50,8 +75,7 @@ TEST_CASE("Package table Version column uses installed version for update rows")
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PackageItem item {};
-  item.row = update;
+  PackageItem item = make_table_test_item(update);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION) == "1.2.3");
 }
@@ -68,8 +92,7 @@ TEST_CASE("Package table Update column uses candidate version for update rows")
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PackageItem item {};
-  item.row = update;
+  PackageItem item = make_table_test_item(update);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION) == "1.2.4");
 }
@@ -81,8 +104,8 @@ TEST_CASE("Package table Update column is empty for normal rows")
 {
   reset_backend_globals();
 
-  PackageItem item {};
-  item.row = make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64");
+  PackageItem item =
+      make_table_test_item(make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64"));
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION).empty());
 }
@@ -96,8 +119,7 @@ TEST_CASE("Package table Release column shows package release")
 
   PackageRow update = make_table_test_row("demo-1.2.4-1.fc44.x86_64", "demo", "1.2.4", "1.fc44", "x86_64");
 
-  PackageItem item {};
-  item.row = update;
+  PackageItem item = make_table_test_item(update);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::RELEASE) == "1.fc44");
 }
@@ -118,8 +140,7 @@ TEST_CASE("Package table release columns handle installed rows with update candi
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PackageItem item {};
-  item.row = installed;
+  PackageItem item = make_table_test_item(installed);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION) == "1.2.3");
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION) == "1.2.4");
@@ -144,8 +165,7 @@ TEST_CASE("Package table Repo column uses candidate repo for installed update ro
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PackageItem item {};
-  item.row = installed;
+  PackageItem item = make_table_test_item(installed);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::REPO) == "updates");
 }
@@ -162,8 +182,7 @@ TEST_CASE("Package table Update Release column uses candidate release for update
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PackageItem item {};
-  item.row = update;
+  PackageItem item = make_table_test_item(update);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_RELEASE) == "1.fc44");
 }
@@ -183,8 +202,7 @@ TEST_CASE("Package table Repo column uses candidate repo for update rows")
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PackageItem item {};
-  item.row = update;
+  PackageItem item = make_table_test_item(update);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::REPO) == "updates");
 }
@@ -212,6 +230,7 @@ TEST_CASE("Package table update columns use daemon upgrade target")
   item.daemon_upgrade = std::make_shared<DaemonUpgradeRowContext>(DaemonUpgradeRowContext {
       .target = target,
   });
+  package_table_fill_item_display_values(item);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION).empty());
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION) == "1.2.5");
@@ -246,11 +265,107 @@ TEST_CASE("Package table daemon upgrade rows use installed version when availabl
   item.daemon_upgrade = std::make_shared<DaemonUpgradeRowContext>(DaemonUpgradeRowContext {
       .target = target,
   });
+  package_table_fill_item_display_values(item);
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION) == "1.2.4");
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION) == "1.2.5");
   REQUIRE(package_table_column_text(item, PackageColumnKind::RELEASE) == "1.fc44");
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_RELEASE) == "2.fc44");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Version sorting uses values stored on the package items.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Version sorter uses stored item values")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-1.0-1.x86_64", "left", "1.0", "1", "x86_64");
+  PackageRow right = make_table_test_row("right-2.0-1.x86_64", "right", "2.0", "1", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Update Version sorting uses values stored on the package items.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Update Version sorter uses stored item values")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow installed_left = make_table_test_row("left-1.0-1.x86_64", "left", "1.0", "1", "x86_64");
+  PackageRow installed_right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed_left, installed_right });
+
+  PackageRow left = make_table_test_row("left-2.0-1.x86_64", "left", "2.0", "1", "x86_64");
+  PackageRow right = make_table_test_row("right-3.0-1.x86_64", "right", "3.0", "1", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Repository sorting uses values stored on the package items.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Repo sorter uses stored item values")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-1.0-1.x86_64", "left", "1.0", "1", "x86_64");
+  left.repo = "fedora";
+  PackageRow right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
+  right.repo = "updates";
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::REPO) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that equal column values fall back to package name and then NEVRA.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table sorter falls back to name and NEVRA")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  PackageRow right = make_table_test_row("other-1.0-1.x86_64", "other", "1.0", "1", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) < 0);
+
+  right.name = left.name;
+  right.nevra = "demo-1.0-2.x86_64";
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that replacing installed state does not change existing item comparisons.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table sorter keeps existing item values after installed snapshot changes")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow installed = make_table_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PackageRow update = make_table_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  PackageRow comparison = make_table_test_row("other-1.2-1.x86_64", "other", "1.2", "1", "x86_64");
+
+  GObject *update_object = make_package_object(&widgets, update);
+  GObject *comparison_object = make_package_object(&widgets, comparison);
+
+  installed.version = "1.3";
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  int result = package_table_column_sorter_compare(
+      update_object, comparison_object, GINT_TO_POINTER(static_cast<int>(PackageColumnKind::VERSION) + 1));
+
+  g_object_unref(update_object);
+  g_object_unref(comparison_object);
+
+  REQUIRE(result < 0);
 }
 
 // -----------------------------------------------------------------------------

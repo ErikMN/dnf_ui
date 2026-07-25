@@ -150,10 +150,10 @@ package table column definitions, stable column ids, saved visibility settings,
 and config migration.
 
 [src/ui/package_table/package_table_model.cpp](../src/ui/package_table/package_table_model.cpp) contains the
-GTK object wrapper used to store package rows in the table model.
+GTK object wrapper used to store package rows and their table display values.
 
 [src/ui/package_table/package_table_sort.cpp](../src/ui/package_table/package_table_sort.cpp) contains package
-table cell text and sorting rules.
+table cell text lookup and sorting rules.
 
 [src/ui/package_table/package_table_export.cpp](../src/ui/package_table/package_table_export.cpp) exports the
 current table rows to CSV.

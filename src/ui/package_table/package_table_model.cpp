@@ -8,6 +8,8 @@
 #include "ui/package_table/package_table_status.hpp"
 #include "ui/common/widgets.hpp"
 
+#include <utility>
+
 // -----------------------------------------------------------------------------
 // Return the private key used to store package rows on GTK objects.
 // -----------------------------------------------------------------------------
@@ -48,13 +50,78 @@ package_table_fill_item_status(MainWindowUiState *widgets, PackageItem &item)
 }
 
 // -----------------------------------------------------------------------------
+// Snapshot display values that depend on installed-package state.
+// -----------------------------------------------------------------------------
+void
+package_table_fill_item_display_values(PackageItem &item)
+{
+  PackageTableDisplayValues values {
+    .version = item.row.version,
+    .update_version = {},
+    .release = item.row.release,
+    .update_release = {},
+    .repo = item.row.repo,
+  };
+
+  if (const TransactionServiceUpgradeTarget *upgrade_target = item.upgrade_target()) {
+    PackageRow installed_row;
+    if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row)) {
+      values.version = installed_row.version;
+      values.release = installed_row.release;
+    } else {
+      values.version.clear();
+      values.release.clear();
+    }
+
+    values.update_version = upgrade_target->version;
+    values.update_release = upgrade_target->release;
+    values.repo = upgrade_target->repo_id;
+    item.display_values = std::make_shared<PackageTableDisplayValues>(std::move(values));
+    return;
+  }
+
+  PackageRow installed_row;
+  if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row)) {
+    if (installed_row.nevra != item.row.nevra) {
+      // The table column is named Version, so keep it aligned with the Info tab Version field.
+      values.version = installed_row.version;
+      values.release = installed_row.release;
+    }
+    values.repo = installed_row.repo;
+  }
+
+  if (dnf_backend_get_package_install_state(item.row) == PackageInstallState::UPGRADEABLE) {
+    values.update_version =
+        item.row.repo_candidate_version.empty() ? item.row.version : item.row.repo_candidate_version;
+    values.update_release =
+        item.row.repo_candidate_release.empty() ? item.row.release : item.row.repo_candidate_release;
+
+    if (!item.row.repo_candidate_repo.empty()) {
+      values.repo = item.row.repo_candidate_repo;
+    } else {
+      values.repo = item.row.repo;
+    }
+  }
+
+  const bool display_values_differ = values.version != item.row.version || !values.update_version.empty() ||
+      values.release != item.row.release || !values.update_release.empty() || values.repo != item.row.repo;
+  if (display_values_differ) {
+    item.display_values = std::make_shared<PackageTableDisplayValues>(std::move(values));
+  } else {
+    item.display_values.reset();
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Wrap one package row in a GObject so GTK list models can sort and select it.
 // -----------------------------------------------------------------------------
 GObject *
 make_package_object(MainWindowUiState *widgets, const PackageRow &row)
 {
   GObject *obj = G_OBJECT(g_object_new(G_TYPE_OBJECT, nullptr));
-  auto *item = new PackageItem { row, {}, {}, 0 };
+  auto *item = new PackageItem;
+  item->row = row;
+  package_table_fill_item_display_values(*item);
   package_table_fill_item_status(widgets, *item);
   g_object_set_qdata_full(obj, package_row_quark(), item, +[](gpointer p) { delete static_cast<PackageItem *>(p); });
 
@@ -65,7 +132,10 @@ GObject *
 make_package_object(MainWindowUiState *widgets, const PackageTableRow &row)
 {
   GObject *obj = G_OBJECT(g_object_new(G_TYPE_OBJECT, nullptr));
-  auto *item = new PackageItem { row.row, row.daemon_upgrade, {}, 0 };
+  auto *item = new PackageItem;
+  item->row = row.row;
+  item->daemon_upgrade = row.daemon_upgrade;
+  package_table_fill_item_display_values(*item);
   package_table_fill_item_status(widgets, *item);
   g_object_set_qdata_full(obj, package_row_quark(), item, +[](gpointer p) { delete static_cast<PackageItem *>(p); });
 

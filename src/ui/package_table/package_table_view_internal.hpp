@@ -11,16 +11,28 @@
 
 #include <gtk/gtk.h>
 
+#include <memory>
 #include <string>
 
 struct MainWindowUiState;
+
+struct PackageTableDisplayValues {
+  std::string version;
+  std::string update_version;
+  std::string release;
+  std::string update_release;
+  std::string repo;
+};
+
+using PackageTableDisplayValuesPtr = std::shared_ptr<const PackageTableDisplayValues>;
 
 // Package row wrapper used by the sortable GTK model.
 struct PackageItem {
   PackageRow row;
   DaemonUpgradeRowContextPtr daemon_upgrade;
+  PackageTableDisplayValuesPtr display_values;
   std::string status_text;
-  int status_rank;
+  int status_rank = 0;
 
   const TransactionServiceUpgradeTarget *upgrade_target() const
   {
@@ -35,6 +47,7 @@ PackageItem *mutable_package_item_from_object(GObject *obj);
 const PackageRow *package_row_from_object(GObject *obj);
 PackageTableRow package_table_row_from_item(const PackageItem &item);
 void package_table_fill_item_status(MainWindowUiState *widgets, PackageItem &item);
+void package_table_fill_item_display_values(PackageItem &item);
 
 std::string package_table_column_text(const PackageItem &item, PackageColumnKind kind);
 int package_table_column_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_data);

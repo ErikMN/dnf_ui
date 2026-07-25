@@ -11,83 +11,25 @@
 std::string
 package_table_column_text(const PackageItem &item, PackageColumnKind kind)
 {
+  const PackageTableDisplayValues *display = item.display_values.get();
+
   switch (kind) {
   case PackageColumnKind::STATUS:
     return item.status_text;
   case PackageColumnKind::PACKAGE:
     return item.row.name;
-  case PackageColumnKind::VERSION: {
-    PackageRow installed_row;
-    if (item.upgrade_target()) {
-      if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row)) {
-        return installed_row.version;
-      }
-      return {};
-    }
-    if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row) &&
-        installed_row.nevra != item.row.nevra) {
-      // The table column is named Version, so keep it aligned with the Info tab Version field.
-      return installed_row.version;
-    }
-    return item.row.version;
-  }
+  case PackageColumnKind::VERSION:
+    return display ? display->version : item.row.version;
   case PackageColumnKind::UPDATE_VERSION:
-    if (const TransactionServiceUpgradeTarget *upgrade_target = item.upgrade_target()) {
-      return upgrade_target->version;
-    }
-    if (dnf_backend_get_package_install_state(item.row) == PackageInstallState::UPGRADEABLE) {
-      if (!item.row.repo_candidate_version.empty()) {
-        return item.row.repo_candidate_version;
-      }
-      return item.row.version;
-    }
-    return {};
-  case PackageColumnKind::RELEASE: {
-    PackageRow installed_row;
-    if (item.upgrade_target()) {
-      if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row)) {
-        return installed_row.release;
-      }
-      return {};
-    }
-    if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row) &&
-        installed_row.nevra != item.row.nevra) {
-      return installed_row.release;
-    }
-    return item.row.release;
-  }
+    return display ? display->update_version : std::string();
+  case PackageColumnKind::RELEASE:
+    return display ? display->release : item.row.release;
   case PackageColumnKind::UPDATE_RELEASE:
-    if (const TransactionServiceUpgradeTarget *upgrade_target = item.upgrade_target()) {
-      return upgrade_target->release;
-    }
-    if (dnf_backend_get_package_install_state(item.row) == PackageInstallState::UPGRADEABLE) {
-      if (!item.row.repo_candidate_release.empty()) {
-        return item.row.repo_candidate_release;
-      }
-      return item.row.release;
-    }
-    return {};
+    return display ? display->update_release : std::string();
   case PackageColumnKind::ARCH:
     return item.row.arch;
-  case PackageColumnKind::REPO: {
-    PackageRow installed_row;
-    // A repository name such as "fedora" means the row is available from that repo.
-    // "@System" means the row comes from the local installed rpmdb.
-    // For upgradable rows, show the repo that provides the update candidate.
-    if (const TransactionServiceUpgradeTarget *upgrade_target = item.upgrade_target()) {
-      return upgrade_target->repo_id;
-    }
-    if (dnf_backend_get_package_install_state(item.row) == PackageInstallState::UPGRADEABLE) {
-      if (!item.row.repo_candidate_repo.empty()) {
-        return item.row.repo_candidate_repo;
-      }
-      return item.row.repo;
-    }
-    if (dnf_backend_get_installed_package_row_by_name_arch(item.row, installed_row)) {
-      return installed_row.repo;
-    }
-    return item.row.repo;
-  }
+  case PackageColumnKind::REPO:
+    return display ? display->repo : item.row.repo;
   case PackageColumnKind::SUMMARY:
     return item.row.summary;
   }
