@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.4.1
+Version:        0.4.2
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,14 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Sat Jul 25 2026 ErikMN <dnfui@proton.me> - 0.4.2-1
+- Clarify installed-package snapshot change reporting
+- Use typed daemon upgrade publication results instead of status-message control flow
+- Simplify List Upgradable refresh ownership
+- Fix UTF-8 case-insensitive filtering in transaction history
+- Use one pending-action resolver for package table Status text, rendering, and export
+- Show a retry message when stale package query results are rejected
+
 * Tue Jul 21 2026 ErikMN [dnfui@proton.me](mailto:dnfui@proton.me) - 0.4.1-1
 - Improve package search and backend state handling
 - Simplify asynchronous ownership and BaseManager locking
