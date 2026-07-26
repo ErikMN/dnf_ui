@@ -220,6 +220,9 @@ grep -E 'Rss|Pss|Private' "/proc/$pid/smaps_rollup"
 
 - `make dockerrun` starts a system bus in the container and uses dnf5daemon
 - `make dockerdnf5daemontest` runs upgrade-target listing, preview, apply, remove, reinstall, and failure checks against dnf5daemon
+- The dnf5daemon failure checks include applying a prepared session after another
+  session changed package state. The stale prepared session must fail and remain
+  releasable.
 - Use native Fedora to test the real desktop Polkit prompt
 
 ## Fedora review checks

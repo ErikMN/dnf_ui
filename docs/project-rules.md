@@ -64,10 +64,10 @@ This file states the rules that should stay true as DNF UI changes.
 ## Transactions
 
 - Transaction preview **must** show the package actions the user is about to approve.
-- Apply **must** re-resolve the transaction and reject it if the approved action set
-  changed.
-- The preview comparison should compare the same package action set, not resolver
-  iteration order.
+- Apply uses the daemon session that produced the approved preview. DNF UI must
+  never apply a different package action set without presenting a new preview.
+- If the prepared daemon session is no longer valid, Apply must fail and require
+  a new preview.
 - Transaction progress should show **useful** user-facing stages without becoming
   a debug log.
 - The UI **must** refresh package state after a successful apply.
