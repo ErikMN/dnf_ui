@@ -194,6 +194,7 @@ create_main_window_ui_state(const AppWidgets *ui)
   widgets->results.list_scroller = GTK_SCROLLED_WINDOW(ui->scrolled_list);
   widgets->results.inner_paned = GTK_PANED(ui->inner_paned);
   widgets->results.details_stack = GTK_STACK(ui->details_stack);
+  widgets->results.details_status_label = GTK_LABEL(ui->details_status_label);
   widgets->results.details_buffer = ui->details_buffer;
   widgets->results.files_buffer = ui->files_buffer;
   widgets->results.deps_buffer = ui->deps_buffer;

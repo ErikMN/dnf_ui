@@ -27,6 +27,10 @@ void package_details_cancel_active_load(MainWindowUiState *widgets);
 // -----------------------------------------------------------------------------
 void package_details_load_selected_package_info(MainWindowUiState *widgets, const PackageTableRow &selected);
 // -----------------------------------------------------------------------------
+// Refresh the selected package action controls and Status label.
+// -----------------------------------------------------------------------------
+void package_details_refresh_selected_package_actions(MainWindowUiState *widgets);
+// -----------------------------------------------------------------------------
 // Load tab content that is fetched only when the tab is opened.
 // -----------------------------------------------------------------------------
 void package_details_on_details_page_changed(GtkStack *stack, GParamSpec *, gpointer user_data);

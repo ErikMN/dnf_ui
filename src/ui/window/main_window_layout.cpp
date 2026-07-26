@@ -226,12 +226,27 @@ main_window_build_layout(AppWidgets *ui)
   gtk_box_append(GTK_BOX(details_panel), details_stack);
 
   // Package info tab.
+  GtkWidget *info_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_hexpand(info_box, TRUE);
+  gtk_widget_set_vexpand(info_box, TRUE);
+
+  GtkWidget *details_status_label = gtk_label_new(NULL);
+  gtk_label_set_xalign(GTK_LABEL(details_status_label), 0.0f);
+  gtk_widget_set_margin_start(details_status_label, 8);
+  gtk_widget_set_margin_end(details_status_label, 8);
+  gtk_widget_set_margin_top(details_status_label, 6);
+  gtk_widget_set_margin_bottom(details_status_label, 6);
+  gtk_widget_set_visible(details_status_label, FALSE);
+  ui->details_status_label = details_status_label;
+  gtk_box_append(GTK_BOX(info_box), details_status_label);
+
   GtkTextBuffer *details_buffer = NULL;
   GtkWidget *scrolled_details =
       create_scrolled_text_view(_("Select a package for details."), GTK_WRAP_WORD, &details_buffer);
   ui->details_buffer = details_buffer;
+  gtk_box_append(GTK_BOX(info_box), scrolled_details);
 
-  gtk_stack_add_titled(GTK_STACK(details_stack), scrolled_details, "info", _("Info"));
+  gtk_stack_add_titled(GTK_STACK(details_stack), info_box, "info", _("Info"));
 
   // File list tab.
   GtkTextBuffer *files_buffer = NULL;

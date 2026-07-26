@@ -41,6 +41,7 @@ struct PackageResultsWidgets {
   GtkScrolledWindow *list_scroller = nullptr;
   GtkPaned *inner_paned = nullptr;
   GtkStack *details_stack = nullptr;
+  GtkLabel *details_status_label = nullptr;
   // Text buffers owned by the details panel text views.
   GtkTextBuffer *details_buffer = nullptr;
   GtkTextBuffer *files_buffer = nullptr;

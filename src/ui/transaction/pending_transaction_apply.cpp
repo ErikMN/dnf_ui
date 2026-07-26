@@ -11,6 +11,7 @@
 #include "dnf_backend/dnf_backend.hpp"
 #include "i18n.hpp"
 #include "ui/details/package_details_controller.hpp"
+#include "ui/package_table/package_table_view.hpp"
 #include "ui/history/transaction_history_view.hpp"
 #include "ui/package_query/package_query_controller.hpp"
 #include "ui/package_query/package_query_controller_internal.hpp"
@@ -351,6 +352,8 @@ start_apply_transaction(MainWindowUiState *widgets)
           // Clear pending actions and restore the transaction controls.
           widgets->transaction.actions.clear();
           pending_transaction_set_preview_controls_sensitive(widgets, true);
+          package_table_refresh_statuses(widgets);
+          package_details_refresh_selected_package_actions(widgets);
 
           ui_helpers_set_status(widgets->query.status_label, _("Transaction successful."), "green");
 

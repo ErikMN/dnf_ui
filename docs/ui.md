@@ -117,6 +117,7 @@ updates the details pane for the selected package.
 
 It updates:
 
+- selected package status
 - package details text
 - installed file list, loaded only when the Files tab is opened
 - dependencies, loaded only when the Dependencies tab is opened
@@ -129,6 +130,9 @@ The controller records the selected NEVRA and backend generation when each task
 starts. If the selected package changes or the backend generation changes, the
 old result is ignored. Changelog loading can require extra repository metadata
 for available packages, so it remains separate from the normal Info load.
+The Info tab keeps Status as a live label outside the fetched package metadata
+text, so pending transaction changes do not leave stale Status text in the
+details panel.
 
 ### Package table view
 

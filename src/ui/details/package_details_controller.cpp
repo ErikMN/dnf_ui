@@ -24,7 +24,6 @@
 struct InfoTaskData {
   std::string selected_nevra;
   std::string details_query_nevra;
-  std::string status_text;
   std::optional<PackageRow> upgrade_row_override;
   uint64_t generation;
 };
@@ -131,29 +130,42 @@ set_details_text(GtkTextBuffer *buffer, const char *text)
 }
 
 // -----------------------------------------------------------------------------
-// Insert the UI row status between package metadata and summary text.
+// Show or hide the selected package Status label in the Info tab.
 // -----------------------------------------------------------------------------
-static std::string
-package_info_text_with_status(const char *info_text, const char *status_text)
+static void
+set_details_status_text(MainWindowUiState *widgets, const char *status_text)
 {
-  std::string text = info_text ? info_text : _("No details found.");
+  if (!widgets || !widgets->results.details_status_label) {
+    return;
+  }
+
   if (!status_text || !*status_text) {
-    return text;
+    gtk_label_set_text(widgets->results.details_status_label, "");
+    gtk_widget_set_visible(GTK_WIDGET(widgets->results.details_status_label), FALSE);
+    return;
   }
 
-  std::string status_line = _("Status");
-  status_line += ": ";
-  status_line += status_text;
+  std::string text = _("Status");
+  text += ": ";
+  text += status_text;
+  gtk_label_set_text(widgets->results.details_status_label, text.c_str());
+  gtk_widget_set_visible(GTK_WIDGET(widgets->results.details_status_label), TRUE);
+}
 
-  size_t summary_separator = text.find("\n\n");
-  if (summary_separator == std::string::npos) {
-    text += "\n";
-    text += status_line;
-    return text;
+// -----------------------------------------------------------------------------
+// Return the Status text for the selected row and current pending actions.
+// -----------------------------------------------------------------------------
+static const char *
+selected_package_status_text(MainWindowUiState *widgets,
+                             const PackageTableRow &selected,
+                             const PendingTransactionActionRows &action_rows)
+{
+  PendingAction::Type action_type;
+  if (package_table_pending_action_for_resolved_row(widgets, selected, action_rows, action_type)) {
+    return package_table_pending_action_status_text(action_type, action_rows.state);
   }
-  text.insert(summary_separator, "\n\n" + status_line);
 
-  return text;
+  return package_table_status_text(action_rows.state);
 }
 
 // -----------------------------------------------------------------------------
@@ -170,6 +182,7 @@ package_details_reset_details_view(MainWindowUiState *widgets)
   widgets->results.deps_loaded_nevra.clear();
   widgets->results.changelog_loaded_nevra.clear();
   widgets->results.details_query_nevra.clear();
+  set_details_status_text(widgets, nullptr);
   set_details_text(widgets->results.details_buffer, _("Select a package for details."));
   set_details_text(widgets->results.files_buffer, _("Select an installed package to view its file list."));
   set_details_text(widgets->results.deps_buffer, _("Select a package to view dependencies."));
@@ -191,6 +204,7 @@ package_details_clear_selected_package_state(MainWindowUiState *widgets)
   widgets->results.files_loaded_nevra.clear();
   widgets->results.deps_loaded_nevra.clear();
   widgets->results.changelog_loaded_nevra.clear();
+  set_details_status_text(widgets, nullptr);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button), FALSE);
@@ -262,6 +276,28 @@ update_selected_package_actions(MainWindowUiState *widgets,
       action_rows.has_installed_row ? action_rows.installed_row.nevra : selected.row.nevra;
   ui_helpers_update_action_button_labels_for_selection(
       widgets, install_nevra, installed_nevra, installed_nevra, action_rows.install_is_upgrade);
+  set_details_status_text(widgets, selected_package_status_text(widgets, selected, action_rows));
+}
+
+// -----------------------------------------------------------------------------
+// Refresh the selected package action controls from the current table and pending action state.
+// -----------------------------------------------------------------------------
+void
+package_details_refresh_selected_package_actions(MainWindowUiState *widgets)
+{
+  if (!widgets || widgets->results.selected_nevra.empty()) {
+    set_details_status_text(widgets, nullptr);
+    return;
+  }
+
+  PackageTableRow selected;
+  if (!package_table_get_selected_package(widgets, selected) || selected.row.nevra != widgets->results.selected_nevra) {
+    set_details_status_text(widgets, nullptr);
+    return;
+  }
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(selected.row);
+  update_selected_package_actions(widgets, selected, resolution);
 }
 
 // -----------------------------------------------------------------------------
@@ -345,11 +381,8 @@ on_package_details_task_finished(GObject *, GAsyncResult *res, gpointer user_dat
     return;
   }
 
-  // Show the row status even when the Status column is hidden.
-  std::string info_text = package_info_text_with_status(info, td->status_text.c_str());
-
   // Display general package information.
-  set_details_text(widgets->results.details_buffer, info_text.c_str());
+  set_details_text(widgets->results.details_buffer, info);
 
   ui_helpers_set_status(widgets->query.status_label, _("Package info loaded."), "green");
   g_free(info);
@@ -556,14 +589,9 @@ package_details_load_selected_package_info(MainWindowUiState *widgets, const Pac
   GTask *task = widgets_task_new_for_main_window_ui_state(widgets, c, on_package_details_task_finished);
   widgets->results.package_details_cancellable = G_CANCELLABLE(g_object_ref(c));
 
-  // Pass selected row state to the background task.
-  PackageInstallState selected_state =
-      selected.upgrade_target() ? PackageInstallState::UPGRADEABLE : selected_resolution.state;
-
   InfoTaskData *td = new InfoTaskData;
   td->selected_nevra = selected.row.nevra;
   td->details_query_nevra = details_query_nevra;
-  td->status_text = package_table_status_text(selected_state);
   td->upgrade_row_override = upgrade_row_override;
   td->generation = BaseManager::instance().current_generation();
   g_task_set_task_data(task, td, info_task_data_free);

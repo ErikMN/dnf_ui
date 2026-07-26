@@ -9,6 +9,7 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 #include "i18n.hpp"
+#include "ui/details/package_details_controller.hpp"
 #include "ui/package_query/package_query_controller_internal.hpp"
 #include "ui/transaction/pending_transaction_action_rows.hpp"
 #include "ui/package_table/package_table_view.hpp"
@@ -122,6 +123,7 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
 
   // Refresh status badges without rebuilding the package table.
   package_table_refresh_statuses(widgets);
+  package_details_refresh_selected_package_actions(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -191,6 +193,7 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
 
   // Refresh status badges without rebuilding the package table.
   package_table_refresh_statuses(widgets);
+  package_details_refresh_selected_package_actions(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -261,6 +264,7 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
   pending_transaction_invalidate_service_preview(widgets);
 
   package_table_refresh_statuses(widgets);
+  package_details_refresh_selected_package_actions(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -295,6 +299,7 @@ pending_transaction_on_mark_listed_upgrades_button_clicked(GtkButton *, gpointer
   pending_transaction_invalidate_service_preview(widgets);
   pending_transaction_refresh_pending_tab(widgets);
   package_table_refresh_statuses(widgets);
+  package_details_refresh_selected_package_actions(widgets);
 
   std::string msg = dnfui_i18n_format_count(marked_count, "Marked %zu listed upgrade.", "Marked %zu listed upgrades.");
   ui_helpers_set_status(widgets->query.status_label, msg, "blue");
@@ -323,6 +328,7 @@ pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_d
 
   // Refresh status badges without rebuilding the package table.
   package_table_refresh_statuses(widgets);
+  package_details_refresh_selected_package_actions(widgets);
 
   std::string msg = dnfui_i18n_format_count(count, "Cleared %zu pending action.", "Cleared %zu pending actions.");
   ui_helpers_set_status(widgets->query.status_label, msg, "green");
