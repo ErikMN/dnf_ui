@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.4.2
+Version:        0.4.3
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,14 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Sun Jul 26 2026 ErikMN <dnfui@proton.me> - 0.4.3-1
+- Align transaction documentation with prepared dnf5daemon sessions
+- Make repository key trust prompts cancellable
+- Stabilize package table display and sorting values across installed-state refreshes
+- Resolve selected installed package state from one snapshot
+- Sort package versions and releases with RPM version rules
+- Keep Details Status live and show it only when the Status column is hidden
+
 * Sat Jul 25 2026 ErikMN <dnfui@proton.me> - 0.4.2-1
 - Clarify installed-package snapshot change reporting
 - Use typed daemon upgrade publication results instead of status-message control flow
