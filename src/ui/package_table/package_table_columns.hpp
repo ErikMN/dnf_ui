@@ -45,7 +45,6 @@ const PackageTableColumnDefinition *package_table_column_definition_by_id(const 
 // Read visible package table columns from the user config.
 // -----------------------------------------------------------------------------
 std::set<std::string> package_table_load_visible_column_ids();
-// -----------------------------------------------------------------------------
 // Save visible package table columns to the user config.
 // -----------------------------------------------------------------------------
 void package_table_save_visible_column_ids(const std::set<std::string> &visible);

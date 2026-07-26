@@ -740,6 +740,36 @@ package_table_refresh_statuses(MainWindowUiState *widgets)
 }
 
 // -----------------------------------------------------------------------------
+// Return true when one package table column is visible in the current GTK view.
+// -----------------------------------------------------------------------------
+bool
+package_table_column_is_visible(MainWindowUiState *widgets, PackageColumnKind kind)
+{
+  if (!widgets || !widgets->results.list_scroller) {
+    return false;
+  }
+
+  GtkWidget *child = gtk_scrolled_window_get_child(widgets->results.list_scroller);
+  if (!child || !GTK_IS_COLUMN_VIEW(child)) {
+    return false;
+  }
+
+  GListModel *columns = gtk_column_view_get_columns(GTK_COLUMN_VIEW(child));
+  guint n_columns = g_list_model_get_n_items(columns);
+  for (guint i = 0; i < n_columns; ++i) {
+    GObject *obj = G_OBJECT(g_list_model_get_item(columns, i));
+    GtkColumnViewColumn *column = GTK_COLUMN_VIEW_COLUMN(obj);
+    bool visible = package_table_column_has_kind(column, kind) && gtk_column_view_column_get_visible(column);
+    g_object_unref(obj);
+    if (visible) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
 // Change one package table column setting and update the current table if shown.
 // -----------------------------------------------------------------------------
 bool
@@ -762,6 +792,7 @@ package_table_set_column_visible(MainWindowUiState *widgets, const char *column_
       package_table_apply_column_visibility(GTK_COLUMN_VIEW(child));
     }
   }
+  package_details_refresh_selected_package_actions(widgets);
 
   return true;
 }
@@ -780,6 +811,7 @@ package_table_reset_columns_to_default(MainWindowUiState *widgets)
       package_table_apply_column_visibility(GTK_COLUMN_VIEW(child));
     }
   }
+  package_details_refresh_selected_package_actions(widgets);
 }
 
 static void

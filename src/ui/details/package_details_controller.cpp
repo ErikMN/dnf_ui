@@ -139,7 +139,7 @@ set_details_status_text(MainWindowUiState *widgets, const char *status_text)
     return;
   }
 
-  if (!status_text || !*status_text) {
+  if (package_table_column_is_visible(widgets, PackageColumnKind::STATUS) || !status_text || !*status_text) {
     gtk_label_set_text(widgets->results.details_status_label, "");
     gtk_widget_set_visible(GTK_WIDGET(widgets->results.details_status_label), FALSE);
     return;

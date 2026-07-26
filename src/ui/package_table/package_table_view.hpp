@@ -9,6 +9,7 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 #include "dnf5daemon_client/transaction_service_client.hpp"
+#include "ui/package_table/package_table_columns.hpp"
 
 #include <memory>
 #include <vector>
@@ -67,6 +68,10 @@ void package_table_fill_package_view(MainWindowUiState *widgets,
 // Refresh status values for all visible package rows.
 // -----------------------------------------------------------------------------
 void package_table_refresh_statuses(MainWindowUiState *widgets);
+// -----------------------------------------------------------------------------
+// Return true when one package table column is visible in the current GTK view.
+// -----------------------------------------------------------------------------
+bool package_table_column_is_visible(MainWindowUiState *widgets, PackageColumnKind kind);
 // -----------------------------------------------------------------------------
 // Change one package table column setting and update the current table if shown.
 // -----------------------------------------------------------------------------
