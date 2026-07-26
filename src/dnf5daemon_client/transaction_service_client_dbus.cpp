@@ -1435,12 +1435,18 @@ transaction_service_client_confirm_key(GDBusConnection *connection,
                                        const std::string &transaction_path,
                                        const std::string &key_id,
                                        bool confirmed,
+                                       GCancellable *cancellable,
                                        std::string &error_out)
 {
   error_out.clear();
 
   if (!connection || transaction_path.empty() || key_id.empty()) {
     error_out = _("dnf5daemon key import request is incomplete.");
+    return false;
+  }
+
+  if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+    error_out = _("Operation cancelled.");
     return false;
   }
 
@@ -1459,11 +1465,13 @@ transaction_service_client_confirm_key(GDBusConnection *connection,
       nullptr,
       G_DBUS_CALL_FLAGS_NONE,
       G_MAXINT,
-      nullptr,
+      cancellable,
       &error);
 
   if (!reply) {
-    if (error) {
+    if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+      error_out = _("Operation cancelled.");
+    } else if (error) {
       g_dbus_error_strip_remote_error(error);
       error_out = error->message ? error->message : "";
       if (error_out.empty()) {

@@ -8,6 +8,8 @@
 
 #include <string>
 
+typedef struct _GCancellable GCancellable;
+
 struct MainWindowUiState;
 struct TransactionKeyImportRequest;
 struct TransactionPreview;
@@ -31,7 +33,9 @@ void transaction_dialogs_show_summary_dialog(MainWindowUiState *widgets,
 // -----------------------------------------------------------------------------
 // Ask the user whether dnf5daemon may import one repository signing key.
 // -----------------------------------------------------------------------------
-bool transaction_dialogs_confirm_key_import(MainWindowUiState *widgets, const TransactionKeyImportRequest &request);
+bool transaction_dialogs_confirm_key_import(MainWindowUiState *widgets,
+                                            const TransactionKeyImportRequest &request,
+                                            GCancellable *cancellable);
 
 // -----------------------------------------------------------------------------
 // EOF

@@ -316,6 +316,8 @@ Why this matters:
   the user's Polkit answer.
 - Repository signing key import is a user trust decision. The app must not
   accept a daemon key request without asking the user.
+- Cancelling preview or apply while a repository signing key prompt is waiting
+  must reject the key and wake the transaction worker.
 - The signal list is intentionally small. It gives the user useful transaction
   stages without turning the progress window into a debug log.
 

@@ -21,6 +21,8 @@ struct TransactionRequest;
 struct TransactionServiceProgressForwarder {
   const std::function<void(const std::string &)> *progress_callback = nullptr;
   const TransactionKeyImportCallback *key_import_callback = nullptr;
+  // Non-owning task cancellable used to avoid sending key approval after cancellation.
+  GCancellable *cancellable = nullptr;
   std::string transaction_path;
   bool downloads_started = false;
   bool transaction_started = false;
@@ -66,6 +68,7 @@ bool transaction_service_client_confirm_key(GDBusConnection *connection,
                                             const std::string &transaction_path,
                                             const std::string &key_id,
                                             bool confirmed,
+                                            GCancellable *cancellable,
                                             std::string &error_out);
 
 bool transaction_service_client_list_daemon_upgrade_targets(GDBusConnection *connection,

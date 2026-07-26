@@ -383,8 +383,8 @@ start_apply_transaction(MainWindowUiState *widgets)
         bool ok = transaction_service_client_apply_started_request(
             td->transaction_path,
             [td](const std::string &message) { transaction_progress_append(td->progress_window, message); },
-            [td](const TransactionKeyImportRequest &request) {
-              return transaction_dialogs_confirm_key_import(td->widgets, request);
+            [td, cancellable](const TransactionKeyImportRequest &request) {
+              return transaction_dialogs_confirm_key_import(td->widgets, request, cancellable);
             },
             err,
             cancellable);
@@ -503,8 +503,8 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
               td->preview,
               td->transaction_path,
               error,
-              [td](const TransactionKeyImportRequest &request) {
-                return transaction_dialogs_confirm_key_import(td->widgets, request);
+              [td, cancellable](const TransactionKeyImportRequest &request) {
+                return transaction_dialogs_confirm_key_import(td->widgets, request, cancellable);
               },
               cancellable);
         } else if (td) {
@@ -521,8 +521,8 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
                 td->preview,
                 td->transaction_path,
                 error,
-                [td](const TransactionKeyImportRequest &request) {
-                  return transaction_dialogs_confirm_key_import(td->widgets, request);
+                [td, cancellable](const TransactionKeyImportRequest &request) {
+                  return transaction_dialogs_confirm_key_import(td->widgets, request, cancellable);
                 },
                 cancellable);
           }

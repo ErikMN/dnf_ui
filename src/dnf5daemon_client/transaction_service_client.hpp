@@ -132,6 +132,17 @@ bool transaction_service_client_testonly_build_upgrade_target_from_fields(const 
 // -----------------------------------------------------------------------------
 bool transaction_service_client_testonly_verify_preview_keeps_running_app_package(const TransactionPreview &preview,
                                                                                   std::string &error_out);
+// -----------------------------------------------------------------------------
+// Return the key import answer after applying the cancellation rule used before daemon confirmation.
+// -----------------------------------------------------------------------------
+bool transaction_service_client_testonly_key_import_answer_after_callback(const TransactionKeyImportCallback &callback,
+                                                                          GCancellable *cancellable,
+                                                                          bool &confirmed_out);
+// -----------------------------------------------------------------------------
+// Return the cancellable used for the final key confirmation call.
+// -----------------------------------------------------------------------------
+GCancellable *transaction_service_client_testonly_key_import_confirmation_cancellable(bool confirmed,
+                                                                                      GCancellable *cancellable);
 #endif
 
 // -----------------------------------------------------------------------------

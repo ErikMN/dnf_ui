@@ -138,6 +138,17 @@ Reject test:
 - `utils/setup_gpg_key_prompt_test_repo.sh status` should not list an imported
   test key.
 
+Close test:
+
+- Start the same transaction in DNF UI again.
+- Close the DNF UI key prompt without trusting the key.
+- The package should not be installed.
+- `utils/setup_gpg_key_prompt_test_repo.sh status` should not list an imported
+  test key.
+
+The Apply progress window is not user-cancellable. Cancellation after UI
+approval but before daemon confirmation is covered by a unit test.
+
 Run `utils/setup_gpg_key_prompt_test_repo.sh restore` before the accept test.
 
 Accept test:

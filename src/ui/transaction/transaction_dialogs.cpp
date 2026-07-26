@@ -28,6 +28,8 @@ struct KeyImportDialogState {
   TransactionKeyImportRequest request;
   std::mutex mutex;
   std::condition_variable condition;
+  // Set on the GTK thread after creation. Cancellation uses it to close the dialog from the main thread.
+  GtkWindow *dialog = nullptr;
   bool done = false;
   bool accepted = false;
 };
@@ -113,7 +115,29 @@ key_import_details_text(const TransactionKeyImportRequest &request)
 }
 
 // -----------------------------------------------------------------------------
-// Finish the key import dialog and wake the waiting worker.
+// Store the final key answer and wake the waiting worker.
+// -----------------------------------------------------------------------------
+static bool
+complete_key_import_state(const KeyImportDialogStatePtr &state, bool accepted)
+{
+  if (!state) {
+    return false;
+  }
+
+  std::unique_lock<std::mutex> lock(state->mutex);
+  if (state->done) {
+    return false;
+  }
+
+  state->accepted = accepted;
+  state->done = true;
+  lock.unlock();
+  state->condition.notify_one();
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Finish the visible key import dialog after a user choice.
 // -----------------------------------------------------------------------------
 static void
 finish_key_import_dialog(GtkWindow *dialog, bool accepted)
@@ -127,18 +151,46 @@ finish_key_import_dialog(GtkWindow *dialog, bool accepted)
     }
   }
 
+  complete_key_import_state(state, accepted);
+
+  if (dialog) {
+    gtk_window_destroy(dialog);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Close a key import dialog from the GTK thread after its task was cancelled.
+// -----------------------------------------------------------------------------
+static gboolean
+destroy_key_import_dialog_on_main(gpointer user_data)
+{
+  std::unique_ptr<KeyImportDialogStatePtr> holder(static_cast<KeyImportDialogStatePtr *>(user_data));
+  KeyImportDialogStatePtr state = holder ? *holder : nullptr;
+  GtkWindow *dialog = nullptr;
+
   if (state) {
     std::lock_guard<std::mutex> lock(state->mutex);
-    if (!state->done) {
-      state->accepted = accepted;
-      state->done = true;
-      state->condition.notify_one();
-    }
+    dialog = state->dialog;
   }
 
   if (dialog) {
     gtk_window_destroy(dialog);
   }
+
+  return G_SOURCE_REMOVE;
+}
+
+// -----------------------------------------------------------------------------
+// Reject a pending key request when the preview or apply task is cancelled.
+// The cancellation callback may run on a worker thread, so GTK cleanup is queued.
+// -----------------------------------------------------------------------------
+static void
+key_import_dialog_cancelled(GCancellable *, gpointer user_data)
+{
+  auto *state_ptr = static_cast<KeyImportDialogStatePtr *>(user_data);
+  KeyImportDialogStatePtr state = state_ptr ? *state_ptr : nullptr;
+  complete_key_import_state(state, false);
+  g_main_context_invoke(nullptr, destroy_key_import_dialog_on_main, new KeyImportDialogStatePtr(state));
 }
 
 // -----------------------------------------------------------------------------
@@ -150,13 +202,15 @@ show_key_import_dialog_on_main(gpointer user_data)
   std::unique_ptr<KeyImportDialogStatePtr> holder(static_cast<KeyImportDialogStatePtr *>(user_data));
   KeyImportDialogStatePtr state = holder ? *holder : nullptr;
   if (!state || !state->widgets || state->widgets->window_state.destroyed) {
-    if (state) {
-      std::lock_guard<std::mutex> lock(state->mutex);
-      state->done = true;
-      state->accepted = false;
-      state->condition.notify_one();
-    }
+    complete_key_import_state(state, false);
     return G_SOURCE_REMOVE;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    if (state->done) {
+      return G_SOURCE_REMOVE;
+    }
   }
 
   GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
@@ -171,12 +225,28 @@ show_key_import_dialog_on_main(gpointer user_data)
       gtk_window_set_application(dialog, app);
     }
     gtk_window_set_transient_for(dialog, parent);
+    gtk_window_set_destroy_with_parent(dialog, TRUE);
   }
 
   auto *dialog_state = new KeyImportDialogStatePtr(state);
   g_object_set_data_full(G_OBJECT(dialog), kKeyImportDialogStateKey, dialog_state, [](gpointer p) {
     delete static_cast<KeyImportDialogStatePtr *>(p);
   });
+
+  bool destroy_dialog = false;
+  {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    if (state->done) {
+      destroy_dialog = true;
+    } else {
+      state->dialog = dialog;
+    }
+  }
+
+  if (destroy_dialog) {
+    gtk_window_destroy(dialog);
+    return G_SOURCE_REMOVE;
+  }
 
   GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
   gtk_widget_set_margin_start(outer, 12);
@@ -243,12 +313,13 @@ show_key_import_dialog_on_main(gpointer user_data)
                        return;
                      }
 
-                     std::lock_guard<std::mutex> lock(state->mutex);
-                     if (!state->done) {
-                       state->accepted = false;
-                       state->done = true;
-                       state->condition.notify_one();
+                     {
+                       std::lock_guard<std::mutex> lock(state->mutex);
+                       if (state->dialog == GTK_WINDOW(widget)) {
+                         state->dialog = nullptr;
+                       }
                      }
+                     complete_key_import_state(state, false);
                    }),
                    nullptr);
 
@@ -486,9 +557,11 @@ transaction_dialogs_show_summary_dialog(MainWindowUiState *widgets,
 // Show the GTK dialog on the main thread and wait for the user answer.
 // -----------------------------------------------------------------------------
 bool
-transaction_dialogs_confirm_key_import(MainWindowUiState *widgets, const TransactionKeyImportRequest &request)
+transaction_dialogs_confirm_key_import(MainWindowUiState *widgets,
+                                       const TransactionKeyImportRequest &request,
+                                       GCancellable *cancellable)
 {
-  if (!widgets) {
+  if (!widgets || (cancellable && g_cancellable_is_cancelled(cancellable))) {
     return false;
   }
 
@@ -496,11 +569,30 @@ transaction_dialogs_confirm_key_import(MainWindowUiState *widgets, const Transac
   state->widgets = widgets;
   state->request = request;
 
+  auto *cancel_data = new KeyImportDialogStatePtr(state);
+  gulong cancel_handler_id = 0;
+  if (cancellable) {
+    // GLib frees cancel_data when this handler is disconnected, or immediately if the task was already cancelled.
+    cancel_handler_id =
+        g_cancellable_connect(cancellable, G_CALLBACK(key_import_dialog_cancelled), cancel_data, [](gpointer p) {
+          delete static_cast<KeyImportDialogStatePtr *>(p);
+        });
+  } else {
+    delete cancel_data;
+  }
+
   g_main_context_invoke(nullptr, show_key_import_dialog_on_main, new KeyImportDialogStatePtr(state));
 
   std::unique_lock<std::mutex> lock(state->mutex);
   state->condition.wait(lock, [&]() { return state->done; });
-  return state->accepted;
+  bool accepted = state->accepted;
+  lock.unlock();
+
+  if (cancellable && cancel_handler_id > 0) {
+    g_cancellable_disconnect(cancellable, cancel_handler_id);
+  }
+
+  return accepted;
 }
 
 // -----------------------------------------------------------------------------

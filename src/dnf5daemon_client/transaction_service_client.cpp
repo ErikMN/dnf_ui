@@ -97,6 +97,7 @@ resolve_transaction_preview(GDBusConnection *connection,
 
   TransactionServiceProgressForwarder progress_forwarder;
   progress_forwarder.key_import_callback = &key_import_callback;
+  progress_forwarder.cancellable = cancellable;
   guint progress_subscription_id =
       transaction_service_client_subscribe_progress(connection, transaction_path, &progress_forwarder);
 
@@ -320,6 +321,7 @@ transaction_service_client_apply_started_request(const std::string &transaction_
   TransactionServiceProgressForwarder progress_forwarder;
   progress_forwarder.progress_callback = &progress_callback;
   progress_forwarder.key_import_callback = &key_import_callback;
+  progress_forwarder.cancellable = cancellable;
   guint progress_subscription_id = 0;
 
   do {

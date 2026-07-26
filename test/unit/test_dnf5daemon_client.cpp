@@ -114,6 +114,32 @@ TEST_CASE("dnf5daemon preview warnings do not count as package actions")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that cancellation wins before a trusted repository key answer reaches dnf5daemon.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon key import confirmation honors cancellation after user approval")
+{
+  GCancellable *cancellable = g_cancellable_new();
+  bool callback_called = false;
+
+  TransactionKeyImportCallback callback = [&](const TransactionKeyImportRequest &) {
+    callback_called = true;
+    g_cancellable_cancel(cancellable);
+    return true;
+  };
+
+  bool confirmed = true;
+  REQUIRE(transaction_service_client_testonly_key_import_answer_after_callback(callback, cancellable, confirmed));
+  GCancellable *confirmation_cancellable =
+      transaction_service_client_testonly_key_import_confirmation_cancellable(confirmed, cancellable);
+
+  g_object_unref(cancellable);
+
+  REQUIRE(callback_called);
+  REQUIRE_FALSE(confirmed);
+  REQUIRE(confirmation_cancellable == nullptr);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that the daemon preview parser rejects replacing the daemon server that applies transactions for DNF UI.
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon preview parser rejects replacing dnf5daemon-server")

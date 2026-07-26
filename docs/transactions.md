@@ -161,6 +161,10 @@ or no, and the client sends that answer back to the same daemon session.
 The same trust dialog is used during preview and apply. During preview it is
 shown before the transaction summary can be prepared.
 
+If the preview or apply task is cancelled while the trust dialog is waiting, DNF
+UI treats the key as rejected and wakes the worker. The app must never import a
+repository signing key after the user cancels the task.
+
 ## Progress
 
 The transaction client subscribes to dnf5daemon progress signals and forwards a

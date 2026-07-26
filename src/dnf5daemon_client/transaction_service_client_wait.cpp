@@ -136,6 +136,45 @@ download_description(TransactionServiceProgressForwarder *forwarder, const std::
 }
 
 // -----------------------------------------------------------------------------
+// Ask the UI for a key answer, then reject it if the task was cancelled.
+// -----------------------------------------------------------------------------
+bool
+key_import_answer_from_callback(TransactionServiceProgressForwarder *forwarder,
+                                const TransactionKeyImportRequest &request,
+                                bool &confirmed_out)
+{
+  confirmed_out = false;
+
+  if (!forwarder || !forwarder->key_import_callback || !*forwarder->key_import_callback) {
+    if (forwarder) {
+      forwarder->key_confirm_error = _("The repository cannot be used until its signing key is trusted.");
+    }
+    forward_progress_line(forwarder, _("The repository cannot be used until its signing key is trusted."));
+    return false;
+  }
+
+  confirmed_out = (*forwarder->key_import_callback)(request);
+  if (confirmed_out && forwarder->cancellable && g_cancellable_is_cancelled(forwarder->cancellable)) {
+    confirmed_out = false;
+  }
+
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Positive key approval should stop if the task is cancelled. Rejection is cleanup and should still be sent.
+// -----------------------------------------------------------------------------
+GCancellable *
+key_import_confirmation_cancellable(TransactionServiceProgressForwarder *forwarder, bool confirmed)
+{
+  if (!confirmed || !forwarder) {
+    return nullptr;
+  }
+
+  return forwarder->cancellable;
+}
+
+// -----------------------------------------------------------------------------
 // Ask the UI whether dnf5daemon should trust one repository signing key.
 // -----------------------------------------------------------------------------
 void
@@ -154,19 +193,17 @@ handle_key_import_request(GDBusConnection *connection,
               request.key_id.c_str());
 
   bool confirmed = false;
-  if (forwarder && forwarder->key_import_callback && *forwarder->key_import_callback) {
-    confirmed = (*forwarder->key_import_callback)(request);
-  } else {
-    if (forwarder) {
-      forwarder->key_confirm_error = _("The repository cannot be used until its signing key is trusted.");
-    }
-    forward_progress_line(forwarder, _("The repository cannot be used until its signing key is trusted."));
+  if (!key_import_answer_from_callback(forwarder, request, confirmed)) {
     return;
   }
 
   std::string confirm_error;
-  if (!transaction_service_client_confirm_key(
-          connection, forwarder ? forwarder->transaction_path : "", request.key_id, confirmed, confirm_error)) {
+  if (!transaction_service_client_confirm_key(connection,
+                                              forwarder ? forwarder->transaction_path : "",
+                                              request.key_id,
+                                              confirmed,
+                                              key_import_confirmation_cancellable(forwarder, confirmed),
+                                              confirm_error)) {
     if (forwarder) {
       forwarder->key_confirm_error = confirm_error;
     }
@@ -307,6 +344,37 @@ on_transaction_progress_signal(GDBusConnection *connection,
 }
 
 } // namespace
+
+#ifdef DNFUI_BUILD_TESTS
+// -----------------------------------------------------------------------------
+// Test the key answer rule without needing a live dnf5daemon signal.
+// -----------------------------------------------------------------------------
+bool
+transaction_service_client_testonly_key_import_answer_after_callback(const TransactionKeyImportCallback &callback,
+                                                                     GCancellable *cancellable,
+                                                                     bool &confirmed_out)
+{
+  TransactionServiceProgressForwarder forwarder;
+  forwarder.key_import_callback = &callback;
+  forwarder.cancellable = cancellable;
+
+  TransactionKeyImportRequest request;
+  request.key_id = "test-key";
+
+  return key_import_answer_from_callback(&forwarder, request, confirmed_out);
+}
+
+// -----------------------------------------------------------------------------
+// Test which cancellable would be used for the final key confirmation call.
+// -----------------------------------------------------------------------------
+GCancellable *
+transaction_service_client_testonly_key_import_confirmation_cancellable(bool confirmed, GCancellable *cancellable)
+{
+  TransactionServiceProgressForwarder forwarder;
+  forwarder.cancellable = cancellable;
+  return key_import_confirmation_cancellable(&forwarder, confirmed);
+}
+#endif
 
 // -----------------------------------------------------------------------------
 // Subscribe to dnf5daemon signals for one transaction session.
