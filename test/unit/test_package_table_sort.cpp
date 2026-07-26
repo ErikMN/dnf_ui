@@ -12,11 +12,13 @@ make_table_test_row(const std::string &nevra,
                     const std::string &name,
                     const std::string &version,
                     const std::string &release,
-                    const std::string &arch)
+                    const std::string &arch,
+                    const std::string &epoch = "")
 {
   PackageRow row;
   row.nevra = nevra;
   row.name = name;
+  row.epoch = epoch;
   row.version = version;
   row.release = release;
   row.arch = arch;
@@ -312,6 +314,62 @@ TEST_CASE("Package table Version sorter uses stored item values")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that Version sorting follows RPM version rules instead of plain text order.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Version sorter uses RPM version order")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-1.2.9-1.x86_64", "left", "1.2.9", "1", "x86_64");
+  PackageRow right = make_table_test_row("right-1.2.10-1.x86_64", "right", "1.2.10", "1", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Version sorting includes the RPM epoch, not only the visible version text.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Version sorter uses RPM epoch order")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-99.0-1.x86_64", "left", "99.0", "1", "x86_64", "0");
+  PackageRow right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64", "1");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Version sorting follows RPM pre-release ordering.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Version sorter handles RPM pre-release marker")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-1.0~rc1-1.x86_64", "left", "1.0~rc1", "1", "x86_64");
+  PackageRow right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Version sorting does not use Release as a hidden sort key.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Version sorter ignores Release")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("bravo-1.0-2.x86_64", "bravo", "1.0", "2", "x86_64");
+  PackageRow right = make_table_test_row("alpha-1.0-10.x86_64", "alpha", "1.0", "10", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) > 0);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that Update Version sorting uses values stored on the package items.
 // -----------------------------------------------------------------------------
 TEST_CASE("Package table Update Version sorter uses stored item values")
@@ -323,10 +381,195 @@ TEST_CASE("Package table Update Version sorter uses stored item values")
   PackageRow installed_right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed_left, installed_right });
 
-  PackageRow left = make_table_test_row("left-2.0-1.x86_64", "left", "2.0", "1", "x86_64");
-  PackageRow right = make_table_test_row("right-3.0-1.x86_64", "right", "3.0", "1", "x86_64");
+  PackageRow left = make_table_test_row("left-1.2.9-1.x86_64", "left", "1.2.9", "1", "x86_64");
+  PackageRow right = make_table_test_row("right-1.2.10-1.x86_64", "right", "1.2.10", "1", "x86_64");
 
   REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Update Version sorting does not use Update Release as a hidden sort key.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Update Version sorter ignores Update Release")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow installed_left = make_table_test_row("bravo-0.9-1.x86_64", "bravo", "0.9", "1", "x86_64");
+  PackageRow installed_right = make_table_test_row("alpha-0.9-1.x86_64", "alpha", "0.9", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed_left, installed_right });
+
+  PackageRow left = make_table_test_row("bravo-1.0-2.x86_64", "bravo", "1.0", "2", "x86_64");
+  PackageRow right = make_table_test_row("alpha-1.0-10.x86_64", "alpha", "1.0", "10", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_VERSION) > 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Update Version sorting includes the candidate RPM epoch.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Update Version sorter uses candidate epoch")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-1.0-1.x86_64", "left", "1.0", "1", "x86_64");
+  left.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  left.repo_candidate_epoch = "0";
+  left.repo_candidate_version = "99.0";
+  left.repo_candidate_release = "1";
+
+  PackageRow right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
+  right.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  right.repo_candidate_epoch = "1";
+  right.repo_candidate_version = "1.0";
+  right.repo_candidate_release = "1";
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ left, right });
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that daemon upgrade rows keep daemon target epochs for Update Version sorting.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Update Version sorter uses daemon target epoch")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageTableRow left {
+    .row = make_table_test_row("left-99.0-1.x86_64", "left", "99.0", "1", "x86_64", "0"),
+    .daemon_upgrade = {},
+  };
+  TransactionServiceUpgradeTarget left_target;
+  left_target.name = "left";
+  left_target.arch = "x86_64";
+  left_target.epoch = "0";
+  left_target.version = "99.0";
+  left_target.release = "1";
+  left_target.nevra = "left-99.0-1.x86_64";
+  left.daemon_upgrade = std::make_shared<DaemonUpgradeRowContext>(DaemonUpgradeRowContext {
+      .target = left_target,
+  });
+
+  PackageTableRow right {
+    .row = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64", "1"),
+    .daemon_upgrade = {},
+  };
+  TransactionServiceUpgradeTarget right_target;
+  right_target.name = "right";
+  right_target.arch = "x86_64";
+  right_target.epoch = "1";
+  right_target.version = "1.0";
+  right_target.release = "1";
+  right_target.nevra = "right-1.0-1.x86_64";
+  right.daemon_upgrade = std::make_shared<DaemonUpgradeRowContext>(DaemonUpgradeRowContext {
+      .target = right_target,
+  });
+
+  GObject *left_object = make_package_object(&widgets, left);
+  GObject *right_object = make_package_object(&widgets, right);
+  int result = package_table_column_sorter_compare(
+      left_object, right_object, GINT_TO_POINTER(static_cast<int>(PackageColumnKind::UPDATE_VERSION) + 1));
+  g_object_unref(left_object);
+  g_object_unref(right_object);
+
+  REQUIRE(result < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that rows without update values sort before rows with update values.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Update Version sorter keeps absent values first")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-1.0-1.x86_64", "left", "1.0", "1", "x86_64");
+  PackageRow installed_right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed_right });
+  PackageRow right = make_table_test_row("right-2.0-1.x86_64", "right", "2.0", "1", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Release sorting follows RPM version rules instead of plain text order.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Release sorter uses RPM version order")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-1.0-2.fc44.x86_64", "left", "1.0", "2.fc44", "x86_64");
+  PackageRow right = make_table_test_row("right-1.0-10.fc44.x86_64", "right", "1.0", "10.fc44", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::RELEASE) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Release sorting follows RPM pre-release ordering.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Release sorter handles RPM pre-release marker")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-1.0-1~beta.x86_64", "left", "1.0", "1~beta", "x86_64");
+  PackageRow right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::RELEASE) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Release sorting does not use Version or epoch as hidden sort keys.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Release sorter ignores Version and epoch")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("left-2.0-1.x86_64", "left", "2.0", "1", "x86_64", "1");
+  PackageRow right = make_table_test_row("right-1.0-10.x86_64", "right", "1.0", "10", "x86_64", "0");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::RELEASE) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Update Release sorting follows RPM version rules.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Update Release sorter uses RPM version order")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow installed_left = make_table_test_row("left-1.0-1.x86_64", "left", "1.0", "1", "x86_64");
+  PackageRow installed_right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed_left, installed_right });
+
+  PackageRow left = make_table_test_row("left-1.0-2.fc44.x86_64", "left", "1.0", "2.fc44", "x86_64");
+  PackageRow right = make_table_test_row("right-1.0-10.fc44.x86_64", "right", "1.0", "10.fc44", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_RELEASE) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that Update Release sorting does not use Update Version as a hidden sort key.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table Update Release sorter ignores Update Version")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow installed_left = make_table_test_row("left-0.9-1.x86_64", "left", "0.9", "1", "x86_64");
+  PackageRow installed_right = make_table_test_row("right-0.9-1.x86_64", "right", "0.9", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed_left, installed_right });
+
+  PackageRow left = make_table_test_row("left-2.0-1.x86_64", "left", "2.0", "1", "x86_64");
+  PackageRow right = make_table_test_row("right-1.0-10.x86_64", "right", "1.0", "10", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_RELEASE) < 0);
 }
 
 // -----------------------------------------------------------------------------
@@ -361,6 +604,39 @@ TEST_CASE("Package table sorter falls back to name and NEVRA")
   right.name = left.name;
   right.nevra = "demo-1.0-2.x86_64";
   REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) < 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that RPM-equal version text still uses the normal fallback order.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table sorter falls back after RPM-equal Version values")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow left = make_table_test_row("zulu-1.02-1.x86_64", "zulu", "1.02", "1", "x86_64");
+  PackageRow right = make_table_test_row("alpha-1.2-1.x86_64", "alpha", "1.2", "1", "x86_64");
+
+  REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) > 0);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an exact installed row sorts by its own EVR.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table sorter uses exact installed row EVR")
+{
+  reset_backend_globals();
+
+  MainWindowUiState widgets;
+  PackageRow older = make_table_test_row("demo-99.0-1.x86_64", "demo", "99.0", "1", "x86_64", "0");
+  older.repo = "@System";
+  PackageRow newer = make_table_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "1");
+  newer.repo = "@System";
+  PackageRow comparison = make_table_test_row("other-1.0-1.x86_64", "other", "1.0", "1", "x86_64", "1");
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ older, newer });
+
+  REQUIRE(compare_table_test_rows(widgets, older, comparison, PackageColumnKind::VERSION) < 0);
 }
 
 // -----------------------------------------------------------------------------

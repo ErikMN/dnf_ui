@@ -70,6 +70,7 @@ struct PackageRow {
   PackageRepoCandidateRelation repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN;
   // These fields are set only when an installed row has a visible repository candidate.
   std::string repo_candidate_nevra;
+  std::string repo_candidate_epoch;
   std::string repo_candidate_version;
   std::string repo_candidate_release;
   std::string repo_candidate_repo;
@@ -293,6 +294,19 @@ int dnf_backend_get_install_state_sort_rank(PackageInstallState state);
 // Convert one backend-owned install reason to user-facing text.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_install_reason_to_string(PackageInstallReason reason);
+
+// -----------------------------------------------------------------------------
+// Compare two RPM epoch and version groups using the same rules as DNF.
+// -----------------------------------------------------------------------------
+int dnf_backend_compare_epoch_version_text(const std::string &left_epoch,
+                                           const std::string &left_version,
+                                           const std::string &right_epoch,
+                                           const std::string &right_version);
+
+// -----------------------------------------------------------------------------
+// Compare two RPM version strings using the same segment rules as DNF.
+// -----------------------------------------------------------------------------
+int dnf_backend_compare_rpm_version_text(const std::string &left, const std::string &right);
 
 // -----------------------------------------------------------------------------
 // Return true only when this exact NEVRA is installed on the current system.

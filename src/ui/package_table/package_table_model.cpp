@@ -25,6 +25,42 @@ package_row_quark()
 }
 
 // -----------------------------------------------------------------------------
+// Return the EVR value used for version-like table sorting.
+// -----------------------------------------------------------------------------
+static PackageTableSortEvr
+sort_evr_from_values(const std::string &epoch, const std::string &version, const std::string &release)
+{
+  if (version.empty() && release.empty()) {
+    return {};
+  }
+
+  return PackageTableSortEvr {
+    .present = true,
+    .epoch = epoch,
+    .version = version,
+    .release = release,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Return the EVR value used for sorting one package row.
+// -----------------------------------------------------------------------------
+static PackageTableSortEvr
+sort_evr_from_row(const PackageRow &row)
+{
+  return sort_evr_from_values(row.epoch, row.version, row.release);
+}
+
+// -----------------------------------------------------------------------------
+// Return the EVR value used for sorting one daemon upgrade target.
+// -----------------------------------------------------------------------------
+static PackageTableSortEvr
+sort_evr_from_daemon_target(const TransactionServiceUpgradeTarget &target)
+{
+  return sort_evr_from_values(target.epoch, target.version, target.release);
+}
+
+// -----------------------------------------------------------------------------
 // Snapshot the visible status text and its sort order for one package row.
 // -----------------------------------------------------------------------------
 void
@@ -65,19 +101,24 @@ package_table_fill_item_display_values(PackageItem &item, const InstalledPackage
     .update_release = {},
     .repo = item.row.repo,
   };
+  item.current_evr = sort_evr_from_row(item.row);
+  item.update_evr = {};
 
   if (const TransactionServiceUpgradeTarget *upgrade_target = item.upgrade_target()) {
     if (resolution.has_installed_row) {
       values.version = resolution.installed_row.version;
       values.release = resolution.installed_row.release;
+      item.current_evr = sort_evr_from_row(resolution.installed_row);
     } else {
       values.version.clear();
       values.release.clear();
+      item.current_evr = {};
     }
 
     values.update_version = upgrade_target->version;
     values.update_release = upgrade_target->release;
     values.repo = upgrade_target->repo_id;
+    item.update_evr = sort_evr_from_daemon_target(*upgrade_target);
     item.display_values = std::make_shared<PackageTableDisplayValues>(std::move(values));
     return;
   }
@@ -87,6 +128,7 @@ package_table_fill_item_display_values(PackageItem &item, const InstalledPackage
     values.version = resolution.installed_row.version;
     values.release = resolution.installed_row.release;
     values.repo = resolution.installed_row.repo;
+    item.current_evr = sort_evr_from_row(resolution.installed_row);
   }
 
   if (resolution.state == PackageInstallState::UPGRADEABLE) {
@@ -99,6 +141,13 @@ package_table_fill_item_display_values(PackageItem &item, const InstalledPackage
       values.repo = item.row.repo_candidate_repo;
     } else {
       values.repo = item.row.repo;
+    }
+
+    if (item.row.repo_candidate_version.empty() && item.row.repo_candidate_release.empty()) {
+      item.update_evr = sort_evr_from_row(item.row);
+    } else {
+      item.update_evr = sort_evr_from_values(
+          item.row.repo_candidate_epoch, item.row.repo_candidate_version, item.row.repo_candidate_release);
     }
   }
 

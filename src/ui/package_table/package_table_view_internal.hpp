@@ -26,11 +26,20 @@ struct PackageTableDisplayValues {
 
 using PackageTableDisplayValuesPtr = std::shared_ptr<const PackageTableDisplayValues>;
 
+struct PackageTableSortEvr {
+  bool present = false;
+  std::string epoch;
+  std::string version;
+  std::string release;
+};
+
 // Package row wrapper used by the sortable GTK model.
 struct PackageItem {
   PackageRow row;
   DaemonUpgradeRowContextPtr daemon_upgrade;
   PackageTableDisplayValuesPtr display_values;
+  PackageTableSortEvr current_evr;
+  PackageTableSortEvr update_evr;
   std::string status_text;
   int status_rank = 0;
 

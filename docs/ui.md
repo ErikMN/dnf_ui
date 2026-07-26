@@ -153,7 +153,8 @@ and config migration.
 GTK object wrapper used to store package rows and their table display values.
 
 [src/ui/package_table/package_table_sort.cpp](../src/ui/package_table/package_table_sort.cpp) contains package
-table cell text lookup and sorting rules.
+table cell text lookup and sorting rules. Version columns sort by stored RPM
+epoch and version. Release columns sort by stored RPM release text.
 
 [src/ui/package_table/package_table_export.cpp](../src/ui/package_table/package_table_export.cpp) exports the
 current table rows to CSV.

@@ -57,6 +57,38 @@ compare_text(const std::string &lhs, const std::string &rhs)
 }
 
 // -----------------------------------------------------------------------------
+// Compare stored package values used by Version and Update Version.
+// -----------------------------------------------------------------------------
+static int
+compare_sort_epoch_version(const PackageTableSortEvr &lhs, const PackageTableSortEvr &rhs)
+{
+  if (!lhs.present || !rhs.present) {
+    if (!lhs.present && !rhs.present) {
+      return 0;
+    }
+    return lhs.present ? 1 : -1;
+  }
+
+  return dnf_backend_compare_epoch_version_text(lhs.epoch, lhs.version, rhs.epoch, rhs.version);
+}
+
+// -----------------------------------------------------------------------------
+// Compare stored package values used by Release and Update Release.
+// -----------------------------------------------------------------------------
+static int
+compare_sort_release(const PackageTableSortEvr &lhs, const PackageTableSortEvr &rhs)
+{
+  if (!lhs.present || !rhs.present) {
+    if (!lhs.present && !rhs.present) {
+      return 0;
+    }
+    return lhs.present ? 1 : -1;
+  }
+
+  return dnf_backend_compare_rpm_version_text(lhs.release, rhs.release);
+}
+
+// -----------------------------------------------------------------------------
 // Compare two package items for the active package table column.
 // -----------------------------------------------------------------------------
 static int
@@ -72,20 +104,16 @@ compare_package_items(const PackageItem &lhs, const PackageItem &rhs, PackageCol
     result = compare_text(lhs.row.name, rhs.row.name);
     break;
   case PackageColumnKind::VERSION:
-    result = compare_text(package_table_column_text(lhs, PackageColumnKind::VERSION),
-                          package_table_column_text(rhs, PackageColumnKind::VERSION));
+    result = compare_sort_epoch_version(lhs.current_evr, rhs.current_evr);
     break;
   case PackageColumnKind::UPDATE_VERSION:
-    result = compare_text(package_table_column_text(lhs, PackageColumnKind::UPDATE_VERSION),
-                          package_table_column_text(rhs, PackageColumnKind::UPDATE_VERSION));
+    result = compare_sort_epoch_version(lhs.update_evr, rhs.update_evr);
     break;
   case PackageColumnKind::RELEASE:
-    result = compare_text(package_table_column_text(lhs, PackageColumnKind::RELEASE),
-                          package_table_column_text(rhs, PackageColumnKind::RELEASE));
+    result = compare_sort_release(lhs.current_evr, rhs.current_evr);
     break;
   case PackageColumnKind::UPDATE_RELEASE:
-    result = compare_text(package_table_column_text(lhs, PackageColumnKind::UPDATE_RELEASE),
-                          package_table_column_text(rhs, PackageColumnKind::UPDATE_RELEASE));
+    result = compare_sort_release(lhs.update_evr, rhs.update_evr);
     break;
   case PackageColumnKind::ARCH:
     result = compare_text(lhs.row.arch, rhs.row.arch);

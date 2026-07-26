@@ -13,6 +13,7 @@
 
 #include <gio/gio.h>
 
+#include <libdnf5/rpm/nevra.hpp>
 #include <libdnf5/transaction/transaction_item_reason.hpp>
 
 namespace dnf_backend_internal {
@@ -85,6 +86,31 @@ package_query_cancelled(GCancellable *cancellable)
 
 } // namespace dnf_backend_internal
 
+namespace {
+
+struct TextEvr {
+  const std::string &epoch;
+  const std::string &version;
+  const std::string &release;
+
+  const std::string &get_epoch() const
+  {
+    return epoch;
+  }
+
+  const std::string &get_version() const
+  {
+    return version;
+  }
+
+  const std::string &get_release() const
+  {
+    return release;
+  }
+};
+
+} // namespace
+
 // -----------------------------------------------------------------------------
 // Convert one backend-owned install reason to stable UI text.
 // -----------------------------------------------------------------------------
@@ -108,6 +134,30 @@ dnf_backend_install_reason_to_string(PackageInstallReason reason)
   default:
     return _("Unknown");
   }
+}
+
+// -----------------------------------------------------------------------------
+// Compare two RPM epoch and version groups using the same rules as DNF.
+// -----------------------------------------------------------------------------
+int
+dnf_backend_compare_epoch_version_text(const std::string &left_epoch,
+                                       const std::string &left_version,
+                                       const std::string &right_epoch,
+                                       const std::string &right_version)
+{
+  static const std::string empty_release;
+  TextEvr left { left_epoch, left_version, empty_release };
+  TextEvr right { right_epoch, right_version, empty_release };
+  return libdnf5::rpm::evrcmp(left, right);
+}
+
+// -----------------------------------------------------------------------------
+// Compare two RPM version strings using the same segment rules as DNF.
+// -----------------------------------------------------------------------------
+int
+dnf_backend_compare_rpm_version_text(const std::string &left, const std::string &right)
+{
+  return libdnf5::rpm::rpmvercmp(left.c_str(), right.c_str());
 }
 
 // -----------------------------------------------------------------------------

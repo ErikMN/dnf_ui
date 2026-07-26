@@ -26,6 +26,8 @@ controller layer by exposing small value types:
 - `TransactionHistoryPage`
 
 Controller code should use this public API instead of calling libdnf5 directly.
+RPM comparison helpers also go through this facade so table sorting does not
+include libdnf5 headers.
 
 ## BaseManager
 

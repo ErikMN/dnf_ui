@@ -322,6 +322,7 @@ annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
   if (it == available_rows.end()) {
     installed_row.repo_candidate_relation = PackageRepoCandidateRelation::NONE;
     installed_row.repo_candidate_nevra.clear();
+    installed_row.repo_candidate_epoch.clear();
     installed_row.repo_candidate_version.clear();
     installed_row.repo_candidate_release.clear();
     installed_row.repo_candidate_repo.clear();
@@ -329,6 +330,7 @@ annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
   }
 
   installed_row.repo_candidate_nevra = it->second.nevra;
+  installed_row.repo_candidate_epoch = it->second.epoch;
   installed_row.repo_candidate_version = it->second.version;
   installed_row.repo_candidate_release = it->second.release;
   installed_row.repo_candidate_repo = it->second.repo;
