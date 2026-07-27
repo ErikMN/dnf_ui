@@ -383,7 +383,7 @@ annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow>
 //   - Available rows that stay in the map without a matching installed entry
 //     keep repo_candidate_relation = UNKNOWN because no installed counterpart
 //     was found during this pass.
-//   - dnf_backend_get_package_install_state handles UNKNOWN on available rows
+//   - dnf_backend_resolve_installed_package handles UNKNOWN on available rows
 //     through its installed-cache EVR comparison fallback.
 //
 // Code that reads repo_candidate_relation directly should treat UNKNOWN on a non-installed row

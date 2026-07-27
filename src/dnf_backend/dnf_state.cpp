@@ -215,16 +215,6 @@ publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string>
 
 using namespace dnf_backend_internal;
 
-// -----------------------------------------------------------------------------
-// Return true when the installed-package snapshot contains one exact NEVRA.
-// -----------------------------------------------------------------------------
-static bool
-dnf_backend_installed_snapshot_contains(const std::string &nevra)
-{
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-  return g_installed_nevras.count(nevra) > 0;
-}
-
 #ifdef DNFUI_BUILD_TESTS
 // -----------------------------------------------------------------------------
 // Return the number of exact NEVRAs in the installed-package snapshot.
@@ -242,7 +232,8 @@ dnf_backend_installed_snapshot_size_for_tests()
 bool
 dnf_backend_installed_snapshot_contains_for_tests(const std::string &nevra)
 {
-  return dnf_backend_installed_snapshot_contains(nevra);
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  return g_installed_nevras.count(nevra) > 0;
 }
 #endif
 
@@ -271,45 +262,6 @@ dnf_backend_refresh_installed_nevras()
   } // Base read lock released before acquiring g_installed_mutex
 
   return publish_installed_snapshot(installed, protected_names);
-}
-
-// -----------------------------------------------------------------------------
-// Return true only when the queried row exactly matches an installed NEVRA in the cached installed snapshot.
-// -----------------------------------------------------------------------------
-bool
-dnf_backend_is_package_installed_exact(const PackageRow &row)
-{
-  return dnf_backend_installed_snapshot_contains(row.nevra);
-}
-
-// -----------------------------------------------------------------------------
-// Return the installed package row for the same name and architecture as one visible row.
-// -----------------------------------------------------------------------------
-bool
-dnf_backend_get_installed_package_row_by_name_arch(const PackageRow &row, PackageRow &installed_out)
-{
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-  auto it = g_installed_rows_by_name_arch.find(row.name_arch_key());
-  if (it == g_installed_rows_by_name_arch.end()) {
-    installed_out = PackageRow();
-    return false;
-  }
-
-  installed_out = it->second;
-  return true;
-}
-
-// -----------------------------------------------------------------------------
-// Classify a package row as available, upgradeable, exact-installed,
-// local-only, or installed-newer-than-repo. Exact-installed rows prefer the row repo relation.
-// Available rows fall back to the installed name and architecture cache so upgrade-state badges
-// can be shown without duplicate visible rows.
-// -----------------------------------------------------------------------------
-PackageInstallState
-dnf_backend_get_package_install_state(const PackageRow &row)
-{
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-  return resolve_installed_package_locked(row).state;
 }
 
 // -----------------------------------------------------------------------------

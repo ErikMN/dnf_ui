@@ -33,8 +33,10 @@ require_stored_status_matches_pending_action(MainWindowUiState &widgets, Package
     .daemon_upgrade = item.daemon_upgrade,
   };
 
+  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
+      table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
   PendingAction::Type action_type;
-  REQUIRE(package_table_pending_action_for_row(&widgets, table_row, action_type));
+  REQUIRE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
 
   InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
   PackageInstallState install_state = item.upgrade_target() ? PackageInstallState::UPGRADEABLE : resolution.state;
@@ -150,8 +152,10 @@ TEST_CASE("Package table pending status keeps exact installed NEVRAs separate")
     .daemon_upgrade = {},
   };
 
+  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
+      table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
   PendingAction::Type action_type;
-  REQUIRE_FALSE(package_table_pending_action_for_row(&widgets, table_row, action_type));
+  REQUIRE_FALSE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
 }
 
 // -----------------------------------------------------------------------------

@@ -68,7 +68,8 @@ TEST_CASE("Search contains mode is case-insensitive for installed package annota
 
   REQUIRE(lower_bash != nullptr);
   REQUIRE(upper_bash != nullptr);
-  REQUIRE(dnf_backend_get_package_install_state(*upper_bash) == dnf_backend_get_package_install_state(*lower_bash));
+  REQUIRE(dnf_backend_resolve_installed_package(*upper_bash).state ==
+          dnf_backend_resolve_installed_package(*lower_bash).state);
   REQUIRE(upper_bash->repo_candidate_relation == lower_bash->repo_candidate_relation);
 }
 

@@ -20,11 +20,8 @@ struct MainWindowUiState;
 // -----------------------------------------------------------------------------
 const char *package_table_status_text(PackageInstallState state);
 // -----------------------------------------------------------------------------
-// Return the pending action for one package table row, including alternate rows resolved for upgrade candidates.
+// Return the pending action for one package table row using already-resolved action rows.
 // -----------------------------------------------------------------------------
-bool package_table_pending_action_for_row(MainWindowUiState *widgets,
-                                          const PackageTableRow &row,
-                                          PendingAction::Type &out_type);
 bool package_table_pending_action_for_resolved_row(MainWindowUiState *widgets,
                                                    const PackageTableRow &row,
                                                    const PendingTransactionActionRows &action_rows,

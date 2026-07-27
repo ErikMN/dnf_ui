@@ -95,16 +95,6 @@ package_table_pending_action_for_resolved_row(MainWindowUiState *widgets,
   return false;
 }
 
-bool
-package_table_pending_action_for_row(MainWindowUiState *widgets,
-                                     const PackageTableRow &row,
-                                     PendingAction::Type &out_type)
-{
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
-  return package_table_pending_action_for_resolved_row(widgets, row, action_rows, out_type);
-}
-
 // -----------------------------------------------------------------------------
 // Return display text for one pending package action.
 // -----------------------------------------------------------------------------

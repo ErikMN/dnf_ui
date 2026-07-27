@@ -31,9 +31,11 @@ find_update_pair_from_installed_annotation(PackageRow &installed_out, PackageRow
     }
 
     update_out = candidates.front();
-    if (!dnf_backend_get_installed_package_row_by_name_arch(update_out, installed_out)) {
+    InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(update_out);
+    if (!resolution.has_installed_row) {
       continue;
     }
+    installed_out = resolution.installed_row;
     return true;
   }
 
@@ -183,9 +185,9 @@ TEST_CASE("Installed snapshot publish ignores metadata-only row changes")
 
   REQUIRE_FALSE(dnf_backend_internal::publish_installed_snapshot(std::move(second_result), {}));
 
-  PackageRow published;
-  REQUIRE(dnf_backend_get_installed_package_row_by_name_arch(second, published));
-  REQUIRE(published.installed_from_repo == "updates");
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(second);
+  REQUIRE(resolution.has_installed_row);
+  REQUIRE(resolution.installed_row.installed_from_repo == "updates");
 }
 
 // -----------------------------------------------------------------------------
@@ -536,19 +538,19 @@ TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
   dnf_backend_testonly_replace_installed_snapshot({ row.nevra });
 
   row.repo_candidate_relation = PackageRepoCandidateRelation::UNKNOWN;
-  REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED);
+  REQUIRE(dnf_backend_resolve_installed_package(row).state == PackageInstallState::INSTALLED);
 
   row.repo_candidate_relation = PackageRepoCandidateRelation::NONE;
-  REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::LOCAL_ONLY);
+  REQUIRE(dnf_backend_resolve_installed_package(row).state == PackageInstallState::LOCAL_ONLY);
 
   row.repo_candidate_relation = PackageRepoCandidateRelation::SAME;
-  REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED);
+  REQUIRE(dnf_backend_resolve_installed_package(row).state == PackageInstallState::INSTALLED);
 
   row.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
-  REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::UPGRADEABLE);
+  REQUIRE(dnf_backend_resolve_installed_package(row).state == PackageInstallState::UPGRADEABLE);
 
   row.repo_candidate_relation = PackageRepoCandidateRelation::OLDER;
-  REQUIRE(dnf_backend_get_package_install_state(row) == PackageInstallState::INSTALLED_NEWER_THAN_REPO);
+  REQUIRE(dnf_backend_resolve_installed_package(row).state == PackageInstallState::INSTALLED_NEWER_THAN_REPO);
 }
 
 // -----------------------------------------------------------------------------
@@ -707,8 +709,8 @@ TEST_CASE("Exact installed checks use the cached installed NEVRA snapshot")
 
   dnf_backend_testonly_replace_installed_snapshot({ exact_row.nevra });
 
-  REQUIRE(dnf_backend_is_package_installed_exact(exact_row));
-  REQUIRE_FALSE(dnf_backend_is_package_installed_exact(different_row));
+  REQUIRE(dnf_backend_resolve_installed_package(exact_row).exact_installed);
+  REQUIRE_FALSE(dnf_backend_resolve_installed_package(different_row).exact_installed);
 }
 
 // -----------------------------------------------------------------------------
@@ -731,9 +733,9 @@ TEST_CASE("Installed row lookup resolves upgrade candidates by name and architec
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed_row });
 
-  PackageRow resolved_row;
-  REQUIRE(dnf_backend_get_installed_package_row_by_name_arch(upgrade_row, resolved_row));
-  REQUIRE(resolved_row.nevra == installed_row.nevra);
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(upgrade_row);
+  REQUIRE(resolution.has_installed_row);
+  REQUIRE(resolution.installed_row.nevra == installed_row.nevra);
 }
 
 // -----------------------------------------------------------------------------
@@ -758,5 +760,5 @@ TEST_CASE("Annotation fallback keeps installed rows usable when repo lookup fail
 
   REQUIRE(rows.size() == 1);
   REQUIRE(rows.front().repo_candidate_relation == PackageRepoCandidateRelation::UNKNOWN);
-  REQUIRE(dnf_backend_get_package_install_state(rows.front()) == PackageInstallState::INSTALLED);
+  REQUIRE(dnf_backend_resolve_installed_package(rows.front()).state == PackageInstallState::INSTALLED);
 }

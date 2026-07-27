@@ -173,7 +173,7 @@ queries do not publish partial installed state.
 
 ## Package status
 
-`dnf_backend_get_package_install_state` classifies one visible row as:
+`dnf_backend_resolve_installed_package` classifies one visible row as:
 
 - available
 - upgradeable
@@ -181,7 +181,11 @@ queries do not publish partial installed state.
 - local only
 - installed newer than repository
 
-Exact installed rows prefer the repository-candidate relation recorded on the row. Available rows fall back to the installed snapshot so the table can show when repository metadata contains a newer candidate without duplicating rows.
+Exact installed rows prefer the repository-candidate relation recorded on the
+row. Available rows fall back to the installed snapshot so the table can show
+when repository metadata contains a newer candidate without duplicating rows.
+The same resolved value also carries exact-installed state and the installed row
+for the same package name and architecture.
 
 The generic Status column is local package metadata. It can say that a newer package exists in enabled repository metadata, but it is not a transaction promise. The List Upgradable view is stricter: it shows the current daemon upgrade targets and keeps the daemon target on the table row so the update columns and Mark for Upgrade use the same snapshot. Transaction preview and apply always go through dnf5daemon.
 

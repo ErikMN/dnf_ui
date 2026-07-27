@@ -275,11 +275,6 @@ struct DnfBackendSearchOptions {
 bool dnf_backend_refresh_installed_nevras();
 
 // -----------------------------------------------------------------------------
-// Classify one visible package row for UI status badges and action gating.
-// -----------------------------------------------------------------------------
-PackageInstallState dnf_backend_get_package_install_state(const PackageRow &row);
-
-// -----------------------------------------------------------------------------
 // Resolve installed-package state for one visible row from one installed snapshot.
 // -----------------------------------------------------------------------------
 InstalledPackageResolution dnf_backend_resolve_installed_package(const PackageRow &row);
@@ -307,18 +302,6 @@ int dnf_backend_compare_epoch_version_text(const std::string &left_epoch,
 // Compare two RPM version strings using the same segment rules as DNF.
 // -----------------------------------------------------------------------------
 int dnf_backend_compare_rpm_version_text(const std::string &left, const std::string &right);
-
-// -----------------------------------------------------------------------------
-// Return true only when this exact NEVRA is installed on the current system.
-// -----------------------------------------------------------------------------
-bool dnf_backend_is_package_installed_exact(const PackageRow &row);
-
-// -----------------------------------------------------------------------------
-// Return the installed row with the same package name and architecture as one visible row.
-// This lets the UI act on the installed package when the selected
-// row is an available upgrade candidate.
-// -----------------------------------------------------------------------------
-bool dnf_backend_get_installed_package_row_by_name_arch(const PackageRow &row, PackageRow &installed_out);
 
 // -----------------------------------------------------------------------------
 // Return true when resolved daemon package labels name the running GUI package.
