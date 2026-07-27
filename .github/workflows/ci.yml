@@ -52,6 +52,9 @@ jobs:
                 --libexecdir libexec \
                 -Dbuild_tests=true
               meson compile -C build/ci
+              meson compile -C build/ci dnf-ui-pot
+              msgcmp --no-fuzzy-matching po/sv.po po/dnf-ui.pot
+              msgfmt --check --output-file=/tmp/dnfui-sv-check.mo po/sv.po
               desktop-file-validate build/ci/packaging/io.github.dnfui.dnfui.desktop
               appstreamcli validate --no-net build/ci/packaging/io.github.dnfui.dnfui.metainfo.xml
               meson test -C build/ci --print-errorlogs

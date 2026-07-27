@@ -1,9 +1,9 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: dnf-ui 0.1.5\n"
+"Project-Id-Version: dnf-ui 0.4.3\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-16 00:00+0200\n"
-"PO-Revision-Date: 2026-05-16 00:00+0200\n"
+"POT-Creation-Date: 2026-07-27 17:31+0000\n"
+"PO-Revision-Date: 2026-07-27 00:00+0200\n"
 "Last-Translator: DNF UI project <dnfui@proton.me>\n"
 "Language-Team: Swedish\n"
 "Language: sv\n"
@@ -12,65 +12,668 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "DNF UI"
+msgstr "DNF UI"
+
 msgid "Browse packages and apply DNF transactions"
 msgstr "Bläddra bland paket och verkställ DNF-transaktioner"
+
+msgid "dnf;dnf5;packages;rpm;fedora;updates;"
+msgstr "dnf;dnf5;paket;rpm;fedora;uppdateringar;"
 
 msgid "Graphical package manager frontend for DNF5"
 msgstr "Grafiskt gränssnitt för DNF5-pakethantering"
 
+msgid "DNF UI contributors"
+msgstr "DNF UI-bidragsgivare"
+
+msgid ""
+"DNF UI is a GTK frontend for DNF5 package management built on libdnf5. It "
+"focuses on fast package browsing, clear transaction review, and a dependable "
+"native desktop workflow."
+msgstr ""
+"DNF UI är ett GTK-gränssnitt för DNF5-pakethantering byggt med libdnf5. Det "
+"fokuserar på snabb paketbläddring, tydlig transaktionsgranskning och ett "
+"pålitligt arbetsflöde för skrivbordet."
+
+msgid ""
+"Package changes are applied through DNF5 dnf5daemon with Polkit "
+"authorization, while the main graphical application continues to run as the "
+"regular desktop user."
+msgstr ""
+"Paketändringar verkställs genom DNF5 dnf5daemon med Polkit-behörighet, medan "
+"det grafiska huvudprogrammet fortsätter att köras som den vanliga "
+"skrivbordsanvändaren."
+
+msgid "Installed package refresh failed."
+msgstr "Uppdatering av installerade paket misslyckades."
+
+msgid ""
+"Installed package state changed. Press List Upgradable to reload upgrades."
+msgstr ""
+"Installerat paketläge ändrades. Tryck på Lista uppgraderbara för att läsa in "
+"uppgraderingar igen."
+
+msgid "Backend warm up was cancelled."
+msgstr "Backend-uppvärmning avbröts."
+
+msgid "Backend warm up failed."
+msgstr "Backend-uppvärmning misslyckades."
+
+msgid "Ready. Repository metadata loaded."
+msgstr "Redo. Förrådsmetadata inläst."
+
+msgid "Ready. Using cached repository metadata."
+msgstr "Redo. Använder cachad förrådsmetadata."
+
+msgid "Ready. Showing installed packages only."
+msgstr "Redo. Visar endast installerade paket."
+
+msgid "Use the upgrade-all preview helper for upgrade-all requests."
+msgstr ""
+"Använd förhandsgranskningshjälpen för uppgradera alla vid begäran om att "
+"uppgradera alla."
+
+msgid "This transaction would remove or replace DNF UI itself."
+msgstr "Den här transaktionen skulle ta bort eller ersätta DNF UI."
+
+msgid ""
+"Could not verify whether this transaction would remove or replace DNF UI."
+msgstr ""
+"Kunde inte kontrollera om den här transaktionen skulle ta bort eller ersätta "
+"DNF UI."
+
+msgid "Upgrade All would remove or replace DNF UI itself."
+msgstr "Uppgradera alla skulle ta bort eller ersätta DNF UI."
+
+msgid "Could not verify whether Upgrade All would remove or replace DNF UI."
+msgstr ""
+"Kunde inte kontrollera om Uppgradera alla skulle ta bort eller ersätta DNF "
+"UI."
+
+msgid "dnf5daemon session path is empty."
+msgstr "dnf5daemon-sessionssökvägen är tom."
+
+msgid "Connecting to dnf5daemon..."
+msgstr "Ansluter till dnf5daemon..."
+
+msgid "Privileged transaction preview ready."
+msgstr "Privilegierad transaktionsgranskning är klar."
+
+msgid "Requesting authorization and starting apply..."
+msgstr "Begär behörighet och startar verkställning..."
+
+msgid "Transaction applied successfully."
+msgstr "Transaktionen verkställdes."
+
+msgid ""
+"The approved transaction was not applied. Prepare the preview again before "
+"retrying."
+msgstr ""
+"Den godkända transaktionen verkställdes inte. Förbered förhandsgranskningen "
+"igen innan du försöker igen."
+
+msgid "Details: "
+msgstr "Detaljer: "
+
+msgid "dnf5daemon returned an incomplete package item."
+msgstr "dnf5daemon returnerade ett ofullständigt paketobjekt."
+
+msgid "dnf5daemon returned an incomplete upgrade item."
+msgstr "dnf5daemon returnerade ett ofullständigt uppgraderingsobjekt."
+
+msgid ""
+"This transaction would remove or replace dnf5daemon-server, which DNF UI "
+"needs to apply package changes."
+msgstr ""
+"Den här transaktionen skulle ta bort eller ersätta dnf5daemon-server, som "
+"DNF UI behöver för att verkställa paketändringar."
+
+msgid "Repository refresh was cancelled."
+msgstr "Förrådsuppdateringen avbröts."
+
+msgid "dnf5daemon repository refresh failed."
+msgstr "dnf5daemon-förrådsuppdatering misslyckades."
+
+msgid "Could not mark packages in dnf5daemon."
+msgstr "Kunde inte markera paket i dnf5daemon."
+
+msgid ""
+"dnf5daemon is not available. Make sure dnf5daemon-server is installed and "
+"running."
+msgstr ""
+"dnf5daemon är inte tillgänglig. Kontrollera att dnf5daemon-server är "
+"installerad och körs."
+
+msgid ""
+"dnf5daemon is installed, but DNF UI is not allowed to talk to it. Reinstall "
+"dnf5daemon-server or check the D-Bus policy."
+msgstr ""
+"dnf5daemon är installerad, men DNF UI får inte prata med den. Installera om "
+"dnf5daemon-server eller kontrollera D-Bus-policyn."
+
+msgid "Could not open a dnf5daemon session."
+msgstr "Kunde inte öppna en dnf5daemon-session."
+
+msgid "dnf5daemon returned an empty session path."
+msgstr "dnf5daemon returnerade en tom sessionssökväg."
+
+msgid "Could not connect to the system D-Bus."
+msgstr "Kunde inte ansluta till systemets D-Bus."
+
+msgid "dnf5daemon connection is not available."
+msgstr "dnf5daemon-anslutning är inte tillgänglig."
+
+msgid "Could not mark upgrade-all in dnf5daemon."
+msgstr "Kunde inte markera uppgradera alla i dnf5daemon."
+
+msgid "Could not list upgrade targets from dnf5daemon."
+msgstr "Kunde inte lista uppgraderingsmål från dnf5daemon."
+
+msgid "dnf5daemon transaction session is not available."
+msgstr "dnf5daemon-transaktionssessionen är inte tillgänglig."
+
+msgid "Transaction preview was cancelled."
+msgstr "Transaktionsgranskningen avbröts."
+
+msgid "dnf5daemon failed to resolve the transaction."
+msgstr "dnf5daemon kunde inte lösa transaktionen."
+
+msgid "dnf5daemon could not resolve the transaction."
+msgstr "dnf5daemon kunde inte lösa transaktionen."
+
+msgid "dnf5daemon returned an unsupported transaction resolve result."
+msgstr "dnf5daemon returnerade ett transaktionsresultat som inte stöds."
+
+msgid "Transaction apply was cancelled."
+msgstr "Transaktionsverkställningen avbröts."
+
+msgid "Failed to close the dnf5daemon session."
+msgstr "Kunde inte stänga dnf5daemon-sessionen."
+
+msgid "dnf5daemon key import request is incomplete."
+msgstr "dnf5daemon-begäran om nyckelimport är ofullständig."
+
+msgid "Operation cancelled."
+msgstr "Åtgärden avbröts."
+
+msgid "Could not answer the dnf5daemon key import request."
+msgstr "Kunde inte svara på dnf5daemon-begäran om nyckelimport."
+
+msgid "The repository cannot be used until its signing key is trusted."
+msgstr "Förrådet kan inte användas förrän dess signeringsnyckel är betrodd."
+
+msgid "Repository signing key was rejected."
+msgstr "Förrådets signeringsnyckel avvisades."
+
+msgid "Repository signing key rejected."
+msgstr "Förrådets signeringsnyckel avvisades."
+
+msgid "Repository signing key accepted."
+msgstr "Förrådets signeringsnyckel accepterades."
+
+msgid "Starting package downloads..."
+msgstr "Startar paketnedladdningar..."
+
+msgid "Downloading: "
+msgstr "Hämtar: "
+
+msgid "Download progress: "
+msgstr "Hämtningsförlopp: "
+
+msgid "package download"
+msgstr "paketnedladdning"
+
+msgid "Download mirror failed."
+msgstr "Nedladdningsspegel misslyckades."
+
+msgid "Package download failed."
+msgstr "Paketnedladdning misslyckades."
+
+msgid "Download ready: "
+msgstr "Hämtning klar: "
+
+msgid "Running transaction."
+msgstr "Kör transaktion."
+
+msgid "Verifying package files."
+msgstr "Verifierar paketfiler."
+
+msgid "Preparing transaction."
+msgstr "Förbereder transaktion."
+
+msgid "Processing package."
+msgstr "Bearbetar paket."
+
+msgid "Processing package: "
+msgstr "Bearbetar paket: "
+
+msgid "Package unpack failed."
+msgstr "Uppackning av paket misslyckades."
+
+msgid "Package unpack failed: "
+msgstr "Uppackning av paket misslyckades: "
+
+msgid "repository metadata"
+msgstr "förrådsmetadata"
+
+msgid "Dependency"
+msgstr "Beroende"
+
+msgid "User"
+msgstr "Användare"
+
+msgid "Clean"
+msgstr "Rensning"
+
+msgid "Weak dependency"
+msgstr "Svagt beroende"
+
+msgid "Group"
+msgstr "Grupp"
+
+msgid "External"
+msgstr "Externt"
+
+msgid "Unknown"
+msgstr "Okänt"
+
+msgid "Name"
+msgstr "Namn"
+
+msgid "Package ID"
+msgstr "Paket-ID"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "Release"
+msgstr "Utgåva"
+
+msgid "Arch"
+msgstr "Arkitektur"
+
+msgid "Repo"
+msgstr "Förråd"
+
+msgid "Installed From"
+msgstr "Installerad från"
+
+msgid "Install Size"
+msgstr "Installationsstorlek"
+
+msgid "Install Reason"
+msgstr "Installationsorsak"
+
+msgid "Download Size"
+msgstr "Nedladdningsstorlek"
+
+msgid "Installed Version"
+msgstr "Installerad version"
+
+msgid "Upgradable Version"
+msgstr "Uppgraderbar version"
+
+msgid "Summary"
+msgstr "Sammanfattning"
+
+msgid "Description"
+msgstr "Beskrivning"
+
+msgid "File list available only for installed packages."
+msgstr "Fillista är endast tillgänglig för installerade paket."
+
+msgid "History load was cancelled."
+msgstr "Historikinläsningen avbröts."
+
+msgid "Install"
+msgstr "Installera"
+
+msgid "Upgrade"
+msgstr "Uppgradera"
+
+msgid "Downgrade"
+msgstr "Nedgradera"
+
+msgid "Reinstall"
+msgstr "Installera om"
+
+msgid "Remove"
+msgstr "Ta bort"
+
+msgid "Replaced"
+msgstr "Ersattes"
+
+msgid "Reason changed"
+msgstr "Orsak ändrades"
+
+msgid "Other"
+msgstr "Annat"
+
+#, c-format
+msgid "%s: %.1f s"
+msgstr "%s: %.1f s"
+
+msgid "Mark for Upgrade"
+msgstr "Markera för uppgradering"
+
+msgid "Mark for Install"
+msgstr "Markera för installation"
+
+msgid "Unmark Upgrade"
+msgstr "Avmarkera uppgradering"
+
+msgid "Unmark Install"
+msgstr "Avmarkera installation"
+
+msgid "Mark for Removal"
+msgstr "Markera för borttagning"
+
+msgid "Mark for Reinstall"
+msgstr "Markera för ominstallation"
+
+msgid "Unmark Reinstall"
+msgstr "Avmarkera ominstallation"
+
+msgid "Unmark Removal"
+msgstr "Avmarkera borttagning"
+
+msgid "Fetching file list..."
+msgstr "Hämtar fillista..."
+
+msgid "Error loading file list."
+msgstr "Fel vid inläsning av fillista."
+
+msgid "Fetching dependencies..."
+msgstr "Hämtar beroenden..."
+
+msgid "Error loading dependencies."
+msgstr "Fel vid inläsning av beroenden."
+
+msgid "Fetching changelog..."
+msgstr "Hämtar ändringslogg..."
+
+msgid "Error loading changelog."
+msgstr "Fel vid inläsning av ändringslogg."
+
+msgid "Package details load was cancelled."
+msgstr "Inläsning av paketdetaljer avbröts."
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Select a package for details."
+msgstr "Välj ett paket för att visa detaljer."
+
+msgid "Select an installed package to view its file list."
+msgstr "Välj ett installerat paket för att visa dess fillista."
+
+msgid "Select a package to view dependencies."
+msgstr "Välj ett paket för att visa beroenden."
+
+msgid "Select a package to view its changelog."
+msgstr "Välj ett paket för att visa ändringsloggen."
+
+msgid "Error loading info."
+msgstr "Fel vid inläsning av information."
+
+msgid "Package info loaded."
+msgstr "Paketinfo lästes in."
+
+msgid "Open the Files tab to load the file list."
+msgstr "Öppna fliken Filer för att läsa in fillistan."
+
+msgid "Open the Dependencies tab to load dependencies."
+msgstr "Öppna fliken Beroenden för att läsa in beroenden."
+
+msgid "Open the Changelog tab to load the changelog."
+msgstr "Öppna fliken Ändringslogg för att läsa in ändringsloggen."
+
+msgid "Fetching package info..."
+msgstr "Hämtar paketinformation..."
+
+msgid "All actions"
+msgstr "Alla åtgärder"
+
+msgid "No actions"
+msgstr "Inga åtgärder"
+
+#, c-format
+msgid "%zu actions"
+msgstr "%zu åtgärder"
+
+msgid "Dates must use YYYY-MM-DD."
+msgstr "Datum måste använda ÅÅÅÅ-MM-DD."
+
+msgid "The start date must be before the end date."
+msgstr "Startdatum måste vara före slutdatum."
+
+msgid "Unknown time"
+msgstr "Okänd tid"
+
+msgid "Page"
+msgstr "Sida"
+
+msgid "Transaction"
+msgstr "Transaktion"
+
+msgid "Result"
+msgstr "Resultat"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "Failed"
+msgstr "Misslyckades"
+
+msgid "Command"
+msgstr "Kommando"
+
+msgid "No transaction history rows were found on this page."
+msgstr "Inga transaktionshistorikrader hittades på den här sidan."
+
+msgid "No transaction history rows match the filter."
+msgstr "Inga transaktionshistorikrader matchar filtret."
+
+msgid "No transaction history was found."
+msgstr "Ingen transaktionshistorik hittades."
+
+#, c-format
+msgid "Showing %zu package change."
+msgid_plural "Showing %zu package changes."
+msgstr[0] "Visar %zu paketändring."
+msgstr[1] "Visar %zu paketändringar."
+
+#, c-format
+msgid "Page %zu."
+msgstr "Sida %zu."
+
+msgid "Use Older to show more history."
+msgstr "Använd Äldre för att visa mer historik."
+
 msgid "Search"
 msgstr "Sök"
+
+msgid "Failed to load transaction history."
+msgstr "Kunde inte läsa in transaktionshistorik."
+
+msgid "Loading transaction history..."
+msgstr "Läser in transaktionshistorik..."
+
+msgid "Transaction is running. History controls are disabled."
+msgstr "En transaktion körs. Historikkontrollerna är inaktiverade."
+
+msgid "Transaction finished. Press Search to refresh transaction history."
+msgstr ""
+"Transaktionen är klar. Tryck på Sök för att uppdatera transaktionshistoriken."
+
+msgid "Transaction History"
+msgstr "Transaktionshistorik"
+
+msgid "Package name..."
+msgstr "Paketnamn..."
+
+msgid "Command, repository, or architecture..."
+msgstr "Kommando, förråd eller arkitektur..."
+
+msgid "All results"
+msgstr "Alla resultat"
+
+msgid "From date YYYY-MM-DD"
+msgstr "Från datum ÅÅÅÅ-MM-DD"
+
+msgid "To date YYYY-MM-DD"
+msgstr "Till datum ÅÅÅÅ-MM-DD"
+
+msgid "Go"
+msgstr "Gå"
+
+msgid "Newer"
+msgstr "Nyare"
+
+msgid "Older"
+msgstr "Äldre"
+
+#, c-format
+msgid "Searching for '%s'..."
+msgstr "Söker efter '%s'..."
+
+#, c-format
+msgid "Loaded %zu cached result."
+msgid_plural "Loaded %zu cached results."
+msgstr[0] "Läste in %zu cachat resultat."
+msgstr[1] "Läste in %zu cachade resultat."
+
+msgid "Listing installed packages..."
+msgstr "Listar installerade paket..."
+
+msgid "Listing packages..."
+msgstr "Listar paket..."
+
+msgid "Listing upgradable packages..."
+msgstr "Listar uppgraderbara paket..."
+
+#. Reset status labels and package actions.
+msgid "Ready."
+msgstr "Redo."
+
+msgid "Wait for the current package query to finish."
+msgstr "Vänta tills aktuell paketfråga är klar."
+
+msgid "Loading package..."
+msgstr "Läser in paket..."
+
+msgid "Query"
+msgstr "Fråga"
+
+msgid "Search cancelled."
+msgstr "Sökning avbröts."
+
+msgid "Listing installed packages cancelled."
+msgstr "Listning av installerade paket avbröts."
+
+msgid "Listing packages cancelled."
+msgstr "Paketlistning avbröts."
+
+msgid "Listing upgradable packages cancelled."
+msgstr "Listning av uppgraderbara paket avbröts."
+
+msgid "Selected package refresh cancelled."
+msgstr "Uppdatering av valt paket avbröts."
+
+msgid "Stopping search..."
+msgstr "Stoppar sökning..."
+
+msgid "Stopping installed package listing..."
+msgstr "Stoppar listning av installerade paket..."
+
+msgid "Stopping package listing..."
+msgstr "Stoppar paketlistning..."
+
+msgid "Stopping upgradable package listing..."
+msgstr "Stoppar listning av uppgraderbara paket..."
+
+msgid "Stopping selected package refresh..."
+msgstr "Stoppar uppdatering av valt paket..."
+
+msgid "Stopping operation..."
+msgstr "Stoppar åtgärd..."
+
+msgid "List Installed"
+msgstr "Lista installerade"
+
+msgid "List Packages"
+msgstr "Lista paket"
+
+msgid "List Upgradable"
+msgstr "Lista uppgraderbara"
+
+msgid "Stop"
+msgstr "Stoppa"
+
+msgid "Package state changed while loading. Run the operation again."
+msgstr "Paketläget ändrades under inläsning. Kör åtgärden igen."
+
+#, c-format
+msgid "Found %zu installed package."
+msgid_plural "Found %zu installed packages."
+msgstr[0] "Hittade %zu installerat paket."
+msgstr[1] "Hittade %zu installerade paket."
+
+msgid "Error listing packages."
+msgstr "Fel vid listning av paket."
+
+#, c-format
+msgid "Found %zu package."
+msgid_plural "Found %zu packages."
+msgstr[0] "Hittade %zu paket."
+msgstr[1] "Hittade %zu paket."
+
+msgid "dnf5daemon upgrade information is already being refreshed."
+msgstr "dnf5daemon uppgraderingsinformation uppdateras redan."
+
+msgid "List Upgradable was cancelled."
+msgstr "Listning av uppgraderbara paket avbröts."
+
+msgid "Unable to load upgradable packages from dnf5daemon."
+msgstr "Kunde inte läsa uppgraderbara paket från dnf5daemon."
+
+msgid ""
+"Package state changed while loading upgrades. Press List Upgradable to try "
+"again."
+msgstr ""
+"Paketläget ändrades medan uppgraderingar lästes in. Tryck på Lista "
+"uppgraderbara för att försöka igen."
+
+msgid "Unable to publish dnf5daemon upgrade information."
+msgstr "Kunde inte publicera dnf5daemon uppgraderingsinformation."
+
+#, c-format
+msgid "Found %zu upgradable package."
+msgid_plural "Found %zu upgradable packages."
+msgstr[0] "Hittade %zu uppgraderbart paket."
+msgstr[1] "Hittade %zu uppgraderbara paket."
+
+msgid "Error listing upgradable packages."
+msgstr "Fel vid listning av uppgraderbara paket."
+
+msgid "Error or no results."
+msgstr "Fel eller inga resultat."
 
 msgid "Refresh"
 msgstr "Uppdatera"
 
-msgid "Search packages..."
-msgstr "Sök paket..."
-
-msgid "Search in description"
-msgstr "Sök i beskrivning"
-
-msgid "Exact match"
-msgstr "Exakt träff"
-
-msgid "Search History"
-msgstr "Sökhistorik"
-
-msgid "History Panel"
-msgstr "Historikpanel"
-
-msgid "Package Info Panel"
-msgstr "Paketinfopanel"
-
-msgid "Columns"
-msgstr "Kolumner"
-
-msgid "View"
-msgstr "Visa"
-
-msgid "Restore Default Columns"
-msgstr "Återställ standardkolumner"
-
-msgid "At least one package table column must remain visible."
-msgstr "Minst en paketkolumn måste vara synlig."
-
-msgid "Package table columns restored to defaults."
-msgstr "Paketkolumner återställda till standard."
+msgid "Error refreshing package."
+msgstr "Fel vid uppdatering av paket."
 
 msgid "Package"
 msgstr "Paket"
 
-msgid "File"
-msgstr "Arkiv"
+msgid "Update"
+msgstr "Uppdatering"
 
-msgid "Export Package List..."
-msgstr "Exportera paketlista..."
-
-msgid "Export Package List"
-msgstr "Exportera paketlista"
-
-msgid "No package rows to export."
-msgstr "Det finns inga paketrader att exportera."
+msgid "Update Release"
+msgstr "Uppdateringsutgåva"
 
 msgid "Package list exported."
 msgstr "Paketlistan exporterades."
@@ -78,14 +681,45 @@ msgstr "Paketlistan exporterades."
 msgid "Could not export package list."
 msgstr "Kunde inte exportera paketlistan."
 
-msgid "Items: 0"
-msgstr "Objekt: 0"
+msgid "No package rows to export."
+msgstr "Det finns inga paketrader att exportera."
+
+msgid "Export Package List"
+msgstr "Exportera paketlista"
+
+msgid "Installed"
+msgstr "Installerat"
+
+msgid "Installed (local only)"
+msgstr "Installerat (endast lokalt)"
+
+msgid "Installed (newer than repo)"
+msgstr "Installerat (nyare än förrådet)"
+
+msgid "Newer in repository"
+msgstr "Nyare i förråd"
+
+msgid "Available"
+msgstr "Tillgängligt"
+
+msgid "Pending Upgrade"
+msgstr "Väntande uppgradering"
+
+msgid "Pending Install"
+msgstr "Väntande installation"
+
+msgid "Pending Reinstall"
+msgstr "Väntande ominstallation"
+
+msgid "Pending Removal"
+msgstr "Väntande borttagning"
 
 msgid "Find packages"
 msgstr "Hitta paket"
 
 msgid "Search for packages, or choose a list option to browse packages."
-msgstr "Sök efter paket, eller välj ett listalternativ för att bläddra bland paket."
+msgstr ""
+"Sök efter paket, eller välj ett listalternativ för att bläddra bland paket."
 
 msgid "No packages found"
 msgstr "Inga paket hittades"
@@ -112,438 +746,19 @@ msgstr ""
 "Ctrl+I: Växla paketinfopanel\n"
 "Ctrl+Q eller Ctrl+W: Avsluta"
 
-msgid "Help"
-msgstr "Hjälp"
+#. Update count label
+#, c-format
+msgid "Item: %zu"
+msgid_plural "Items: %zu"
+msgstr[0] "Objekt: %zu"
+msgstr[1] "Objekt: %zu"
 
-msgid "Quit"
-msgstr "Avsluta"
+msgid "Items: 0"
+msgstr "Objekt: 0"
 
-msgid "About DNF UI"
-msgstr "Om DNF UI"
-
-msgid "Credits"
-msgstr "Tack"
-
-msgid "Summary"
-msgstr "Sammanfattning"
-
-msgid "Description"
-msgstr "Beskrivning"
-
-msgid "Version"
-msgstr "Version"
-
-msgid "Update"
-msgstr "Uppdatering"
-
-msgid "Release"
-msgstr "Utgåva"
-
-msgid "Update Release"
-msgstr "Uppdateringsutgåva"
-
-msgid "Repo"
-msgstr "Förråd"
-
-msgid "Installed From"
-msgstr "Installerad från"
-
-msgid "Name"
-msgstr "Namn"
-
-msgid "Package ID"
-msgstr "Paket-ID"
-
-msgid "Install Size"
-msgstr "Installationsstorlek"
-
-msgid "Install Reason"
-msgstr "Installationsorsak"
-
-msgid "Download Size"
-msgstr "Nedladdningsstorlek"
-
-msgid "Installed Version"
-msgstr "Installerad version"
-
-msgid "Upgradable Version"
-msgstr "Uppgraderbar version"
-
-msgid "Dependency"
-msgstr "Beroende"
-
-msgid "User"
-msgstr "Användare"
-
-msgid "Clean"
-msgstr "Rensning"
-
-msgid "Weak dependency"
-msgstr "Svagt beroende"
-
-msgid "Group"
-msgstr "Grupp"
-
-msgid "External"
-msgstr "Externt"
-
-msgid "Unknown"
-msgstr "Okänt"
-
-msgid "Info"
-msgstr "Info"
-
-msgid "Select a package for details."
-msgstr "Välj ett paket för att visa detaljer."
-
-msgid "Files"
-msgstr "Filer"
-
-msgid "Select an installed package to view its file list."
-msgstr "Välj ett installerat paket för att visa dess fillista."
-
-msgid "File list available only for installed packages."
-msgstr "Fillista är endast tillgänglig för installerade paket."
-
-msgid "Dependencies"
-msgstr "Beroenden"
-
-msgid "Select a package to view dependencies."
-msgstr "Välj ett paket för att visa beroenden."
-
-msgid "Changelog"
-msgstr "Ändringslogg"
-
-msgid "Select a package to view its changelog."
-msgstr "Välj ett paket för att visa ändringsloggen."
-
-msgid "Pending"
-msgstr "Väntande"
-
-msgid "Status"
-msgstr "Status"
-
-msgid "Installed"
-msgstr "Installerat"
-
-msgid "Installed (local only)"
-msgstr "Installerat (endast lokalt)"
-
-msgid "Installed (newer than repo)"
-msgstr "Installerat (nyare än förrådet)"
-
-msgid "Newer in repository"
-msgstr "Nyare i förråd"
-
-msgid "Available"
-msgstr "Tillgängligt"
-
-msgid "Pending Install"
-msgstr "Väntande installation"
-
-msgid "Pending Upgrade"
-msgstr "Väntande uppgradering"
-
-msgid "Pending Reinstall"
-msgstr "Väntande ominstallation"
-
-msgid "Pending Removal"
-msgstr "Väntande borttagning"
-
-msgid "Mark for Install"
-msgstr "Markera för installation"
-
-msgid "Mark for Upgrade"
-msgstr "Markera för uppgradering"
-
-msgid "Mark for Reinstall"
-msgstr "Markera för ominstallation"
-
-msgid "Mark for Removal"
-msgstr "Markera för borttagning"
-
-msgid "Unmark Install"
-msgstr "Avmarkera installation"
-
-msgid "Unmark Upgrade"
-msgstr "Avmarkera uppgradering"
-
-msgid "Unmark Reinstall"
-msgstr "Avmarkera ominstallation"
-
-msgid "Unmark Removal"
-msgstr "Avmarkera borttagning"
-
-msgid "List Installed"
-msgstr "Lista installerade"
-
-msgid "List Packages"
-msgstr "Lista paket"
-
-msgid "List Upgradable"
-msgstr "Lista uppgraderbara"
-
+#. Starts repository refresh on a background task.
 msgid "Refresh Repositories"
 msgstr "Uppdatera förråd"
-
-msgid "Upgrade All"
-msgstr "Uppgradera alla"
-
-msgid "Mark Listed Upgrades"
-msgstr "Markera listade uppgraderingar"
-
-msgid "Apply Transactions"
-msgstr "Verkställ transaktioner"
-
-msgid "Clear Transactions"
-msgstr "Rensa transaktioner"
-
-msgid "Clear List"
-msgstr "Rensa lista"
-
-msgid "Clear Search Cache"
-msgstr "Rensa sökcache"
-
-msgid "Transaction History..."
-msgstr "Transaktionshistorik..."
-
-msgid "Transaction History"
-msgstr "Transaktionshistorik"
-
-msgid "Package name..."
-msgstr "Paketnamn..."
-
-msgid "Command, repository, or architecture..."
-msgstr "Kommando, förråd eller arkitektur..."
-
-msgid "All actions"
-msgstr "Alla åtgärder"
-
-msgid "No actions"
-msgstr "Inga åtgärder"
-
-msgid "%zu actions"
-msgstr "%zu åtgärder"
-
-msgid "All results"
-msgstr "Alla resultat"
-
-msgid "From date YYYY-MM-DD"
-msgstr "Från datum ÅÅÅÅ-MM-DD"
-
-msgid "To date YYYY-MM-DD"
-msgstr "Till datum ÅÅÅÅ-MM-DD"
-
-msgid "Loading transaction history..."
-msgstr "Läser in transaktionshistorik..."
-
-msgid "Page"
-msgstr "Sida"
-
-msgid "Go"
-msgstr "Gå"
-
-msgid "Newer"
-msgstr "Nyare"
-
-msgid "Older"
-msgstr "Äldre"
-
-msgid "Use Older to show more history."
-msgstr "Använd Äldre för att visa mer historik."
-
-msgid "No transaction history rows match the filter."
-msgstr "Inga transaktionshistorikrader matchar filtret."
-
-msgid "No transaction history rows were found on this page."
-msgstr "Inga transaktionshistorikrader hittades på den här sidan."
-
-msgid "No transaction history was found."
-msgstr "Ingen transaktionshistorik hittades."
-
-#, c-format
-msgid "Showing %zu package change."
-msgid_plural "Showing %zu package changes."
-msgstr[0] "Visar %zu paketändring."
-msgstr[1] "Visar %zu paketändringar."
-
-#, c-format
-msgid "Page %zu."
-msgstr "Sida %zu."
-
-msgid "Dates must use YYYY-MM-DD."
-msgstr "Datum måste använda ÅÅÅÅ-MM-DD."
-
-msgid "The start date must be before the end date."
-msgstr "Startdatum måste vara före slutdatum."
-
-msgid "History load was cancelled."
-msgstr "Historikinläsningen avbröts."
-
-msgid "Failed to load transaction history."
-msgstr "Kunde inte läsa in transaktionshistorik."
-
-msgid "Transaction is running. History controls are disabled."
-msgstr "En transaktion körs. Historikkontrollerna är inaktiverade."
-
-msgid "Transaction finished. Press Search to refresh transaction history."
-msgstr "Transaktionen är klar. Tryck på Sök för att uppdatera transaktionshistoriken."
-
-msgid "Unknown time"
-msgstr "Okänd tid"
-
-msgid "Transaction"
-msgstr "Transaktion"
-
-msgid "Result"
-msgstr "Resultat"
-
-msgid "OK"
-msgstr "OK"
-
-msgid "Failed"
-msgstr "Misslyckades"
-
-msgid "Command"
-msgstr "Kommando"
-
-msgid "Install"
-msgstr "Installera"
-
-msgid "Upgrade"
-msgstr "Uppgradera"
-
-msgid "Downgrade"
-msgstr "Nedgradera"
-
-msgid "Reinstall"
-msgstr "Installera om"
-
-msgid "Remove"
-msgstr "Ta bort"
-
-msgid "Replaced"
-msgstr "Ersattes"
-
-msgid "Reason changed"
-msgstr "Orsak ändrades"
-
-msgid "Other"
-msgstr "Annat"
-
-msgid "Stop"
-msgstr "Stoppa"
-
-msgid "Cancel"
-msgstr "Avbryt"
-
-msgid "Close"
-msgstr "Stäng"
-
-msgid "Apply"
-msgstr "Verkställ"
-
-msgid "A transaction is still applying."
-msgstr "En transaktion verkställs fortfarande."
-
-msgid "Apply the following changes?"
-msgstr "Verkställ följande ändringar?"
-
-msgid "This is your last opportunity to look through the list of marked changes before they are applied."
-msgstr "Detta är din sista möjlighet att gå igenom listan med markerade ändringar innan de verkställs."
-
-msgid "To be installed"
-msgstr "Kommer att installeras"
-
-msgid "To be upgraded"
-msgstr "Kommer att uppgraderas"
-
-msgid "To be removed"
-msgstr "Kommer att tas bort"
-
-msgid "To be replaced"
-msgstr "Kommer att ersättas"
-
-msgid "Disk space usage will be unchanged."
-msgstr "Diskanvändningen ändras inte."
-
-msgid "Applying package transaction"
-msgstr "Verkställer pakettransaktion"
-
-#, c-format
-msgid "Applying %zu pending package change"
-msgid_plural "Applying %zu pending package changes"
-msgstr[0] "Verkställer %zu väntande paketändring"
-msgstr[1] "Verkställer %zu väntande paketändringar"
-
-msgid "Searching for '%s'..."
-msgstr "Söker efter '%s'..."
-
-msgid "Listing installed packages..."
-msgstr "Listar installerade paket..."
-
-msgid "Listing packages..."
-msgstr "Listar paket..."
-
-msgid "Listing upgradable packages..."
-msgstr "Listar uppgraderbara paket..."
-
-msgid "Loading package..."
-msgstr "Läser in paket..."
-
-msgid "Stopping search..."
-msgstr "Stoppar sökning..."
-
-msgid "Stopping installed package listing..."
-msgstr "Stoppar listning av installerade paket..."
-
-msgid "Stopping package listing..."
-msgstr "Stoppar paketlistning..."
-
-msgid "Stopping upgradable package listing..."
-msgstr "Stoppar listning av uppgraderbara paket..."
-
-msgid "Stopping selected package refresh..."
-msgstr "Stoppar uppdatering av valt paket..."
-
-msgid "Stopping operation..."
-msgstr "Stoppar åtgärd..."
-
-msgid "Search cancelled."
-msgstr "Sökning avbröts."
-
-msgid "Listing installed packages cancelled."
-msgstr "Listning av installerade paket avbröts."
-
-msgid "Listing packages cancelled."
-msgstr "Paketlistning avbröts."
-
-msgid "Listing upgradable packages cancelled."
-msgstr "Listning av uppgraderbara paket avbröts."
-
-msgid "Selected package refresh cancelled."
-msgstr "Uppdatering av valt paket avbröts."
-
-msgid "Repositories refreshed."
-msgstr "Förråd uppdaterade."
-
-msgid "Repositories refreshed. Press List Upgradable to load updated upgrades."
-msgstr "Förråd uppdaterade. Tryck på Lista uppgraderbara för att läsa in uppdaterade uppgraderingar."
-
-msgid "Installed package state changed. Press List Upgradable to reload upgrades."
-msgstr "Installerat paketläge ändrades. Tryck på Lista uppgraderbara för att läsa in uppgraderingar igen."
-
-msgid "Package state changed while loading upgrades. Press List Upgradable to try again."
-msgstr "Paketläget ändrades medan uppgraderingar lästes in. Tryck på Lista uppgraderbara för att försöka igen."
-
-msgid "Package state changed while loading. Run the operation again."
-msgstr "Paketläget ändrades under inläsning. Kör åtgärden igen."
-
-msgid "Upgrade information changed. Press List Upgradable to reload."
-msgstr "Uppgraderingsinformationen ändrades. Tryck på Lista uppgraderbara för att läsa in igen."
-
-msgid "Refreshing repositories..."
-msgstr "Uppdaterar förråd..."
 
 msgid "Refreshing dnf5daemon metadata..."
 msgstr "Uppdaterar dnf5daemon-metadata..."
@@ -551,347 +766,27 @@ msgstr "Uppdaterar dnf5daemon-metadata..."
 msgid "Loading refreshed metadata..."
 msgstr "Läser in uppdaterad metadata..."
 
-msgid "Repository refresh cancelled."
-msgstr "Förrådsuppdatering avbröts."
-
-msgid "Repository refresh cancelled. Finishing current repo check in the background."
-msgstr "Förrådsuppdatering avbröts. Slutför aktuell förrådskontroll i bakgrunden."
-
-msgid "Repository refresh is already running."
-msgstr "Förrådsuppdatering körs redan."
-
-msgid "Repository refresh is still stopping."
-msgstr "Förrådsuppdatering stoppas fortfarande."
-
-msgid "Repo refresh failed."
-msgstr "Förrådsuppdatering misslyckades."
-
-msgid "Repository refresh failed after transaction."
-msgstr "Förrådsuppdatering efter transaktion misslyckades."
-
-msgid "Package info loaded."
-msgstr "Paketinfo lästes in."
-
-msgid "Open the Changelog tab to load the changelog."
-msgstr "Öppna fliken Ändringslogg för att läsa in ändringsloggen."
-
-msgid "Open the Files tab to load the file list."
-msgstr "Öppna fliken Filer för att läsa in fillistan."
-
-msgid "Open the Dependencies tab to load dependencies."
-msgstr "Öppna fliken Beroenden för att läsa in beroenden."
-
-msgid "Fetching file list..."
-msgstr "Hämtar fillista..."
-
-msgid "Fetching dependencies..."
-msgstr "Hämtar beroenden..."
-
-msgid "Error loading file list."
-msgstr "Fel vid inläsning av fillista."
-
-msgid "Error loading dependencies."
-msgstr "Fel vid inläsning av beroenden."
-
-msgid "Fetching changelog..."
-msgstr "Hämtar ändringslogg..."
-
-msgid "Error loading changelog."
-msgstr "Fel vid inläsning av ändringslogg."
-
-msgid "Error refreshing package."
-msgstr "Fel vid uppdatering av paket."
-
-msgid "Package details load was cancelled."
-msgstr "Inläsning av paketdetaljer avbröts."
-
-msgid "No package selected."
-msgstr "Inget paket valt."
-
-msgid "No install or upgrade action is available."
-msgstr "Ingen installation eller uppgradering är tillgänglig."
-
-msgid "Package is not installed."
-msgstr "Paketet är inte installerat."
-
-msgid "Package cannot be reinstalled from current repositories."
-msgstr "Paketet kan inte ominstalleras från nuvarande förråd."
-
-msgid "Unmarked: "
-msgstr "Avmarkerat: "
-
-msgid "Marked for install: "
-msgstr "Markerat för installation: "
-
-msgid "Marked for upgrade: "
-msgstr "Markerat för uppgradering: "
-
-msgid "Marked for removal: "
-msgstr "Markerat för borttagning: "
-
-msgid "Marked for reinstall: "
-msgstr "Markerat för ominstallation: "
-
-msgid "No pending actions to clear."
-msgstr "Det finns inga väntande åtgärder att rensa."
-
-msgid "No listed upgrades to mark."
-msgstr "Det finns inga listade uppgraderingar att markera."
-
-msgid "Apply authorization is already in progress."
-msgstr "Behörighetskontroll för verkställning pågår redan."
-
-msgid "Package state changed after the preview was prepared. Review the transaction again before applying."
-msgstr "Paketläget ändrades efter att förhandsgranskningen skapades. Granska transaktionen igen innan du verkställer den."
-
-msgid "Unknown pending package action."
-msgstr "Okänd väntande paketåtgärd."
-
-msgid "Queued transaction request."
-msgstr "Transaktionsbegäran köades."
-
-msgid "dnf5daemon is not available. Make sure dnf5daemon-server is installed and running."
-msgstr "dnf5daemon är inte tillgänglig. Kontrollera att dnf5daemon-server är installerad och körs."
-
-msgid "dnf5daemon is installed, but DNF UI is not allowed to talk to it. Reinstall dnf5daemon-server or check the D-Bus policy."
-msgstr "dnf5daemon är installerad, men DNF UI får inte prata med den. Installera om dnf5daemon-server eller kontrollera D-Bus-policyn."
-
-msgid "This transaction would remove or replace dnf5daemon-server, which DNF UI needs to apply package changes."
-msgstr "Den här transaktionen skulle ta bort eller ersätta dnf5daemon-server, som DNF UI behöver för att verkställa paketändringar."
-
-msgid "This transaction would remove or replace DNF UI itself."
-msgstr "Den här transaktionen skulle ta bort eller ersätta DNF UI."
-
-msgid "Could not verify whether this transaction would remove or replace DNF UI."
-msgstr "Kunde inte kontrollera om den här transaktionen skulle ta bort eller ersätta DNF UI."
-
-msgid "Could not verify whether the transaction modifies DNF UI itself."
-msgstr "Kunde inte kontrollera om transaktionen ändrar DNF UI."
-
-msgid "Upgrade All would remove or replace DNF UI itself."
-msgstr "Uppgradera alla skulle ta bort eller ersätta DNF UI."
-
-msgid "Could not verify whether Upgrade All would remove or replace DNF UI."
-msgstr "Kunde inte kontrollera om Uppgradera alla skulle ta bort eller ersätta DNF UI."
-
-msgid "The approved transaction was not applied. Prepare the preview again before retrying."
-msgstr "Den godkända transaktionen verkställdes inte. Förbered förhandsgranskningen igen innan du försöker igen."
-
-msgid "Details: "
-msgstr "Detaljer: "
-
-msgid "Privileged transaction preview ready."
-msgstr "Privilegierad transaktionsgranskning är klar."
-
-msgid "Requesting authorization and starting apply..."
-msgstr "Begär behörighet och startar verkställning..."
-
-msgid "Waiting for privileged apply to finish..."
-msgstr "Väntar på att privilegierad verkställning ska bli klar..."
-
-msgid "Refreshing backend state..."
-msgstr "Uppdaterar backend-läge..."
-
-msgid "Refreshing installed package state..."
-msgstr "Uppdaterar läge för installerade paket..."
-
-msgid "Transaction applied successfully."
-msgstr "Transaktionen verkställdes."
-
-msgid "Applying pending changes. See transaction window for details."
-msgstr "Verkställer väntande ändringar. Se transaktionsfönstret för detaljer."
-
-msgid "Applying package upgrades. See transaction window for details."
-msgstr "Verkställer paketuppgraderingar. Se transaktionsfönstret för detaljer."
-
-msgid "Wait for the current transaction to finish."
-msgstr "Vänta tills den aktuella transaktionen har verkställts."
-
-msgid "Transaction preview was cancelled."
-msgstr "Transaktionsgranskningen avbröts."
-
-msgid "Transaction apply was cancelled."
-msgstr "Transaktionsverkställningen avbröts."
-
-msgid "dnf5daemon transaction session is not available."
-msgstr "dnf5daemon-transaktionssessionen är inte tillgänglig."
-
-msgid "dnf5daemon key import request is incomplete."
-msgstr "dnf5daemon-begäran om nyckelimport är ofullständig."
-
-msgid "Could not answer the dnf5daemon key import request."
-msgstr "Kunde inte svara på dnf5daemon-begäran om nyckelimport."
-
-msgid "Repository signing key was rejected."
-msgstr "Förrådets signeringsnyckel avvisades."
-
-msgid "Repository signing key rejected."
-msgstr "Förrådets signeringsnyckel avvisades."
-
-msgid "Repository signing key accepted."
-msgstr "Förrådets signeringsnyckel accepterades."
-
-msgid "The repository cannot be used until its signing key is trusted."
-msgstr "Förrådet kan inte användas förrän dess signeringsnyckel är betrodd."
-
-msgid "Repository Signing Key"
-msgstr "Förrådets signeringsnyckel"
-
-msgid "Trust this repository signing key?"
-msgstr "Lita på den här signeringsnyckeln för förrådet?"
-
-msgid "Key ID"
-msgstr "Nyckel-ID"
-
-msgid "Fingerprint"
-msgstr "Fingeravtryck"
-
-msgid "Repository"
-msgstr "Förråd"
-
-msgid "Key URL"
-msgstr "Nyckel-URL"
-
-msgid "Reject"
-msgstr "Avvisa"
-
-msgid "Trust Key"
-msgstr "Lita på nyckel"
-
-msgid "repository metadata"
-msgstr "förrådsmetadata"
-
-msgid "Downloading: "
-msgstr "Hämtar: "
-
-msgid "Download progress: "
-msgstr "Hämtningsförlopp: "
-
-msgid "Download ready: "
-msgstr "Hämtning klar: "
-
-msgid "dnf5daemon returned an unsupported transaction resolve result."
-msgstr "dnf5daemon returnerade ett transaktionsresultat som inte stöds."
-
-msgid "dnf5daemon returned an incomplete package item."
-msgstr "dnf5daemon returnerade ett ofullständigt paketobjekt."
-
-msgid "dnf5daemon returned an incomplete upgrade item."
-msgstr "dnf5daemon returnerade ett ofullständigt uppgraderingsobjekt."
-
-msgid "No transaction changes were returned."
-msgstr "Inga transaktionsändringar returnerades."
-
-msgid "Could not list upgrade targets from dnf5daemon."
-msgstr "Kunde inte lista uppgraderingsmål från dnf5daemon."
-
-msgid "dnf5daemon upgrade information is already being refreshed."
-msgstr "dnf5daemon uppgraderingsinformation uppdateras redan."
-
-msgid "List Upgradable was cancelled."
-msgstr "Listning av uppgraderbara paket avbröts."
-
-msgid "Unable to load upgradable packages from dnf5daemon."
-msgstr "Kunde inte läsa uppgraderbara paket från dnf5daemon."
-
-msgid "Unable to publish dnf5daemon upgrade information."
-msgstr "Kunde inte publicera dnf5daemon uppgraderingsinformation."
-
-msgid "dnf5daemon upgrade information is not ready."
-msgstr "dnf5daemon uppgraderingsinformation är inte klar."
-
-#, c-format
-msgid "Found %zu package."
-msgid_plural "Found %zu packages."
-msgstr[0] "Hittade %zu paket."
-msgstr[1] "Hittade %zu paket."
-
-#, c-format
-msgid "Found %zu installed package."
-msgid_plural "Found %zu installed packages."
-msgstr[0] "Hittade %zu installerat paket."
-msgstr[1] "Hittade %zu installerade paket."
-
-#, c-format
-msgid "Found %zu upgradable package."
-msgid_plural "Found %zu upgradable packages."
-msgstr[0] "Hittade %zu uppgraderbart paket."
-msgstr[1] "Hittade %zu uppgraderbara paket."
-
-#, c-format
-msgid "Item: %zu"
-msgid_plural "Items: %zu"
-msgstr[0] "Objekt: %zu"
-msgstr[1] "Objekt: %zu"
-
-#, c-format
-msgid "Loaded %zu cached result."
-msgid_plural "Loaded %zu cached results."
-msgstr[0] "Läste in %zu cachat resultat."
-msgstr[1] "Läste in %zu cachade resultat."
-
-#, c-format
-msgid "Cleared %zu pending action."
-msgid_plural "Cleared %zu pending actions."
-msgstr[0] "Rensade %zu väntande åtgärd."
-msgstr[1] "Rensade %zu väntande åtgärder."
-
-#, c-format
-msgid "Marked %zu listed upgrade."
-msgid_plural "Marked %zu listed upgrades."
-msgstr[0] "Markerade %zu listad uppgradering."
-msgstr[1] "Markerade %zu listade uppgraderingar."
-
-#, c-format
-msgid "%zu package will be installed."
-msgid_plural "%zu packages will be installed."
-msgstr[0] "%zu paket kommer att installeras."
-msgstr[1] "%zu paket kommer att installeras."
-
-#, c-format
-msgid "%zu package will be upgraded."
-msgid_plural "%zu packages will be upgraded."
-msgstr[0] "%zu paket kommer att uppgraderas."
-msgstr[1] "%zu paket kommer att uppgraderas."
-
-#, c-format
-msgid "%zu package will be removed."
-msgid_plural "%zu packages will be removed."
-msgstr[0] "%zu paket kommer att tas bort."
-msgstr[1] "%zu paket kommer att tas bort."
-
-#, c-format
-msgid "%zu package will be replaced."
-msgid_plural "%zu packages will be replaced."
-msgstr[0] "%zu paket kommer att ersättas."
-msgstr[1] "%zu paket kommer att ersättas."
-
-msgid "Error loading info."
-msgstr "Fel vid inläsning av information."
-
-msgid "No details found."
-msgstr "Inga detaljer hittades."
-
-msgid "Fetching package info..."
-msgstr "Hämtar paketinformation..."
-
-msgid "Repository refresh was cancelled."
-msgstr "Förrådsuppdateringen avbröts."
-
-msgid "Repository refresh failed. Showing installed packages only."
-msgstr "Förrådsuppdatering misslyckades. Visar endast installerade paket."
-
 msgid "Repository refresh stopped."
 msgstr "Förrådsuppdatering stoppades."
 
+msgid "Repositories refreshed. Press List Upgradable to load updated upgrades."
+msgstr ""
+"Förråd uppdaterade. Tryck på Lista uppgraderbara för att läsa in uppdaterade "
+"uppgraderingar."
+
+msgid "Repositories refreshed."
+msgstr "Förråd uppdaterade."
+
 msgid "Live repo refresh failed. Using cached repository metadata."
-msgstr "Direkt förrådsuppdatering misslyckades. Använder cachad förrådsmetadata."
+msgstr ""
+"Direkt förrådsuppdatering misslyckades. Använder cachad förrådsmetadata."
 
 msgid "Live repo refresh failed. Showing installed packages only."
-msgstr "Direkt förrådsuppdatering misslyckades. Visar endast installerade paket."
+msgstr ""
+"Direkt förrådsuppdatering misslyckades. Visar endast installerade paket."
 
-msgid "Wait for the current package query to finish."
-msgstr "Vänta tills aktuell paketfråga är klar."
+msgid "Repo refresh failed."
+msgstr "Förrådsuppdatering misslyckades."
 
 msgid "Stopping repository refresh..."
 msgstr "Stoppar förrådsuppdatering..."
@@ -899,45 +794,8 @@ msgstr "Stoppar förrådsuppdatering..."
 msgid "Repository refresh is stopping."
 msgstr "Förrådsuppdatering stoppas."
 
-msgid "Installed package refresh failed."
-msgstr "Uppdatering av installerade paket misslyckades."
-
-msgid "Backend warm up was cancelled."
-msgstr "Backend-uppvärmning avbröts."
-
-msgid "Backend warm up failed."
-msgstr "Backend-uppvärmning misslyckades."
-
-msgid "Ready. Repository metadata loaded."
-msgstr "Redo. Förrådsmetadata inläst."
-
-msgid "Ready. Using cached repository metadata."
-msgstr "Redo. Använder cachad förrådsmetadata."
-
-msgid "Ready. Showing installed packages only."
-msgstr "Redo. Visar endast installerade paket."
-
-#, c-format
-msgid "Cannot modify %s while DNF UI is running. Close the application and use another tool."
-msgstr "Kan inte ändra %s medan DNF UI körs. Stäng programmet och använd ett annat verktyg."
-
-msgid "Pending package could not be found in current package data."
-msgstr "Det väntande paketet hittades inte i aktuell paketdata."
-
-msgid "Install: "
-msgstr "Installera: "
-
-msgid "Upgrade: "
-msgstr "Uppgradera: "
-
-msgid "Reinstall: "
-msgstr "Ominstallera: "
-
-msgid "Remove: "
-msgstr "Ta bort: "
-
-msgid "Ready."
-msgstr "Redo."
+msgid "Refreshing repositories..."
+msgstr "Uppdaterar förråd..."
 
 msgid "Wait for the current transaction preview to finish."
 msgstr "Vänta tills aktuell transaktionsförhandsgranskning är klar."
@@ -945,11 +803,29 @@ msgstr "Vänta tills aktuell transaktionsförhandsgranskning är klar."
 msgid "All packages are already up to date."
 msgstr "Alla paket är redan uppdaterade."
 
+msgid "No transaction changes were returned."
+msgstr "Inga transaktionsändringar returnerades."
+
+msgid "Wait for the current transaction to finish."
+msgstr "Vänta tills den aktuella transaktionen har verkställts."
+
 msgid "Preparing Preview..."
 msgstr "Förbereder förhandsgranskning..."
 
+msgid "Repository refresh failed after transaction."
+msgstr "Förrådsuppdatering efter transaktion misslyckades."
+
 msgid "No prepared transaction request is available."
 msgstr "Ingen förberedd transaktionsbegäran är tillgänglig."
+
+msgid "Queued transaction request."
+msgstr "Transaktionsbegäran köades."
+
+msgid "Applying package upgrades. See transaction window for details."
+msgstr "Verkställer paketuppgraderingar. Se transaktionsfönstret för detaljer."
+
+msgid "Applying pending changes. See transaction window for details."
+msgstr "Verkställer väntande ändringar. Se transaktionsfönstret för detaljer."
 
 msgid "Transaction successful."
 msgstr "Transaktionen lyckades."
@@ -979,7 +855,8 @@ msgid "Transaction Preview Warning"
 msgstr "Varning i transaktionsförhandsgranskning"
 
 msgid "No package changes were returned, but dnf5daemon reported a warning."
-msgstr "Inga paketändringar returnerades, men dnf5daemon rapporterade en varning."
+msgstr ""
+"Inga paketändringar returnerades, men dnf5daemon rapporterade en varning."
 
 msgid "Clear pending package actions before upgrading all packages."
 msgstr "Rensa väntande paketåtgärder innan alla paket uppgraderas."
@@ -987,8 +864,189 @@ msgstr "Rensa väntande paketåtgärder innan alla paket uppgraderas."
 msgid "No pending changes."
 msgstr "Inga väntande ändringar."
 
+#, c-format
+msgid ""
+"Cannot modify %s while DNF UI is running. Close the application and use "
+"another tool."
+msgstr ""
+"Kan inte ändra %s medan DNF UI körs. Stäng programmet och använd ett annat "
+"verktyg."
+
+msgid "No package selected."
+msgstr "Inget paket valt."
+
+msgid "No install or upgrade action is available."
+msgstr "Ingen installation eller uppgradering är tillgänglig."
+
+msgid "Unmarked: "
+msgstr "Avmarkerat: "
+
+msgid "Upgrade information changed. Press List Upgradable to reload."
+msgstr ""
+"Uppgraderingsinformationen ändrades. Tryck på Lista uppgraderbara för att "
+"läsa in igen."
+
+msgid "Marked for upgrade: "
+msgstr "Markerat för uppgradering: "
+
+msgid "Marked for install: "
+msgstr "Markerat för installation: "
+
+msgid "Package is not installed."
+msgstr "Paketet är inte installerat."
+
+msgid "Marked for removal: "
+msgstr "Markerat för borttagning: "
+
+msgid "Package cannot be reinstalled from current repositories."
+msgstr "Paketet kan inte ominstalleras från nuvarande förråd."
+
+msgid "Marked for reinstall: "
+msgstr "Markerat för ominstallation: "
+
+msgid "No listed upgrades to mark."
+msgstr "Det finns inga listade uppgraderingar att markera."
+
+#, c-format
+msgid "Marked %zu listed upgrade."
+msgid_plural "Marked %zu listed upgrades."
+msgstr[0] "Markerade %zu listad uppgradering."
+msgstr[1] "Markerade %zu listade uppgraderingar."
+
+msgid "No pending actions to clear."
+msgstr "Det finns inga väntande åtgärder att rensa."
+
+#, c-format
+msgid "Cleared %zu pending action."
+msgid_plural "Cleared %zu pending actions."
+msgstr[0] "Rensade %zu väntande åtgärd."
+msgstr[1] "Rensade %zu väntande åtgärder."
+
+msgid "Pending package action is missing its transaction spec."
+msgstr "Väntande paketåtgärd saknar transaktionsspecifikation."
+
+msgid "Unknown pending package action."
+msgstr "Okänd väntande paketåtgärd."
+
+msgid ""
+"DNF UI cannot remove the package that owns the running application. Close "
+"DNF UI and remove it from another tool."
+msgstr ""
+"DNF UI kan inte ta bort paketet som äger det körande programmet. Stäng DNF "
+"UI och ta bort det med ett annat verktyg."
+
+msgid ""
+"DNF UI cannot reinstall the package that owns the running application while "
+"it is running."
+msgstr ""
+"DNF UI kan inte ominstallera paketet som äger det körande programmet medan "
+"det körs."
+
+msgid "Could not verify whether the transaction modifies DNF UI itself."
+msgstr "Kunde inte kontrollera om transaktionen ändrar DNF UI."
+
+msgid "Apply Transactions"
+msgstr "Verkställ transaktioner"
+
+msgid "Install: "
+msgstr "Installera: "
+
+msgid "Upgrade: "
+msgstr "Uppgradera: "
+
+msgid "Reinstall: "
+msgstr "Ominstallera: "
+
+msgid "Remove: "
+msgstr "Ta bort: "
+
+msgid "Key ID"
+msgstr "Nyckel-ID"
+
+msgid "Fingerprint"
+msgstr "Fingeravtryck"
+
+msgid "Repository"
+msgstr "Förråd"
+
+msgid "Key URL"
+msgstr "Nyckel-URL"
+
+msgid "Repository Signing Key"
+msgstr "Förrådets signeringsnyckel"
+
+msgid "Trust this repository signing key?"
+msgstr "Lita på den här signeringsnyckeln för förrådet?"
+
+msgid "Reject"
+msgstr "Avvisa"
+
+msgid "Trust Key"
+msgstr "Lita på nyckel"
+
+msgid "Disk space usage will be unchanged."
+msgstr "Diskanvändningen ändras inte."
+
+#, c-format
+msgid "%s extra disk space will be used."
+msgstr "%s extra diskutrymme kommer att användas."
+
+#, c-format
+msgid "%s of disk space will be freed."
+msgstr "%s diskutrymme kommer att frigöras."
+
+msgid "Apply the following changes?"
+msgstr "Verkställ följande ändringar?"
+
+msgid ""
+"This is your last opportunity to look through the list of marked changes "
+"before they are applied."
+msgstr ""
+"Detta är din sista möjlighet att gå igenom listan med markerade ändringar "
+"innan de verkställs."
+
+msgid "Warnings"
+msgstr "Varningar"
+
+#. Show the resolved backend changes, not only the packages marked manually.
+msgid "To be installed"
+msgstr "Kommer att installeras"
+
+msgid "To be upgraded"
+msgstr "Kommer att uppgraderas"
+
+msgid "To be downgraded"
+msgstr "Kommer att nedgraderas"
+
+msgid "To be reinstalled"
+msgstr "Kommer att ominstalleras"
+
+msgid "To be removed"
+msgstr "Kommer att tas bort"
+
+msgid "To be replaced"
+msgstr "Kommer att ersättas"
+
+msgid "Cancel"
+msgstr "Avbryt"
+
+msgid "Apply"
+msgstr "Verkställ"
+
+msgid "Close"
+msgstr "Stäng"
+
 msgid "Transaction Progress"
 msgstr "Transaktionsförlopp"
+
+msgid "Applying package transaction"
+msgstr "Verkställer pakettransaktion"
+
+#, c-format
+msgid "Applying %zu pending package change"
+msgid_plural "Applying %zu pending package changes"
+msgstr[0] "Verkställer %zu väntande paketändring"
+msgstr[1] "Verkställer %zu väntande paketändringar"
 
 msgid "Resolving dependency changes..."
 msgstr "Löser beroendeändringar..."
@@ -1002,128 +1060,11 @@ msgstr "Transaktionen slutfördes med fel."
 msgid "Transaction Complete"
 msgstr "Transaktionen klar"
 
-#, c-format
-msgid "%s extra disk space will be used."
-msgstr "%s extra diskutrymme kommer att användas."
-
-#, c-format
-msgid "%s of disk space will be freed."
-msgstr "%s diskutrymme kommer att frigöras."
-
-msgid "To be downgraded"
-msgstr "Kommer att nedgraderas"
-
-msgid "To be reinstalled"
-msgstr "Kommer att ominstalleras"
-
-msgid "DNF UI cannot remove the package that owns the running application. Close DNF UI and remove it from another tool."
-msgstr "DNF UI kan inte ta bort paketet som äger det körande programmet. Stäng DNF UI och ta bort det med ett annat verktyg."
-
-msgid "DNF UI cannot reinstall the package that owns the running application while it is running."
-msgstr "DNF UI kan inte ominstallera paketet som äger det körande programmet medan det körs."
-
-msgid "Arch"
-msgstr "Arkitektur"
-
-msgid "Query"
-msgstr "Fråga"
-
-#, c-format
-msgid "%s: %.1f s"
-msgstr "%s: %.1f s"
-
-msgid "Operation cancelled."
-msgstr "Åtgärden avbröts."
-
-msgid "Quit and discard marked changes?"
-msgstr "Avsluta och kasta markerade ändringar?"
-
-msgid "There are still marked changes that have not yet been applied. They will get lost if you choose to quit."
-msgstr "Det finns fortfarande markerade ändringar som inte har verkställts. De går förlorade om du avslutar."
-
-msgid "Starting package downloads..."
-msgstr "Startar paketnedladdningar..."
-
-msgid "package download"
-msgstr "paketnedladdning"
-
-msgid "Download mirror failed."
-msgstr "Nedladdningsspegel misslyckades."
-
-msgid "Package download failed."
-msgstr "Paketnedladdning misslyckades."
-
-msgid "Running transaction."
-msgstr "Kör transaktion."
-
-msgid "Verifying package files."
-msgstr "Verifierar paketfiler."
-
-msgid "Preparing transaction."
-msgstr "Förbereder transaktion."
-
-msgid "Processing package."
-msgstr "Bearbetar paket."
-
-msgid "Processing package: "
-msgstr "Bearbetar paket: "
-
-msgid "Package unpack failed."
-msgstr "Uppackning av paket misslyckades."
-
-msgid "Package unpack failed: "
-msgstr "Uppackning av paket misslyckades: "
-
-msgid "Error listing packages."
-msgstr "Fel vid listning av paket."
-
-msgid "Error listing upgradable packages."
-msgstr "Fel vid listning av uppgraderbara paket."
-
-msgid "Error or no results."
-msgstr "Fel eller inga resultat."
-
-msgid "Use the upgrade-all preview helper for upgrade-all requests."
-msgstr "Använd förhandsgranskningshjälpen för uppgradera alla vid begäran om att uppgradera alla."
-
-msgid "dnf5daemon session path is empty."
-msgstr "dnf5daemon-sessionssökvägen är tom."
-
-msgid "Connecting to dnf5daemon..."
-msgstr "Ansluter till dnf5daemon..."
-
-msgid "dnf5daemon repository refresh failed."
-msgstr "dnf5daemon-förrådsuppdatering misslyckades."
-
-msgid "Could not mark packages in dnf5daemon."
-msgstr "Kunde inte markera paket i dnf5daemon."
-
-msgid "Could not open a dnf5daemon session."
-msgstr "Kunde inte öppna en dnf5daemon-session."
-
-msgid "dnf5daemon returned an empty session path."
-msgstr "dnf5daemon returnerade en tom sessionssökväg."
-
-msgid "Could not connect to the system D-Bus."
-msgstr "Kunde inte ansluta till systemets D-Bus."
-
-msgid "dnf5daemon connection is not available."
-msgstr "dnf5daemon-anslutning är inte tillgänglig."
-
-msgid "Could not mark upgrade-all in dnf5daemon."
-msgstr "Kunde inte markera uppgradera alla i dnf5daemon."
-
-msgid "dnf5daemon failed to resolve the transaction."
-msgstr "dnf5daemon kunde inte lösa transaktionen."
-
-msgid "dnf5daemon could not resolve the transaction."
-msgstr "dnf5daemon kunde inte lösa transaktionen."
-
-msgid "Failed to close the dnf5daemon session."
-msgstr "Kunde inte stänga dnf5daemon-sessionen."
-
 msgid "Search cache cleared."
 msgstr "Sökcache rensades."
+
+msgid "Report issues"
+msgstr "Rapportera problem"
 
 msgid "Graphical package manager frontend for DNF5."
 msgstr "Grafiskt gränssnitt för DNF5-pakethantering."
@@ -1131,14 +1072,103 @@ msgstr "Grafiskt gränssnitt för DNF5-pakethantering."
 msgid "GitHub repository"
 msgstr "GitHub-förråd"
 
-msgid "Report issues"
-msgstr "Rapportera problem"
-
 msgid "Support"
 msgstr "Support"
 
-msgid "Warnings"
-msgstr "Varningar"
+msgid "At least one package table column must remain visible."
+msgstr "Minst en paketkolumn måste vara synlig."
 
+msgid "Package table columns restored to defaults."
+msgstr "Paketkolumner återställda till standard."
+
+msgid "Export Package List..."
+msgstr "Exportera paketlista..."
+
+msgid "Quit"
+msgstr "Avsluta"
+
+msgid "File"
+msgstr "Arkiv"
+
+msgid "History Panel"
+msgstr "Historikpanel"
+
+msgid "Package Info Panel"
+msgstr "Paketinfopanel"
+
+msgid "Restore Default Columns"
+msgstr "Återställ standardkolumner"
+
+msgid "Columns"
+msgstr "Kolumner"
+
+msgid "View"
+msgstr "Visa"
+
+msgid "Clear List"
+msgstr "Rensa lista"
+
+msgid "Clear Search Cache"
+msgstr "Rensa sökcache"
+
+msgid "Transaction History..."
+msgstr "Transaktionshistorik..."
+
+msgid "About DNF UI"
+msgstr "Om DNF UI"
+
+msgid "Help"
+msgstr "Hjälp"
+
+msgid "Quit and discard marked changes?"
+msgstr "Avsluta och kasta markerade ändringar?"
+
+msgid ""
+"There are still marked changes that have not yet been applied. They will get "
+"lost if you choose to quit."
+msgstr ""
+"Det finns fortfarande markerade ändringar som inte har verkställts. De går "
+"förlorade om du avslutar."
+
+msgid "A transaction is still applying."
+msgstr "En transaktion verkställs fortfarande."
+
+msgid "Search History"
+msgstr "Sökhistorik"
+
+msgid "Search packages..."
+msgstr "Sök paket..."
+
+msgid "Search in description"
+msgstr "Sök i beskrivning"
+
+msgid "Exact match"
+msgstr "Exakt träff"
+
+msgid "Upgrade All"
+msgstr "Uppgradera alla"
+
+msgid "Mark Listed Upgrades"
+msgstr "Markera listade uppgraderingar"
+
+msgid "Clear Transactions"
+msgstr "Rensa transaktioner"
+
+msgid "Info"
+msgstr "Info"
+
+msgid "Files"
+msgstr "Filer"
+
+msgid "Dependencies"
+msgstr "Beroenden"
+
+msgid "Changelog"
+msgstr "Ändringslogg"
+
+msgid "Pending"
+msgstr "Väntande"
+
+#. Passive startup note shown only while the backend is warming up.
 msgid "Loading package data..."
 msgstr "Läser in paketdata..."
