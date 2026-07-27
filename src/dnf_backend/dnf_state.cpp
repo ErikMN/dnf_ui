@@ -345,16 +345,6 @@ dnf_backend_get_install_state_sort_rank(PackageInstallState state)
 }
 
 // -----------------------------------------------------------------------------
-// Check the cached self-protection snapshot collected from the owner of the running GUI executable.
-// -----------------------------------------------------------------------------
-bool
-dnf_backend_is_package_self_protected(const PackageRow &row)
-{
-  std::lock_guard<std::mutex> lock(g_installed_mutex);
-  return g_self_protected_package_names.count(row.name) > 0;
-}
-
-// -----------------------------------------------------------------------------
 // Check resolved daemon preview package labels against the current installed snapshot.
 // The caller refreshes that snapshot before this check when fresh rpmdb state matters.
 // -----------------------------------------------------------------------------

@@ -199,7 +199,6 @@ that would remove or replace the running app package.
 
 The relevant functions are:
 
-- `dnf_backend_is_package_self_protected`
 - `dnf_backend_any_self_protected_package_label`
 - `dnf_backend_is_self_protected_transaction_spec`
 - `pending_transaction_validate_request`

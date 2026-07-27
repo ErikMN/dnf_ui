@@ -144,22 +144,6 @@ package_table_pending_action_css_class_for_type(PendingAction::Type action_type)
 }
 
 // -----------------------------------------------------------------------------
-// Return the pending action CSS class for one package row.
-// -----------------------------------------------------------------------------
-const char *
-package_table_pending_action_css_class(MainWindowUiState *widgets, const PackageTableRow &row)
-{
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
-  PendingAction::Type action_type;
-  if (!package_table_pending_action_for_resolved_row(widgets, row, action_rows, action_type)) {
-    return nullptr;
-  }
-
-  return package_table_pending_action_css_class_for_type(action_type);
-}
-
-// -----------------------------------------------------------------------------
 // Return the icon name for a pending action.
 // -----------------------------------------------------------------------------
 static const char *
@@ -272,14 +256,6 @@ package_table_update_resolved_status_label(GtkWidget *cell,
       gtk_widget_add_css_class(cell, "package-status-available");
     }
   }
-}
-
-void
-package_table_update_status_label(GtkWidget *cell, MainWindowUiState *widgets, const PackageTableRow &row)
-{
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
-  package_table_update_resolved_status_label(cell, widgets, row, action_rows);
 }
 
 // -----------------------------------------------------------------------------

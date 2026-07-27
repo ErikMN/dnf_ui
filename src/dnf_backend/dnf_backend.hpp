@@ -321,12 +321,6 @@ bool dnf_backend_is_package_installed_exact(const PackageRow &row);
 bool dnf_backend_get_installed_package_row_by_name_arch(const PackageRow &row, PackageRow &installed_out);
 
 // -----------------------------------------------------------------------------
-// Return true when this installed package owns the running GUI executable.
-// That package must not be modified from within the app itself.
-// -----------------------------------------------------------------------------
-bool dnf_backend_is_package_self_protected(const PackageRow &row);
-
-// -----------------------------------------------------------------------------
 // Return true when resolved daemon package labels name the running GUI package.
 // Uses the current installed snapshot. Callers refresh that snapshot when needed.
 // -----------------------------------------------------------------------------
