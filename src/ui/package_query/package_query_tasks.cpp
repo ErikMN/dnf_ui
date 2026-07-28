@@ -68,6 +68,7 @@ struct PackageListTaskData {
   uint64_t request_id;
   uint64_t generation;
   gint64 started_at_us;
+  DnfBackendSearchOptions options;
 };
 
 struct UpgradeablePackageListResult {
@@ -295,7 +296,10 @@ on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellabl
   QueryBackendBaseDropGuard base_drop_guard(cancellable);
 
   try {
-    auto *results = new std::vector<PackageRow>(dnf_backend_get_browse_package_rows_interruptible(cancellable));
+    const PackageListTaskData *td = static_cast<const PackageListTaskData *>(g_task_get_task_data(task));
+    const DnfBackendSearchOptions options = td ? td->options : DnfBackendSearchOptions {};
+    auto *results =
+        new std::vector<PackageRow>(dnf_backend_get_browse_package_rows_interruptible(options, cancellable));
     g_task_return_pointer(task, results, [](gpointer p) { delete static_cast<std::vector<PackageRow> *>(p); });
   } catch (const std::exception &e) {
     g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
@@ -796,6 +800,7 @@ package_query_start_list_available_task(MainWindowUiState *widgets)
   td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
   td->started_at_us = g_get_monotonic_time();
+  td->options = DnfBackendSearchOptions {};
 
   package_query_begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
   GTask *task = widgets_task_new_for_main_window_ui_state(widgets, c, on_list_available_task_finished);

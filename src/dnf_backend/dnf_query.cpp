@@ -218,10 +218,96 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
     // The repo relation is UNKNOWN until compared against the installed set.
     // The merge or annotation helpers resolve it when installed rows are available.
     PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
+    row.is_newest_available = true;
     remember_newest_row(rows_by_name_arch, row);
   }
 
   return rows_by_name_arch;
+}
+
+// -----------------------------------------------------------------------------
+// Add one available row to an exact-version package view.
+// -----------------------------------------------------------------------------
+void
+add_available_view_row(AvailableViewRows &rows, PackageRow row)
+{
+  if (rows.visible_nevras.count(row.nevra) > 0) {
+    return;
+  }
+
+  auto newest_it = rows.newest_available_by_name_arch.find(row.name_arch_key());
+  row.is_newest_available =
+      newest_it != rows.newest_available_by_name_arch.end() && newest_it->second.nevra == row.nevra;
+
+  rows.visible_nevras.insert(row.nevra);
+  remember_newest_row(rows.newest_visible_by_name_arch, row);
+  rows.rows.push_back(row);
+}
+
+// -----------------------------------------------------------------------------
+// Collect the newest available repo candidate for every package name and architecture tuple.
+// This is calculated before search filtering so an older matching version cannot
+// become the actionable upgrade target merely because the newest version did not match the search text.
+// -----------------------------------------------------------------------------
+static std::map<std::string, PackageRow>
+collect_newest_available_rows_by_name_arch(libdnf5::Base &base, GCancellable *cancellable)
+{
+  std::map<std::string, PackageRow> rows_by_name_arch;
+
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_available();
+  query.filter_latest_evr();
+
+  for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      rows_by_name_arch.clear();
+      return rows_by_name_arch;
+    }
+
+    PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
+    row.is_newest_available = true;
+    remember_newest_row(rows_by_name_arch, row);
+  }
+
+  return rows_by_name_arch;
+}
+
+// -----------------------------------------------------------------------------
+// Collect one visible row per exact available NEVRA.
+// Repository copies of the same NEVRA are hidden, but distinct versions remain visible.
+// -----------------------------------------------------------------------------
+static AvailableViewRows
+collect_available_view_rows(libdnf5::Base &base,
+                            GCancellable *cancellable,
+                            const DnfBackendSearchOptions &search_options,
+                            const std::string *pattern)
+{
+  AvailableViewRows result;
+  result.newest_available_by_name_arch = collect_newest_available_rows_by_name_arch(base, cancellable);
+  if (package_query_cancelled(cancellable)) {
+    result = AvailableViewRows {};
+    return result;
+  }
+
+  const std::string pattern_lower = pattern ? utf8_casefold_copy(*pattern) : "";
+
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_available();
+
+  for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      result = AvailableViewRows {};
+      return result;
+    }
+
+    if (pattern && !package_matches_search(pkg, pattern_lower, search_options)) {
+      continue;
+    }
+
+    add_available_view_row(result, make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN));
+  }
+
+  return result;
 }
 
 // -----------------------------------------------------------------------------
@@ -251,6 +337,7 @@ collect_available_rows_for_installed_names(libdnf5::Base &base,
     }
 
     PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
+    row.is_newest_available = true;
     remember_newest_row(rows_by_name_arch, row);
   }
 
@@ -416,6 +503,29 @@ visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
   return rows;
 }
 
+// -----------------------------------------------------------------------------
+// Build an exact-version package view.
+// Available rows remain one row per exact NEVRA, and every installed NEVRA that
+// is not already visible is added separately.
+// -----------------------------------------------------------------------------
+std::vector<PackageRow>
+visible_rows_from_available_view(AvailableViewRows available_rows, const InstalledQueryResult &installed)
+{
+  std::vector<PackageRow> rows = std::move(available_rows.rows);
+
+  for (const auto &stored_installed_row : installed.rows) {
+    if (available_rows.visible_nevras.count(stored_installed_row.nevra) > 0) {
+      continue;
+    }
+
+    PackageRow installed_row = stored_installed_row;
+    annotate_installed_row_with_repo_candidate(installed_row, available_rows.newest_visible_by_name_arch);
+    rows.push_back(installed_row);
+  }
+
+  return rows;
+}
+
 } // namespace dnf_backend_internal
 
 using namespace dnf_backend_internal;
@@ -434,19 +544,6 @@ dnf_backend_search_package_rows_interruptible(const std::string &pattern,
   {
     try {
       auto [base, guard] = acquire_interruptible_base_read(cancellable);
-      auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options, &pattern);
-      if (package_query_cancelled(cancellable)) {
-        return {};
-      }
-
-      // This scan is only for installed rows that match the search term.
-      // Those rows can still appear in the visible search result when no repo candidate
-      // is shown for the same package name and architecture.
-      InstalledQueryResult filtered_installed = collect_installed_rows(base, cancellable, search_options, &pattern);
-      if (package_query_cancelled(cancellable)) {
-        return {};
-      }
-
       // The shared installed snapshot must contain every installed package, not
       // only the rows that matched this search.
       // The UI uses it later for package status, action buttons, and pending action handling.
@@ -457,7 +554,34 @@ dnf_backend_search_package_rows_interruptible(const std::string &pattern,
       }
 
       protected_names = collect_self_protected_package_names(base);
-      rows = visible_rows_from_maps(std::move(available_rows), filtered_installed.rows_by_name_arch);
+      if (search_options.latest_only) {
+        auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options, &pattern);
+        if (package_query_cancelled(cancellable)) {
+          return {};
+        }
+
+        // This scan is only for installed rows that match the search term.
+        // Those rows can still appear in the visible search result when no repo candidate
+        // is shown for the same package name and architecture.
+        InstalledQueryResult filtered_installed = collect_installed_rows(base, cancellable, search_options, &pattern);
+        if (package_query_cancelled(cancellable)) {
+          return {};
+        }
+
+        rows = visible_rows_from_maps(std::move(available_rows), filtered_installed.rows_by_name_arch);
+      } else {
+        AvailableViewRows available_rows = collect_available_view_rows(base, cancellable, search_options, &pattern);
+        if (package_query_cancelled(cancellable)) {
+          return {};
+        }
+
+        InstalledQueryResult filtered_installed = collect_installed_rows(base, cancellable, search_options, &pattern);
+        if (package_query_cancelled(cancellable)) {
+          return {};
+        }
+
+        rows = visible_rows_from_available_view(std::move(available_rows), filtered_installed);
+      }
     } catch (const BaseOperationCancelled &) {
       return {};
     }
@@ -520,20 +644,15 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
 // Installed RPMs missing from enabled repositories are included as local-only rows.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow>
-dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
+dnf_backend_get_browse_package_rows_interruptible(const DnfBackendSearchOptions &search_options,
+                                                  GCancellable *cancellable)
 {
-  const DnfBackendSearchOptions search_options {};
-
   std::vector<PackageRow> rows;
   InstalledQueryResult installed;
   std::set<std::string> protected_names;
   {
     try {
       auto [base, guard] = acquire_interruptible_base_read(cancellable);
-      auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options);
-      if (package_query_cancelled(cancellable)) {
-        return {};
-      }
 
       // Browse uses the full installed set because installed-only packages must
       // still be visible even when no enabled repo contains them.
@@ -543,7 +662,19 @@ dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable)
       }
 
       protected_names = collect_self_protected_package_names(base);
-      rows = visible_rows_from_maps(std::move(available_rows), installed.rows_by_name_arch);
+      if (search_options.latest_only) {
+        auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options);
+        if (package_query_cancelled(cancellable)) {
+          return {};
+        }
+        rows = visible_rows_from_maps(std::move(available_rows), installed.rows_by_name_arch);
+      } else {
+        AvailableViewRows available_rows = collect_available_view_rows(base, cancellable, search_options, nullptr);
+        if (package_query_cancelled(cancellable)) {
+          return {};
+        }
+        rows = visible_rows_from_available_view(std::move(available_rows), installed);
+      }
     } catch (const BaseOperationCancelled &) {
       return {};
     }
@@ -633,12 +764,22 @@ dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra)
   std::vector<PackageRow> packages;
 
   auto [base, guard] = BaseManager::instance().acquire_read();
-  libdnf5::rpm::PackageQuery query(base);
-  query.filter_nevra(pkg_nevra);
-  query.filter_available();
+  {
+    libdnf5::rpm::PackageQuery query(base);
+    query.filter_nevra(pkg_nevra);
+    query.filter_available();
 
-  for (auto pkg : query) {
-    packages.push_back(make_package_row(pkg));
+    for (auto pkg : query) {
+      packages.push_back(make_package_row(pkg));
+    }
+  }
+
+  if (!packages.empty()) {
+    auto newest_available = collect_available_rows_for_installed_names(base, nullptr, packages);
+    for (auto &row : packages) {
+      auto newest_it = newest_available.find(row.name_arch_key());
+      row.is_newest_available = newest_it != newest_available.end() && newest_it->second.nevra == row.nevra;
+    }
   }
 
   return packages;

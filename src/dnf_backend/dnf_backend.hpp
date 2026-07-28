@@ -74,6 +74,8 @@ struct PackageRow {
   std::string repo_candidate_version;
   std::string repo_candidate_release;
   std::string repo_candidate_repo;
+  // True only for the newest available repo row for this package name and architecture.
+  bool is_newest_available = false;
 
   // libdnf EVR comparison adapter.
   const std::string &get_epoch() const
@@ -265,6 +267,8 @@ bool dnf_backend_history_text_matches_filter_for_tests(const std::string &text, 
 struct DnfBackendSearchOptions {
   bool search_in_description = false;
   bool exact_match = false;
+  // Keep the current one-row-per-package view unless the caller asks for exact versions.
+  bool latest_only = true;
 };
 
 // -----------------------------------------------------------------------------
@@ -324,7 +328,8 @@ std::vector<PackageRow> dnf_backend_get_installed_package_rows_interruptible(GCa
 // -----------------------------------------------------------------------------
 // Query the merged browse view shown by "List Packages".
 // -----------------------------------------------------------------------------
-std::vector<PackageRow> dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable);
+std::vector<PackageRow> dnf_backend_get_browse_package_rows_interruptible(const DnfBackendSearchOptions &search_options,
+                                                                          GCancellable *cancellable);
 
 // -----------------------------------------------------------------------------
 // Return available package metadata for exact daemon-selected NEVRAs.

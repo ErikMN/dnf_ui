@@ -60,6 +60,7 @@ package_query_cache_key_for(const std::string &term, const DnfBackendSearchOptio
 {
   std::string key = (options.search_in_description ? "desc:" : "name:");
   key += (options.exact_match ? "exact:" : "contains:");
+  key += (options.latest_only ? "latest:" : "all:");
   key += term;
 
   return key;

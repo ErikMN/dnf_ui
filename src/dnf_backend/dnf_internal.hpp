@@ -31,6 +31,13 @@ struct InstalledQueryResult {
   std::map<std::string, PackageRow> rows_by_name_arch;
 };
 
+struct AvailableViewRows {
+  std::vector<PackageRow> rows;
+  std::map<std::string, PackageRow> newest_visible_by_name_arch;
+  std::map<std::string, PackageRow> newest_available_by_name_arch;
+  std::set<std::string> visible_nevras;
+};
+
 using AvailableRowsProvider = std::function<std::map<std::string, PackageRow>(GCancellable *)>;
 
 // -----------------------------------------------------------------------------
@@ -53,7 +60,6 @@ std::map<std::string, PackageRow> collect_available_rows_by_name_arch(libdnf5::B
                                                                       GCancellable *cancellable,
                                                                       const DnfBackendSearchOptions &search_options,
                                                                       const std::string *pattern = nullptr);
-// -----------------------------------------------------------------------------
 // Collect installed rows and exact NEVRA cache data in one scan.
 // -----------------------------------------------------------------------------
 InstalledQueryResult collect_installed_rows(libdnf5::Base &base,
@@ -72,6 +78,15 @@ void annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
 void annotate_installed_rows_with_repo_candidates_best_effort(std::vector<PackageRow> &installed_rows,
                                                               GCancellable *cancellable,
                                                               const AvailableRowsProvider &available_rows_provider);
+// -----------------------------------------------------------------------------
+// Add one available row to an exact-version package view.
+// -----------------------------------------------------------------------------
+void add_available_view_row(AvailableViewRows &rows, PackageRow row);
+// -----------------------------------------------------------------------------
+// Merge exact-version available rows with missing exact installed rows.
+// -----------------------------------------------------------------------------
+std::vector<PackageRow> visible_rows_from_available_view(AvailableViewRows available_rows,
+                                                         const InstalledQueryResult &installed);
 // -----------------------------------------------------------------------------
 // Merge available and installed row maps into the visible package list.
 // -----------------------------------------------------------------------------
