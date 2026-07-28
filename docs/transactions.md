@@ -33,6 +33,7 @@ the GUI:
 - upgrade all
 - install
 - upgrade
+- downgrade
 - remove
 - reinstall
 
@@ -50,7 +51,7 @@ When the user clicks Apply:
 1. The pending controller validates the pending actions.
 2. The controller builds a `TransactionRequest`.
 3. The transaction client opens a dnf5daemon session.
-4. The client marks install, upgrade, remove, or reinstall specs on that session.
+4. The client marks install, upgrade, downgrade, remove, or reinstall specs on that session.
 5. The client asks dnf5daemon to resolve the transaction with user interaction enabled.
 6. If dnf5daemon requests a repository signing key during resolve, DNF UI asks before showing the summary.
 7. The GUI shows the resolved preview.
@@ -127,9 +128,9 @@ human-readable warning text without treating the transaction as failed.
 If dnf5daemon returns an unsupported transaction item or action, preview fails
 instead of hiding part of the transaction from the user.
 
-After preview, DNF UI rejects transactions that would remove or replace the
-running app package or the daemon needed for package changes. Normal upgrades
-are allowed.
+After preview, DNF UI rejects transactions that would downgrade, remove, or
+replace the running app package. It also rejects transactions that would remove
+or replace the daemon needed for package changes. Normal upgrades are allowed.
 
 If Upgrade All resolves to an empty preview, the GUI reports that all packages
 are already up to date. If a selected package action resolves to an empty

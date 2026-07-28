@@ -191,15 +191,16 @@ The generic Status column is local package metadata. It can say that a newer pac
 
 ## Self protection
 
-DNF UI blocks direct remove and reinstall requests for the package that owns the
-running GUI executable from inside the app. Normal upgrades are allowed because
-users must be able to update DNF UI and dnf5daemon from the package manager UI.
+DNF UI blocks direct downgrade, remove, and reinstall requests for the package
+that owns the running GUI executable from inside the app. Normal upgrades are
+allowed because users must be able to update DNF UI and dnf5daemon from the
+package manager UI.
 
 The backend finds the current executable path and asks libdnf5 which installed
 package owns it. The UI disables package changes for that exact installed row.
 The pending transaction request is checked again before it is sent to
 dnf5daemon. After dnf5daemon resolves the preview, DNF UI rejects any transaction
-that would remove or replace the running app package.
+that would downgrade, remove, or replace the running app package.
 
 The relevant functions are:
 

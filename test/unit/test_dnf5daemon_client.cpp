@@ -33,6 +33,19 @@ dnf5daemon_test_install_spec()
 }
 
 // -----------------------------------------------------------------------------
+// Return the package used for daemon downgrade preview tests.
+// -----------------------------------------------------------------------------
+std::string
+dnf5daemon_test_downgrade_spec()
+{
+  const char *spec = g_getenv("DNFUI_TEST_DNF5DAEMON_DOWNGRADE_SPEC");
+  if (spec && *spec) {
+    return spec;
+  }
+  return "";
+}
+
+// -----------------------------------------------------------------------------
 // Return true when a preview section contains a package label by name.
 // -----------------------------------------------------------------------------
 bool
@@ -98,6 +111,24 @@ TEST_CASE("dnf5daemon preview parser represents replaced package actions")
   REQUIRE(error.empty());
   REQUIRE(preview.replaced == std::vector<std::string> { "test-package-2.0-3.x86_64" });
   REQUIRE(preview.disk_space_delta == -4096);
+  REQUIRE_FALSE(preview.empty());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that downgrade preview items are represented explicitly.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon preview parser represents downgrade package actions")
+{
+  TransactionPreview preview;
+  std::string error;
+
+  bool ok = transaction_service_client_testonly_build_preview_from_item(
+      "package", "downgrade", "test-package", preview, error);
+
+  REQUIRE(ok);
+  REQUIRE(error.empty());
+  REQUIRE(preview.downgrade == std::vector<std::string> { "test-package-2.0-3.x86_64" });
+  REQUIRE(preview.disk_space_delta == 4096);
   REQUIRE_FALSE(preview.empty());
 }
 
@@ -179,6 +210,21 @@ TEST_CASE("dnf5daemon preview self-protection rejects replacements")
 
   TransactionPreview preview;
   preview.replaced.push_back("dnf-ui-1.2.3-1.x86_64");
+  std::string error;
+
+  REQUIRE_FALSE(transaction_service_client_testonly_verify_preview_keeps_running_app_package(preview, error));
+  REQUIRE(error.find("DNF UI") != std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that self-protection rejects a resolved downgrade of the running app package.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon preview self-protection rejects downgrades")
+{
+  ScopedEnvVar protected_name("DNFUI_TEST_SELF_PROTECTED_PACKAGE_NAME", "dnf-ui");
+
+  TransactionPreview preview;
+  preview.downgrade.push_back("dnf-ui-1.2.3-1.x86_64");
   std::string error;
 
   REQUIRE_FALSE(transaction_service_client_testonly_verify_preview_keeps_running_app_package(preview, error));
@@ -336,6 +382,38 @@ TEST_CASE("dnf5daemon client previews upgrade-all requests", "[dnf5daemon]")
     transaction_service_client_release_request(transaction_path);
   }
   transaction_service_client_reset_for_tests();
+}
+
+// -----------------------------------------------------------------------------
+// Verify that the client can ask dnf5daemon for a downgrade preview.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon client previews downgrade requests", "[dnf5daemon]")
+{
+  require_dnf5daemon_test_enabled();
+  transaction_service_client_reset_for_tests();
+
+  const std::string downgrade_spec = dnf5daemon_test_downgrade_spec();
+  if (downgrade_spec.empty()) {
+    SKIP("Set DNFUI_TEST_DNF5DAEMON_DOWNGRADE_SPEC to run the daemon downgrade preview test.");
+  }
+
+  TransactionRequest request;
+  request.downgrade.push_back(downgrade_spec);
+
+  TransactionPreview preview;
+  std::string transaction_path;
+  std::string error;
+
+  REQUIRE(transaction_service_client_preview_request(request, preview, transaction_path, error));
+  REQUIRE_FALSE(transaction_path.empty());
+
+  bool preview_contains_package = preview_section_contains_name(preview.downgrade, downgrade_spec) ||
+      std::find(preview.downgrade.begin(), preview.downgrade.end(), downgrade_spec) != preview.downgrade.end();
+
+  transaction_service_client_release_request(transaction_path);
+  transaction_service_client_reset_for_tests();
+
+  REQUIRE(preview_contains_package);
 }
 
 // -----------------------------------------------------------------------------

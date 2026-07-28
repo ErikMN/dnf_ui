@@ -105,6 +105,8 @@ package_table_pending_action_status_text(PendingAction::Type action_type, Packag
   case PendingAction::INSTALL:
   case PendingAction::UPGRADE:
     return install_state == PackageInstallState::UPGRADEABLE ? _("Pending Upgrade") : _("Pending Install");
+  case PendingAction::DOWNGRADE:
+    return _("Pending Downgrade");
   case PendingAction::REINSTALL:
     return _("Pending Reinstall");
   case PendingAction::REMOVE:
@@ -123,6 +125,7 @@ package_table_pending_action_css_class_for_type(PendingAction::Type action_type)
   switch (action_type) {
   case PendingAction::INSTALL:
   case PendingAction::UPGRADE:
+  case PendingAction::DOWNGRADE:
     return "package-status-pending-install";
   case PendingAction::REINSTALL:
     return "package-status-pending-reinstall";
@@ -143,6 +146,8 @@ pending_icon_name(PendingAction::Type action_type, PackageInstallState install_s
   case PendingAction::INSTALL:
   case PendingAction::UPGRADE:
     return install_state == PackageInstallState::UPGRADEABLE ? "view-refresh-symbolic" : "list-add-symbolic";
+  case PendingAction::DOWNGRADE:
+    return "view-refresh-symbolic";
   case PendingAction::REINSTALL:
     return "view-refresh-symbolic";
   case PendingAction::REMOVE:

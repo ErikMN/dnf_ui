@@ -101,8 +101,9 @@ Why this matters:
   install specs. DNF UI sends the package name and architecture for selected
   upgrades because exact candidate NEVRAs can fail with no match even though the
   package is correctly shown as upgradable.
-- If the resolved preview would remove or replace DNF UI itself, the preview is
-  rejected before the user can apply it. Normal upgrades are allowed.
+- If the resolved preview would downgrade, remove, or replace DNF UI itself,
+  the preview is rejected before the user can apply it. Normal upgrades are
+  allowed.
 - Do not document this as bit-for-bit equivalence with every possible `dnf`
   command-line configuration, plugin, or option. The maintained guarantee is
   that DNF UI sends the upgrade request through the app's configured backend and
@@ -271,7 +272,8 @@ Assumptions:
   and `load_system_repo=false`, then explicitly expires and reloads repositories.
 - Session cleanup uses `org.rpm.dnf.v0.SessionManager.close_session(o) -> (b)`.
 - Package specs are marked on the session through these rpm interface methods:
-  `install(as, a{sv})`, `remove(as, a{sv})`, `reinstall(as, a{sv})`, and `upgrade(as, a{sv})`.
+  `install(as, a{sv})`, `upgrade(as, a{sv})`, `downgrade(as, a{sv})`,
+  `remove(as, a{sv})`, and `reinstall(as, a{sv})`.
 - Preview is resolved through `org.rpm.dnf.v0.Goal.resolve(a{sv}) -> (a(sssa{sv}a{sv})u)`.
 - Resolver result `0` means success, `1` means success with warnings, and `2`
   means resolve failure.
@@ -287,8 +289,8 @@ Assumptions:
 - Signal subscriptions invoke callbacks in the subscribing thread's
   thread-default main context.
 - A dnf5daemon session is tied to the D-Bus connection that created it.
-- DNF UI rejects previews that would remove or replace the running app package.
-  Normal package upgrades are allowed.
+- DNF UI rejects previews that would downgrade, remove, or replace the running
+  app package. Normal package upgrades are allowed.
 - DNF UI rejects previews that would remove or replace `dnf5daemon-server`,
   because later package changes depend on that daemon.
 - The app keeps one shared system bus connection so the session used for preview

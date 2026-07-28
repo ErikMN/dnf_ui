@@ -74,8 +74,15 @@ msgstr ""
 "Använd förhandsgranskningshjälpen för uppgradera alla vid begäran om att "
 "uppgradera alla."
 
+msgid "This transaction would downgrade, remove, or replace DNF UI itself."
+msgstr ""
+"Den här transaktionen skulle nedgradera, ta bort eller ersätta DNF UI."
+
 msgid "This transaction would remove or replace DNF UI itself."
 msgstr "Den här transaktionen skulle ta bort eller ersätta DNF UI."
+
+msgid "Could not verify whether this transaction would modify DNF UI."
+msgstr "Kunde inte kontrollera om den här transaktionen skulle ändra DNF UI."
 
 msgid ""
 "Could not verify whether this transaction would remove or replace DNF UI."
@@ -83,8 +90,14 @@ msgstr ""
 "Kunde inte kontrollera om den här transaktionen skulle ta bort eller ersätta "
 "DNF UI."
 
+msgid "Upgrade All would downgrade, remove, or replace DNF UI itself."
+msgstr "Uppgradera alla skulle nedgradera, ta bort eller ersätta DNF UI."
+
 msgid "Upgrade All would remove or replace DNF UI itself."
 msgstr "Uppgradera alla skulle ta bort eller ersätta DNF UI."
+
+msgid "Could not verify whether Upgrade All would modify DNF UI."
+msgstr "Kunde inte kontrollera om Uppgradera alla skulle ändra DNF UI."
 
 msgid "Could not verify whether Upgrade All would remove or replace DNF UI."
 msgstr ""
@@ -708,6 +721,9 @@ msgstr "Väntande uppgradering"
 msgid "Pending Install"
 msgstr "Väntande installation"
 
+msgid "Pending Downgrade"
+msgstr "Väntande nedgradering"
+
 msgid "Pending Reinstall"
 msgstr "Väntande ominstallation"
 
@@ -929,6 +945,13 @@ msgid "Unknown pending package action."
 msgstr "Okänd väntande paketåtgärd."
 
 msgid ""
+"DNF UI cannot downgrade the package that owns the running application while "
+"it is running."
+msgstr ""
+"DNF UI kan inte nedgradera paketet som äger det körande programmet medan "
+"det körs."
+
+msgid ""
 "DNF UI cannot remove the package that owns the running application. Close "
 "DNF UI and remove it from another tool."
 msgstr ""
@@ -953,6 +976,9 @@ msgstr "Installera: "
 
 msgid "Upgrade: "
 msgstr "Uppgradera: "
+
+msgid "Downgrade: "
+msgstr "Nedgradera: "
 
 msgid "Reinstall: "
 msgstr "Ominstallera: "
