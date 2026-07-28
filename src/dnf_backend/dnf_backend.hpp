@@ -122,6 +122,7 @@ struct PackageRow {
 enum class PackageInstallState {
   AVAILABLE,
   UPGRADEABLE,
+  DOWNGRADEABLE,
   INSTALLED,
   LOCAL_ONLY,
   INSTALLED_NEWER_THAN_REPO,
@@ -235,6 +236,11 @@ struct TransactionHistoryPage {
   std::vector<TransactionHistoryPackageRow> rows;
   TransactionHistoryCursor next_cursor;
   bool has_more = false;
+};
+
+enum class PackageDetailsContext {
+  INSTALLED_CONTEXT,
+  SELECTED_VERSION,
 };
 
 // -----------------------------------------------------------------------------
@@ -359,14 +365,21 @@ std::vector<PackageRow> dnf_backend_get_available_package_rows_by_nevra(const st
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_package_info(const std::string &pkg_nevra);
 std::string dnf_backend_get_package_info(const std::string &pkg_nevra, const PackageRow *upgrade_row_override);
+std::string dnf_backend_get_package_info(const std::string &pkg_nevra,
+                                         PackageDetailsContext context,
+                                         const PackageRow *upgrade_row_override = nullptr);
 // -----------------------------------------------------------------------------
 // Return the installed file list for one NEVRA.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max_files_for_display = 1500);
+std::string dnf_backend_get_installed_package_files(const std::string &pkg_nevra,
+                                                    PackageDetailsContext context,
+                                                    size_t max_files_for_display = 1500);
 // -----------------------------------------------------------------------------
 // Return formatted dependency details for one NEVRA.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_package_deps(const std::string &pkg_nevra);
+std::string dnf_backend_get_package_deps(const std::string &pkg_nevra, PackageDetailsContext context);
 // -----------------------------------------------------------------------------
 // Return formatted changelog entries for one NEVRA.
 // -----------------------------------------------------------------------------

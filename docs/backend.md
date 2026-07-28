@@ -133,7 +133,9 @@ The main query paths are:
 
 The browse and search views merge repository candidates with installed-only
 packages. The visible result keeps one row for each package name and
-architecture pair.
+architecture pair when Latest only is enabled. When Latest only is disabled,
+the visible result keeps one row per exact available NEVRA and adds missing
+exact installed NEVRAs.
 
 Normal search is substring based. If the search term contains `*` or `?`, normal search treats it as a wildcard pattern. Exact search remains literal.
 
@@ -177,15 +179,16 @@ queries do not publish partial installed state.
 
 - available
 - upgradeable
+- older in repository
 - installed
 - local only
 - installed newer than repository
 
 Exact installed rows prefer the repository-candidate relation recorded on the
 row. Available rows fall back to the installed snapshot so the table can show
-when repository metadata contains a newer candidate without duplicating rows.
-The same resolved value also carries exact-installed state and the installed row
-for the same package name and architecture.
+when repository metadata contains a newer or older candidate without duplicating
+rows. The same resolved value also carries exact-installed state and the
+installed row for the same package name and architecture.
 
 The generic Status column is local package metadata. It can say that a newer package exists in enabled repository metadata, but it is not a transaction promise. The List Upgradable view is stricter: it shows the current daemon upgrade targets and keeps the daemon target on the table row so the update columns and Mark for Upgrade use the same snapshot. Transaction preview and apply always go through dnf5daemon.
 
@@ -228,6 +231,13 @@ the visible row ID separate from the package ID used for details. Info, files,
 dependencies, and changelog use the installed counterpart when it is known. The
 Info tab uses the attached daemon target for the upgradable version line instead
 of asking libdnf5 to choose a separate candidate.
+
+Normal newest-upgrade rows also use installed context for Info, Files, and
+Dependencies so they keep the same presentation as Latest only mode. Exact
+selected-version rows use selected-version context instead. That lets older
+repository versions and intermediate newer versions show their own Info,
+Dependencies, and Changelog entries, while Files stays available only when that
+exact NEVRA is installed.
 
 ## Transactions
 

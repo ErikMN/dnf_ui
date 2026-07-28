@@ -32,11 +32,49 @@ find_update_pair_from_installed_annotation(PackageRow &installed_out, PackageRow
 
     update_out = candidates.front();
     InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(update_out);
-    if (!resolution.has_installed_row) {
+    if (resolution.exact_installed || !resolution.has_installed_row ||
+        resolution.state != PackageInstallState::UPGRADEABLE) {
       continue;
     }
     installed_out = resolution.installed_row;
     return true;
+  }
+
+  return false;
+}
+
+int
+compare_backend_test_row_evr(const PackageRow &left, const PackageRow &right)
+{
+  int result = dnf_backend_compare_epoch_version_text(left.epoch, left.version, right.epoch, right.version);
+  if (result != 0) {
+    return result;
+  }
+
+  return dnf_backend_compare_rpm_version_text(left.release, right.release);
+}
+
+bool
+find_parallel_installed_versions(PackageRow &older_out, PackageRow &newer_out)
+{
+  auto installed_rows = dnf_backend_get_installed_package_rows_interruptible(nullptr);
+
+  for (size_t i = 0; i < installed_rows.size(); ++i) {
+    for (size_t j = i + 1; j < installed_rows.size(); ++j) {
+      if (installed_rows[i].name_arch_key() != installed_rows[j].name_arch_key() ||
+          installed_rows[i].nevra == installed_rows[j].nevra) {
+        continue;
+      }
+
+      if (compare_backend_test_row_evr(installed_rows[i], installed_rows[j]) <= 0) {
+        older_out = installed_rows[i];
+        newer_out = installed_rows[j];
+      } else {
+        older_out = installed_rows[j];
+        newer_out = installed_rows[i];
+      }
+      return true;
+    }
   }
 
   return false;
@@ -408,6 +446,46 @@ TEST_CASE("Package info formatting can use explicit upgrade details")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that selected-version details describe the exact selected NEVRA.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package info selected-version mode uses selected package metadata")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  PackageRow update_row;
+  if (!find_update_pair_from_installed_annotation(installed_row, update_row)) {
+    SUCCEED("No installed package with a newer repo candidate in the test environment.");
+    return;
+  }
+
+  auto info = dnf_backend_get_package_info(update_row.nevra, PackageDetailsContext::SELECTED_VERSION);
+
+  REQUIRE(info.find("Package ID: " + update_row.nevra) != std::string::npos);
+  REQUIRE(info.find("Package ID: " + installed_row.nevra) == std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installed context keeps exact installed package metadata.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package info installed context keeps exact installed version")
+{
+  reset_backend_globals();
+
+  PackageRow older_row;
+  PackageRow newer_row;
+  if (!find_parallel_installed_versions(older_row, newer_row)) {
+    SUCCEED("No parallel installed package versions in the test environment.");
+    return;
+  }
+
+  auto info = dnf_backend_get_package_info(older_row.nevra);
+
+  REQUIRE(info.find("Package ID: " + older_row.nevra) != std::string::npos);
+  REQUIRE(info.find("Package ID: " + newer_row.nevra) == std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
 // Structured package row metadata tests
 // -----------------------------------------------------------------------------
 
@@ -722,6 +800,25 @@ TEST_CASE("File list query uses installed package for update rows")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that selected-version file lookup does not use another installed version.
+// -----------------------------------------------------------------------------
+TEST_CASE("File list selected-version mode requires exact installed package")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  PackageRow update_row;
+  if (!find_update_pair_from_installed_annotation(installed_row, update_row)) {
+    SUCCEED("No installed package with a newer repo candidate in the test environment.");
+    return;
+  }
+
+  auto files = dnf_backend_get_installed_package_files(update_row.nevra, PackageDetailsContext::SELECTED_VERSION, 1500);
+
+  REQUIRE(files.find("File list available only for installed packages.") != std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that exact installed rows use repo relation to distinguish states.
 // -----------------------------------------------------------------------------
 TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
@@ -825,9 +922,9 @@ TEST_CASE("Installed package resolution reports upgradeable rows")
 }
 
 // -----------------------------------------------------------------------------
-// Verify that installed package resolution reports installed rows newer than the selected repo row.
+// Verify that installed package resolution reports older available rows.
 // -----------------------------------------------------------------------------
-TEST_CASE("Installed package resolution reports installed-newer rows")
+TEST_CASE("Installed package resolution reports downgradeable rows")
 {
   reset_backend_globals();
 
@@ -846,7 +943,7 @@ TEST_CASE("Installed package resolution reports installed-newer rows")
 
   InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(older_repo_row);
 
-  REQUIRE(resolution.state == PackageInstallState::INSTALLED_NEWER_THAN_REPO);
+  REQUIRE(resolution.state == PackageInstallState::DOWNGRADEABLE);
   REQUIRE_FALSE(resolution.exact_installed);
   REQUIRE(resolution.has_installed_row);
   REQUIRE(resolution.installed_row.nevra == installed_row.nevra);
@@ -887,6 +984,8 @@ TEST_CASE("Default install state sort keeps installed rows first")
   REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::LOCAL_ONLY) <
           dnf_backend_get_install_state_sort_rank(PackageInstallState::UPGRADEABLE));
   REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::UPGRADEABLE) <
+          dnf_backend_get_install_state_sort_rank(PackageInstallState::DOWNGRADEABLE));
+  REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::DOWNGRADEABLE) <
           dnf_backend_get_install_state_sort_rank(PackageInstallState::AVAILABLE));
 }
 

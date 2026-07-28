@@ -117,6 +117,7 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
 
   PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -130,6 +131,27 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE(rows.can_try_reinstall);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an intermediate newer row is visible but cannot be marked as an upgrade.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows reject intermediate update rows")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  PackageRow intermediate = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(intermediate, nullptr, 0);
+
+  REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(rows.install_is_upgrade);
+  REQUIRE_FALSE(rows.has_install_row);
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == installed.nevra);
 }
 
 // -----------------------------------------------------------------------------
@@ -290,6 +312,7 @@ TEST_CASE("Pending transaction bulk upgrade marking ignores non upgrade rows")
   PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
   PackageRow available = make_test_package_row("other-1.0-1.x86_64", "other", "1.0", "1", "x86_64");
+  update.is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -313,6 +336,7 @@ TEST_CASE("Pending transaction bulk upgrade marking replaces existing package ac
 
   PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -338,6 +362,7 @@ TEST_CASE("Pending transaction upgrade marking replaces stale upgrade candidate"
   PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   PackageRow old_update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
   PackageRow new_update = make_test_package_row("demo-2.1-1.x86_64", "demo", "2.1", "1", "x86_64");
+  new_update.is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 

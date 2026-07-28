@@ -712,6 +712,9 @@ msgstr "Installerat (nyare än förrådet)"
 msgid "Newer in repository"
 msgstr "Nyare i förråd"
 
+msgid "Older in repository"
+msgstr "Äldre i förråd"
+
 msgid "Available"
 msgstr "Tillgängligt"
 

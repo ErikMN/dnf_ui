@@ -26,6 +26,8 @@ package_table_status_text(PackageInstallState state)
     return _("Installed (newer than repo)");
   case PackageInstallState::UPGRADEABLE:
     return _("Newer in repository");
+  case PackageInstallState::DOWNGRADEABLE:
+    return _("Older in repository");
   case PackageInstallState::AVAILABLE:
   default:
     return _("Available");
@@ -170,6 +172,8 @@ status_icon_name(PackageInstallState state)
     return "object-select-symbolic";
   case PackageInstallState::UPGRADEABLE:
     return "view-refresh-symbolic";
+  case PackageInstallState::DOWNGRADEABLE:
+    return "view-refresh-symbolic";
   case PackageInstallState::AVAILABLE:
   default:
     return "list-add-symbolic";
@@ -186,6 +190,7 @@ package_table_clear_status_css(GtkWidget *cell)
   gtk_widget_remove_css_class(cell, "package-status-installed");
   gtk_widget_remove_css_class(cell, "package-status-local-only");
   gtk_widget_remove_css_class(cell, "package-status-upgradeable");
+  gtk_widget_remove_css_class(cell, "package-status-downgradeable");
   gtk_widget_remove_css_class(cell, "package-status-installed-newer");
   package_table_clear_pending_action_css(cell);
 
@@ -247,6 +252,8 @@ package_table_update_resolved_status_label(GtkWidget *cell,
       gtk_widget_add_css_class(cell, "package-status-installed-newer");
     } else if (install_state == PackageInstallState::UPGRADEABLE) {
       gtk_widget_add_css_class(cell, "package-status-upgradeable");
+    } else if (install_state == PackageInstallState::DOWNGRADEABLE) {
+      gtk_widget_add_css_class(cell, "package-status-downgradeable");
     } else {
       gtk_widget_add_css_class(cell, "package-status-available");
     }

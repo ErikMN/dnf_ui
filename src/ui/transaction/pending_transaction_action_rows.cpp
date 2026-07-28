@@ -100,9 +100,9 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
       rows.has_install_row = !selected.repo_candidate_nevra.empty();
       rows.install_row.nevra = selected.repo_candidate_nevra;
     } else {
-      // Upgradable-list rows are already the available upgrade package.
-      // The installed package ID comes from the installed snapshot.
-      rows.has_install_row = true;
+      // Available update rows are already repository package rows.
+      // Only the newest available row can use the upgrade action.
+      rows.has_install_row = selected.is_newest_available;
       rows.has_installed_row = installed_resolution.has_installed_row;
       rows.self_protected = rows.has_installed_row && installed_resolution.self_protected;
     }

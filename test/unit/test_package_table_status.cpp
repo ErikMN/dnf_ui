@@ -65,6 +65,28 @@ TEST_CASE("Package table pending install status is shared")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that downgradeable rows have their own Status text.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table downgradeable status is shared")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_status_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  PackageRow older = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PackageItem item;
+  item.row = older;
+
+  MainWindowUiState widgets;
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
+  package_table_fill_item_status(&widgets, item, resolution);
+
+  REQUIRE(item.status_text == "Older in repository");
+  REQUIRE(package_table_column_text(item, PackageColumnKind::STATUS) == "Older in repository");
+}
+
+// -----------------------------------------------------------------------------
 // Verify that an installed row can show a pending upgrade queued for its install row.
 // -----------------------------------------------------------------------------
 TEST_CASE("Package table pending upgrade status uses resolved install row")

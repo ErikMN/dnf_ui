@@ -72,11 +72,19 @@ collect_installed_reverse_dependency_nevras(libdnf5::Base &base, const libdnf5::
 std::string
 dnf_backend_get_package_info(const std::string &pkg_nevra)
 {
-  return dnf_backend_get_package_info(pkg_nevra, nullptr);
+  return dnf_backend_get_package_info(pkg_nevra, PackageDetailsContext::INSTALLED_CONTEXT, nullptr);
 }
 
 std::string
 dnf_backend_get_package_info(const std::string &pkg_nevra, const PackageRow *upgrade_row_override)
+{
+  return dnf_backend_get_package_info(pkg_nevra, PackageDetailsContext::INSTALLED_CONTEXT, upgrade_row_override);
+}
+
+std::string
+dnf_backend_get_package_info(const std::string &pkg_nevra,
+                             PackageDetailsContext context,
+                             const PackageRow *upgrade_row_override)
 {
   PackageRow selected_row;
   unsigned long long selected_install_size = 0;
@@ -99,9 +107,15 @@ dnf_backend_get_package_info(const std::string &pkg_nevra, const PackageRow *upg
     return "No details found for " + pkg_nevra;
   }
 
-  libdnf5::rpm::PackageQuery installed_q(query);
-  installed_q.filter_installed();
-  libdnf5::rpm::PackageQuery best_candidate = installed_q.empty() ? query : installed_q;
+  const bool use_installed_context = context == PackageDetailsContext::INSTALLED_CONTEXT;
+  libdnf5::rpm::PackageQuery best_candidate(query);
+  if (use_installed_context) {
+    libdnf5::rpm::PackageQuery installed_q(query);
+    installed_q.filter_installed();
+    if (!installed_q.empty()) {
+      best_candidate = installed_q;
+    }
+  }
   best_candidate.filter_latest_evr();
   auto pkg = *best_candidate.begin();
 
@@ -110,22 +124,32 @@ dnf_backend_get_package_info(const std::string &pkg_nevra, const PackageRow *upg
   selected_summary = pkg.get_summary();
   selected_description = pkg.get_description();
 
-  // Find the installed package with the same name and architecture.
-  // This gives the details pane one answer for both an installed row and its update row.
-  libdnf5::rpm::PackageQuery installed_by_name(base);
-  installed_by_name.filter_name(pkg.get_name(), libdnf5::sack::QueryCmp::EQ);
-  installed_by_name.filter_installed();
-  for (auto installed_pkg : installed_by_name) {
-    if (installed_pkg.get_arch() != pkg.get_arch()) {
-      continue;
-    }
-    PackageRow row = make_package_row(installed_pkg);
-    if (!have_installed_counterpart || libdnf5::rpm::evrcmp(row, installed_row) > 0) {
-      installed_row = row;
-      installed_install_size = static_cast<unsigned long long>(installed_pkg.get_install_size());
-      installed_summary = installed_pkg.get_summary();
-      installed_description = installed_pkg.get_description();
+  if (use_installed_context) {
+    if (pkg.is_installed()) {
+      installed_row = selected_row;
+      installed_install_size = selected_install_size;
+      installed_summary = selected_summary;
+      installed_description = selected_description;
       have_installed_counterpart = true;
+    } else {
+      // Find the installed package with the same name and architecture.
+      // This gives available update rows the same installed context as Latest only mode.
+      libdnf5::rpm::PackageQuery installed_by_name(base);
+      installed_by_name.filter_name(pkg.get_name(), libdnf5::sack::QueryCmp::EQ);
+      installed_by_name.filter_installed();
+      for (auto installed_pkg : installed_by_name) {
+        if (installed_pkg.get_arch() != pkg.get_arch()) {
+          continue;
+        }
+        PackageRow row = make_package_row(installed_pkg);
+        if (!have_installed_counterpart || libdnf5::rpm::evrcmp(row, installed_row) > 0) {
+          installed_row = row;
+          installed_install_size = static_cast<unsigned long long>(installed_pkg.get_install_size());
+          installed_summary = installed_pkg.get_summary();
+          installed_description = installed_pkg.get_description();
+          have_installed_counterpart = true;
+        }
+      }
     }
   }
 
@@ -156,14 +180,15 @@ dnf_backend_get_package_info(const std::string &pkg_nevra, const PackageRow *upg
     }
   }
 
-  // Use installed metadata for the header when the package is installed.
-  // This keeps version, repo, install size, and install reason consistent
-  // when the user opens the package from different lists.
-  const PackageRow &display_row = have_installed_counterpart ? installed_row : selected_row;
+  // Installed context uses installed metadata for the header when the package is installed.
+  // This keeps version, repo, install size, and install reason consistent when the user opens the package from
+  // different lists.
+  const bool show_installed_context = use_installed_context && have_installed_counterpart;
+  const PackageRow &display_row = show_installed_context ? installed_row : selected_row;
   const unsigned long long display_install_size =
-      have_installed_counterpart ? installed_install_size : selected_install_size;
-  const std::string &display_summary = have_installed_counterpart ? installed_summary : selected_summary;
-  const std::string &display_description = have_installed_counterpart ? installed_description : selected_description;
+      show_installed_context ? installed_install_size : selected_install_size;
+  const std::string &display_summary = show_installed_context ? installed_summary : selected_summary;
+  const std::string &display_description = show_installed_context ? installed_description : selected_description;
 
   std::ostringstream oss;
   oss << _("Name") << ": " << display_row.name << "\n"
@@ -173,13 +198,13 @@ dnf_backend_get_package_info(const std::string &pkg_nevra, const PackageRow *upg
       << _("Arch") << ": " << display_row.arch << "\n"
       << _("Repo") << ": " << display_row.repo << "\n";
 
-  if (have_installed_counterpart) {
+  if (show_installed_context) {
     oss << _("Installed From") << ": " << installed_row.installed_from_repo << "\n";
   }
 
   oss << _("Install Size") << ": " << format_package_size(display_install_size) << "\n";
 
-  if (have_installed_counterpart) {
+  if (show_installed_context) {
     oss << _("Install Reason") << ": " << dnf_backend_install_reason_to_string(installed_row.install_reason) << "\n";
   }
 
@@ -208,6 +233,15 @@ dnf_backend_get_package_info(const std::string &pkg_nevra, const PackageRow *upg
 std::string
 dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max_files_for_display)
 {
+  return dnf_backend_get_installed_package_files(
+      pkg_nevra, PackageDetailsContext::INSTALLED_CONTEXT, max_files_for_display);
+}
+
+std::string
+dnf_backend_get_installed_package_files(const std::string &pkg_nevra,
+                                        PackageDetailsContext context,
+                                        size_t max_files_for_display)
+{
   DNFUI_TRACE("Backend file list start nevra=%s max_display=%zu", pkg_nevra.c_str(), max_files_for_display);
   auto [base, guard] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
@@ -228,7 +262,7 @@ dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max
     exact_installed.filter_latest_evr();
     auto installed_pkg = *exact_installed.begin();
     installed_nevra = installed_pkg.get_nevra();
-  } else {
+  } else if (context == PackageDetailsContext::INSTALLED_CONTEXT) {
     libdnf5::rpm::PackageQuery selected_query(query);
     selected_query.filter_latest_evr();
     auto selected_pkg = *selected_query.begin();
@@ -321,6 +355,12 @@ dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max
 std::string
 dnf_backend_get_package_deps(const std::string &pkg_nevra)
 {
+  return dnf_backend_get_package_deps(pkg_nevra, PackageDetailsContext::INSTALLED_CONTEXT);
+}
+
+std::string
+dnf_backend_get_package_deps(const std::string &pkg_nevra, PackageDetailsContext context)
+{
   auto [base, guard] = BaseManager::instance().acquire_read();
   libdnf5::rpm::PackageQuery query(base);
 
@@ -347,27 +387,29 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra)
     auto selected_pkg = *selected_query.begin();
     dependency_nevra = selected_pkg.get_nevra();
 
-    // Available update packages do not describe the current system state.
-    // Look up the installed package with the same name and architecture instead.
-    libdnf5::rpm::PackageQuery installed_by_name(base);
-    installed_by_name.filter_name(selected_pkg.get_name(), libdnf5::sack::QueryCmp::EQ);
-    installed_by_name.filter_installed();
+    if (context == PackageDetailsContext::INSTALLED_CONTEXT) {
+      // Available update packages do not describe the current system state.
+      // Look up the installed package with the same name and architecture instead.
+      libdnf5::rpm::PackageQuery installed_by_name(base);
+      installed_by_name.filter_name(selected_pkg.get_name(), libdnf5::sack::QueryCmp::EQ);
+      installed_by_name.filter_installed();
 
-    // Match the selected package architecture and keep the newest installed
-    // package if more than one installed row exists.
-    PackageRow installed_row;
-    bool have_installed_row = false;
-    for (auto installed_pkg : installed_by_name) {
-      if (installed_pkg.get_arch() != selected_pkg.get_arch()) {
-        continue;
-      }
+      // Match the selected package architecture and keep the newest installed
+      // package if more than one installed row exists.
+      PackageRow installed_row;
+      bool have_installed_row = false;
+      for (auto installed_pkg : installed_by_name) {
+        if (installed_pkg.get_arch() != selected_pkg.get_arch()) {
+          continue;
+        }
 
-      PackageRow row = make_package_row(installed_pkg);
-      if (!have_installed_row || libdnf5::rpm::evrcmp(row, installed_row) > 0) {
-        installed_row = row;
-        dependency_nevra = row.nevra;
-        dependency_nevra_is_installed = true;
-        have_installed_row = true;
+        PackageRow row = make_package_row(installed_pkg);
+        if (!have_installed_row || libdnf5::rpm::evrcmp(row, installed_row) > 0) {
+          installed_row = row;
+          dependency_nevra = row.nevra;
+          dependency_nevra_is_installed = true;
+          have_installed_row = true;
+        }
       }
     }
   }

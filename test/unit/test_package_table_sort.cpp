@@ -75,6 +75,7 @@ TEST_CASE("Package table Version column uses installed version for update rows")
 
   PackageRow installed = make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64");
   PackageRow update = make_table_test_row("demo-1.2.4-1.fc44.x86_64", "demo", "1.2.4", "1.fc44", "x86_64");
+  update.is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -92,6 +93,7 @@ TEST_CASE("Package table Update column uses candidate version for update rows")
 
   PackageRow installed = make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64");
   PackageRow update = make_table_test_row("demo-1.2.4-1.fc44.x86_64", "demo", "1.2.4", "1.fc44", "x86_64");
+  update.is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -111,6 +113,46 @@ TEST_CASE("Package table Update column is empty for normal rows")
       make_table_test_item(make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64"));
 
   REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION).empty());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an older available version shows the selected package version.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table downgradeable row displays selected version")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_table_test_row("demo-2.0-1.fc44.x86_64", "demo", "2.0", "1.fc44", "x86_64");
+  PackageRow older = make_table_test_row("demo-1.0-1.fc44.x86_64", "demo", "1.0", "1.fc44", "x86_64");
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PackageItem item = make_table_test_item(older);
+
+  REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION) == older.version);
+  REQUIRE(package_table_column_text(item, PackageColumnKind::RELEASE) == older.release);
+  REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION).empty());
+  REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_RELEASE).empty());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an intermediate newer version shows the selected package version.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table intermediate update row displays selected version")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_table_test_row("demo-1.0-1.fc44.x86_64", "demo", "1.0", "1.fc44", "x86_64");
+  PackageRow intermediate = make_table_test_row("demo-2.0-1.fc44.x86_64", "demo", "2.0", "1.fc44", "x86_64");
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PackageItem item = make_table_test_item(intermediate);
+
+  REQUIRE(package_table_column_text(item, PackageColumnKind::VERSION) == intermediate.version);
+  REQUIRE(package_table_column_text(item, PackageColumnKind::RELEASE) == intermediate.release);
+  REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_VERSION).empty());
+  REQUIRE(package_table_column_text(item, PackageColumnKind::UPDATE_RELEASE).empty());
 }
 
 // -----------------------------------------------------------------------------
@@ -203,6 +245,7 @@ TEST_CASE("Package table Update Release column uses candidate release for update
 
   PackageRow installed = make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64");
   PackageRow update = make_table_test_row("demo-1.2.4-1.fc44.x86_64", "demo", "1.2.4", "1.fc44", "x86_64");
+  update.is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -223,6 +266,7 @@ TEST_CASE("Package table Repo column uses candidate repo for update rows")
 
   PackageRow update = make_table_test_row("demo-1.2.4-1.fc44.x86_64", "demo", "1.2.4", "1.fc44", "x86_64");
   update.repo = "updates";
+  update.is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -323,6 +367,8 @@ TEST_CASE("Package table Version sorter uses RPM version order")
   MainWindowUiState widgets;
   PackageRow left = make_table_test_row("left-1.2.9-1.x86_64", "left", "1.2.9", "1", "x86_64");
   PackageRow right = make_table_test_row("right-1.2.10-1.x86_64", "right", "1.2.10", "1", "x86_64");
+  left.is_newest_available = true;
+  right.is_newest_available = true;
 
   REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) < 0);
 }
@@ -365,6 +411,8 @@ TEST_CASE("Package table Version sorter ignores Release")
   MainWindowUiState widgets;
   PackageRow left = make_table_test_row("bravo-1.0-2.x86_64", "bravo", "1.0", "2", "x86_64");
   PackageRow right = make_table_test_row("alpha-1.0-10.x86_64", "alpha", "1.0", "10", "x86_64");
+  left.is_newest_available = true;
+  right.is_newest_available = true;
 
   REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::VERSION) > 0);
 }
@@ -490,6 +538,7 @@ TEST_CASE("Package table Update Version sorter keeps absent values first")
   PackageRow installed_right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed_right });
   PackageRow right = make_table_test_row("right-2.0-1.x86_64", "right", "2.0", "1", "x86_64");
+  right.is_newest_available = true;
 
   REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_VERSION) < 0);
 }
@@ -504,6 +553,8 @@ TEST_CASE("Package table Release sorter uses RPM version order")
   MainWindowUiState widgets;
   PackageRow left = make_table_test_row("left-1.0-2.fc44.x86_64", "left", "1.0", "2.fc44", "x86_64");
   PackageRow right = make_table_test_row("right-1.0-10.fc44.x86_64", "right", "1.0", "10.fc44", "x86_64");
+  left.is_newest_available = true;
+  right.is_newest_available = true;
 
   REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::RELEASE) < 0);
 }
@@ -568,6 +619,8 @@ TEST_CASE("Package table Update Release sorter ignores Update Version")
 
   PackageRow left = make_table_test_row("left-2.0-1.x86_64", "left", "2.0", "1", "x86_64");
   PackageRow right = make_table_test_row("right-1.0-10.x86_64", "right", "1.0", "10", "x86_64");
+  left.is_newest_available = true;
+  right.is_newest_available = true;
 
   REQUIRE(compare_table_test_rows(widgets, left, right, PackageColumnKind::UPDATE_RELEASE) < 0);
 }
@@ -651,6 +704,7 @@ TEST_CASE("Package table sorter keeps existing item values after installed snaps
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
   PackageRow update = make_table_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
   PackageRow comparison = make_table_test_row("other-1.2-1.x86_64", "other", "1.2", "1", "x86_64");
 
   GObject *update_object = make_package_object(&widgets, update);
