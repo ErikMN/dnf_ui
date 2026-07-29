@@ -2,8 +2,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: dnf-ui 0.4.3\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-07-27 17:31+0000\n"
-"PO-Revision-Date: 2026-07-27 00:00+0200\n"
+"POT-Creation-Date: 2026-07-29 16:20+0000\n"
+"PO-Revision-Date: 2026-07-29 00:00+0200\n"
 "Last-Translator: DNF UI project <dnfui@proton.me>\n"
 "Language-Team: Swedish\n"
 "Language: sv\n"
@@ -75,34 +75,16 @@ msgstr ""
 "uppgradera alla."
 
 msgid "This transaction would downgrade, remove, or replace DNF UI itself."
-msgstr ""
-"Den här transaktionen skulle nedgradera, ta bort eller ersätta DNF UI."
-
-msgid "This transaction would remove or replace DNF UI itself."
-msgstr "Den här transaktionen skulle ta bort eller ersätta DNF UI."
+msgstr "Den här transaktionen skulle nedgradera, ta bort eller ersätta DNF UI."
 
 msgid "Could not verify whether this transaction would modify DNF UI."
 msgstr "Kunde inte kontrollera om den här transaktionen skulle ändra DNF UI."
 
-msgid ""
-"Could not verify whether this transaction would remove or replace DNF UI."
-msgstr ""
-"Kunde inte kontrollera om den här transaktionen skulle ta bort eller ersätta "
-"DNF UI."
-
 msgid "Upgrade All would downgrade, remove, or replace DNF UI itself."
 msgstr "Uppgradera alla skulle nedgradera, ta bort eller ersätta DNF UI."
 
-msgid "Upgrade All would remove or replace DNF UI itself."
-msgstr "Uppgradera alla skulle ta bort eller ersätta DNF UI."
-
 msgid "Could not verify whether Upgrade All would modify DNF UI."
 msgstr "Kunde inte kontrollera om Uppgradera alla skulle ändra DNF UI."
-
-msgid "Could not verify whether Upgrade All would remove or replace DNF UI."
-msgstr ""
-"Kunde inte kontrollera om Uppgradera alla skulle ta bort eller ersätta DNF "
-"UI."
 
 msgid "dnf5daemon session path is empty."
 msgstr "dnf5daemon-sessionssökvägen är tom."
@@ -367,17 +349,23 @@ msgstr "Annat"
 msgid "%s: %.1f s"
 msgstr "%s: %.1f s"
 
-msgid "Mark for Upgrade"
-msgstr "Markera för uppgradering"
-
 msgid "Mark for Install"
 msgstr "Markera för installation"
+
+msgid "Unmark Install"
+msgstr "Avmarkera installation"
+
+msgid "Mark for Upgrade"
+msgstr "Markera för uppgradering"
 
 msgid "Unmark Upgrade"
 msgstr "Avmarkera uppgradering"
 
-msgid "Unmark Install"
-msgstr "Avmarkera installation"
+msgid "Mark for Downgrade"
+msgstr "Markera för nedgradering"
+
+msgid "Unmark Downgrade"
+msgstr "Avmarkera nedgradering"
 
 msgid "Mark for Removal"
 msgstr "Markera för borttagning"
@@ -894,8 +882,8 @@ msgstr ""
 msgid "No package selected."
 msgstr "Inget paket valt."
 
-msgid "No install or upgrade action is available."
-msgstr "Ingen installation eller uppgradering är tillgänglig."
+msgid "No install, upgrade, or downgrade action is available."
+msgstr "Ingen installation, uppgradering eller nedgradering är tillgänglig."
 
 msgid "Unmarked: "
 msgstr "Avmarkerat: "
@@ -905,11 +893,14 @@ msgstr ""
 "Uppgraderingsinformationen ändrades. Tryck på Lista uppgraderbara för att "
 "läsa in igen."
 
+msgid "Marked for install: "
+msgstr "Markerat för installation: "
+
 msgid "Marked for upgrade: "
 msgstr "Markerat för uppgradering: "
 
-msgid "Marked for install: "
-msgstr "Markerat för installation: "
+msgid "Marked for downgrade: "
+msgstr "Markerat för nedgradering: "
 
 msgid "Package is not installed."
 msgstr "Paketet är inte installerat."
@@ -951,8 +942,8 @@ msgid ""
 "DNF UI cannot downgrade the package that owns the running application while "
 "it is running."
 msgstr ""
-"DNF UI kan inte nedgradera paketet som äger det körande programmet medan "
-"det körs."
+"DNF UI kan inte nedgradera paketet som äger det körande programmet medan det "
+"körs."
 
 msgid ""
 "DNF UI cannot remove the package that owns the running application. Close "
@@ -1173,6 +1164,9 @@ msgstr "Sök i beskrivning"
 
 msgid "Exact match"
 msgstr "Exakt träff"
+
+msgid "Latest only"
+msgstr "Endast senaste"
 
 msgid "Upgrade All"
 msgstr "Uppgradera alla"
