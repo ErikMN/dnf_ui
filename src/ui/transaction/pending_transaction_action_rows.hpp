@@ -65,6 +65,10 @@ bool pending_transaction_mark_install_side_action(std::vector<PendingAction> &ac
 // -----------------------------------------------------------------------------
 bool pending_transaction_install_action_blocked_by_self_protection(const PendingTransactionActionRows &rows,
                                                                    bool self_protected);
+// -----------------------------------------------------------------------------
+// Return true when activating this visible row should use the remove action.
+// -----------------------------------------------------------------------------
+bool pending_transaction_activation_should_remove(const PackageRow &selected, const PendingTransactionActionRows &rows);
 
 // -----------------------------------------------------------------------------
 // EOF

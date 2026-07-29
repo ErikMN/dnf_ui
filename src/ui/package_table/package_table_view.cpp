@@ -912,7 +912,7 @@ finish_package_table_view(MainWindowUiState *widgets,
 
                      if (action_rows.has_install_row) {
                        pending_transaction_on_install_button_clicked(nullptr, widgets);
-                     } else if (action_rows.has_installed_row) {
+                     } else if (pending_transaction_activation_should_remove(row.row, action_rows)) {
                        pending_transaction_on_remove_button_clicked(nullptr, widgets);
                      }
                    }),

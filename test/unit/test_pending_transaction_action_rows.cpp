@@ -157,6 +157,25 @@ TEST_CASE("Pending transaction action rows reject intermediate update rows")
   REQUIRE_FALSE(rows.has_install_row);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
+  REQUIRE_FALSE(pending_transaction_activation_should_remove(intermediate, rows));
+}
+
+// -----------------------------------------------------------------------------
+// Verify that activation can remove only the exact installed row.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction activation removes exact installed row only")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == installed.nevra);
+  REQUIRE(pending_transaction_activation_should_remove(installed, rows));
 }
 
 // -----------------------------------------------------------------------------
