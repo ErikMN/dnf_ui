@@ -763,28 +763,21 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
 std::vector<PackageRow>
 dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra)
 {
-  std::vector<PackageRow> packages;
+  AvailableViewRows visible_rows;
 
   auto [base, guard] = BaseManager::instance().acquire_read();
+  visible_rows.newest_available_by_name_arch = collect_newest_available_rows_by_name_arch(base, nullptr);
   {
     libdnf5::rpm::PackageQuery query(base);
     query.filter_nevra(pkg_nevra);
     query.filter_available();
 
     for (auto pkg : query) {
-      packages.push_back(make_package_row(pkg));
+      add_available_view_row(visible_rows, make_package_row(pkg));
     }
   }
 
-  if (!packages.empty()) {
-    auto newest_available = collect_available_rows_for_installed_names(base, nullptr, packages);
-    for (auto &row : packages) {
-      auto newest_it = newest_available.find(row.name_arch_key());
-      row.is_newest_available = newest_it != newest_available.end() && newest_it->second.nevra == row.nevra;
-    }
-  }
-
-  return packages;
+  return visible_rows.rows;
 }
 
 // -----------------------------------------------------------------------------

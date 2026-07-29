@@ -647,6 +647,27 @@ TEST_CASE("All-version merge keeps distinct available package versions")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that exact-version available views hide duplicate repository copies.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version merge hides duplicate available repository copies")
+{
+  PackageRow first_repo = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "fedora");
+  PackageRow second_repo = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "updates");
+
+  dnf_backend_internal::AvailableViewRows available;
+  available.newest_available_by_name_arch.emplace(first_repo.name_arch_key(), first_repo);
+  dnf_backend_internal::add_available_view_row(available, first_repo);
+  dnf_backend_internal::add_available_view_row(available, second_repo);
+
+  dnf_backend_internal::InstalledQueryResult installed;
+  auto rows = dnf_backend_internal::visible_rows_from_available_view(std::move(available), installed);
+
+  REQUIRE(rows.size() == 1);
+  REQUIRE(rows.front().nevra == first_repo.nevra);
+  REQUIRE(rows.front().repo == first_repo.repo);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that an installed row is compared against the newest visible candidate.
 // -----------------------------------------------------------------------------
 TEST_CASE("All-version merge ignores hidden newest candidates for installed row annotation")
