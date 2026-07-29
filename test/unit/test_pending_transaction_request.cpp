@@ -214,6 +214,28 @@ TEST_CASE("Pending transaction request builder rejects package identity conflict
 }
 
 // -----------------------------------------------------------------------------
+// Verify that request building keeps different architecture downgrade identities separate.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction request builder accepts different architecture downgrades")
+{
+  std::vector<PendingAction> actions = {
+    { PendingAction::DOWNGRADE, "demo-1.0-1.x86_64", "demo-1.0-1.x86_64", "demo\nx86_64" },
+    { PendingAction::DOWNGRADE, "demo-1.0-1.i686", "demo-1.0-1.i686", "demo\ni686" },
+  };
+
+  TransactionRequest request;
+  std::string error;
+
+  REQUIRE(pending_transaction_build_request(actions, request, error));
+  REQUIRE(error.empty());
+  REQUIRE(request.downgrade ==
+          std::vector<std::string> {
+              "demo-1.0-1.x86_64",
+              "demo-1.0-1.i686",
+          });
+}
+
+// -----------------------------------------------------------------------------
 // Verify that ordinary non protected package requests pass UI validation.
 // -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction request validation accepts non protected requests")
