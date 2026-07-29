@@ -67,6 +67,16 @@ package_query_cache_key_for(const std::string &term, const DnfBackendSearchOptio
 }
 
 // -----------------------------------------------------------------------------
+// Cache only the normal compact search view.
+// All-version searches can be much larger than the current table.
+// -----------------------------------------------------------------------------
+bool
+package_query_cache_should_use(const DnfBackendSearchOptions &options)
+{
+  return options.latest_only;
+}
+
+// -----------------------------------------------------------------------------
 // Clear cached search results.
 // Used by the Clear Cache button, repository refresh, transaction refresh, and installed-state refresh.
 // Advancing the cache epoch also prevents older searches from storing rows back into a cache state the UI already

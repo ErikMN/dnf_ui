@@ -47,6 +47,15 @@ TEST_CASE("Package query cache key includes search options")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that only compact latest-only searches use the in-memory search cache.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package query cache is used only for latest-only searches")
+{
+  REQUIRE(package_query_cache_should_use(backend_search_options(false, false)));
+  REQUIRE_FALSE(package_query_cache_should_use(backend_search_options(false, false, false)));
+}
+
+// -----------------------------------------------------------------------------
 // Verify that cached rows are returned only for the same key and generation.
 // -----------------------------------------------------------------------------
 TEST_CASE("Package query cache returns rows for matching key and generation")

@@ -94,6 +94,11 @@ of the public callback file:
 Long-running package queries run on worker threads through `GTask`. Completion
 callbacks run on the GTK thread before they update widgets.
 
+The Latest only checkbox is enabled by default. It keeps Search and List
+Packages in the compact one-row-per-package view. When disabled, those two
+queries show exact package versions. List Installed and List Upgradable do not
+use this checkbox.
+
 The bottom bar shows the visible row count on the left and the last completed
 package query time on the right.
 

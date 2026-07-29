@@ -346,7 +346,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   }
 
   if (packages) {
-    package_query_set_displayed_query_kind(widgets, DisplayedPackageQueryKind::LIST_AVAILABLE);
+    package_query_set_displayed_list_available_query(widgets, td ? td->options.latest_only : true);
 
     if (!widgets->query_state.reload_selected_nevra.empty()) {
       widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
@@ -647,7 +647,7 @@ on_search_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 
     if (td) {
       package_query_set_displayed_search_query(
-          widgets, td->term, td->options.search_in_description, td->options.exact_match);
+          widgets, td->term, td->options.search_in_description, td->options.exact_match, td->options.latest_only);
     }
 
     // Fill the package table and display the result count.
@@ -791,7 +791,7 @@ package_query_start_list_installed_task(MainWindowUiState *widgets)
 // Start one package browse worker.
 // -----------------------------------------------------------------------------
 void
-package_query_start_list_available_task(MainWindowUiState *widgets)
+package_query_start_list_available_task(MainWindowUiState *widgets, const DnfBackendSearchOptions &options)
 {
   widgets_spinner_acquire(widgets->query.spinner);
 
@@ -800,7 +800,7 @@ package_query_start_list_available_task(MainWindowUiState *widgets)
   td->request_id = widgets->query_state.next_package_list_request_id++;
   td->generation = BaseManager::instance().current_generation();
   td->started_at_us = g_get_monotonic_time();
-  td->options = DnfBackendSearchOptions {};
+  td->options = options;
 
   package_query_begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
   GTask *task = widgets_task_new_for_main_window_ui_state(widgets, c, on_list_available_task_finished);

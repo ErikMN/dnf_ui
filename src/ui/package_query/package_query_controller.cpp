@@ -55,21 +55,28 @@ add_to_history(MainWindowUiState *widgets, const std::string &term)
 }
 
 // -----------------------------------------------------------------------------
+// Read package query options once before dispatching background work.
+// -----------------------------------------------------------------------------
+static DnfBackendSearchOptions
+package_query_options_from_controls(MainWindowUiState *widgets)
+{
+  return {
+    .search_in_description =
+        static_cast<bool>(gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox))),
+    .exact_match = static_cast<bool>(gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox))),
+    .latest_only = static_cast<bool>(gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.latest_checkbox))),
+  };
+}
+
+// -----------------------------------------------------------------------------
 // Run a search from cache or start a background search task.
 // -----------------------------------------------------------------------------
 static void
-perform_search(MainWindowUiState *widgets, const std::string &term)
+perform_search(MainWindowUiState *widgets, const std::string &term, const DnfBackendSearchOptions &search_options)
 {
   if (term.empty()) {
     return;
   }
-
-  // Include the current checkboxes in the cache key even for history searches.
-  const DnfBackendSearchOptions search_options {
-    .search_in_description =
-        static_cast<bool>(gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox))),
-    .exact_match = static_cast<bool>(gtk_check_button_get_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox))),
-  };
 
   gtk_editable_set_text(GTK_EDITABLE(widgets->query.entry), term.c_str());
   std::string searching_message = dnfui_i18n_format(_("Searching for '%s'..."), term.c_str());
@@ -82,15 +89,16 @@ perform_search(MainWindowUiState *widgets, const std::string &term)
   // Look up saved rows before starting a new backend query.
   // Base drops do not invalidate search results because they only release memory.
   // Generation and cache epoch still reject rows after refreshes, transactions, or explicit cache clears.
-  const std::string key = package_query_cache_key_for(term, search_options);
+  const bool use_cache = package_query_cache_should_use(search_options);
+  const std::string key = use_cache ? package_query_cache_key_for(term, search_options) : "";
   const uint64_t generation = BaseManager::instance().current_generation();
   const uint64_t cache_epoch = package_query_cache_current_epoch();
   const gint64 started_at_us = g_get_monotonic_time();
   std::vector<PackageRow> cached_packages;
-  if (package_query_cache_lookup(key, generation, cache_epoch, cached_packages)) {
+  if (use_cache && package_query_cache_lookup(key, generation, cache_epoch, cached_packages)) {
     // Show saved rows and skip the worker thread.
     package_query_set_displayed_search_query(
-        widgets, term, search_options.search_in_description, search_options.exact_match);
+        widgets, term, search_options.search_in_description, search_options.exact_match, search_options.latest_only);
 
     package_table_fill_package_view(widgets,
                                     cached_packages,
@@ -146,7 +154,8 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
   }
 
   ui_helpers_set_status(widgets->query.status_label, _("Listing packages..."), "blue");
-  package_query_start_list_available_task(widgets);
+  DnfBackendSearchOptions options = package_query_options_from_controls(widgets);
+  package_query_start_list_available_task(widgets, options);
 }
 
 // -----------------------------------------------------------------------------
@@ -195,7 +204,7 @@ package_query_on_search_button_clicked(GtkButton *, gpointer user_data)
 
   // Save the search term and start lookup.
   add_to_history(widgets, pattern);
-  perform_search(widgets, pattern);
+  perform_search(widgets, pattern, package_query_options_from_controls(widgets));
 }
 
 // -----------------------------------------------------------------------------
@@ -211,7 +220,7 @@ package_query_on_history_row_selected(GtkListBox *, GtkListBoxRow *row, gpointer
   MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
   GtkWidget *child = gtk_list_box_row_get_child(row);
   const char *term = gtk_label_get_text(GTK_LABEL(child));
-  perform_search(widgets, term);
+  perform_search(widgets, term, package_query_options_from_controls(widgets));
 }
 
 // -----------------------------------------------------------------------------
@@ -254,23 +263,32 @@ package_query_reload_current_view(MainWindowUiState *widgets)
   const DisplayedPackageQueryState view_state = widgets->query_state.displayed_query;
 
   switch (view_state.kind) {
-  case DisplayedPackageQueryKind::SEARCH:
+  case DisplayedPackageQueryKind::SEARCH: {
     if (view_state.search_term.empty()) {
       widgets->query_state.reload_selected_nevra.clear();
       BaseManager::instance().drop_cached_base();
       return;
     }
 
-    gtk_check_button_set_active(GTK_CHECK_BUTTON(widgets->query.desc_checkbox), view_state.search_in_description);
-    gtk_check_button_set_active(GTK_CHECK_BUTTON(widgets->query.exact_checkbox), view_state.exact_match);
-    perform_search(widgets, view_state.search_term);
+    DnfBackendSearchOptions options {
+      .search_in_description = view_state.search_in_description,
+      .exact_match = view_state.exact_match,
+      .latest_only = view_state.latest_only,
+    };
+    perform_search(widgets, view_state.search_term, options);
     return;
+  }
   case DisplayedPackageQueryKind::LIST_INSTALLED:
     package_query_on_list_button_clicked(nullptr, widgets);
     return;
-  case DisplayedPackageQueryKind::LIST_AVAILABLE:
-    package_query_on_list_available_button_clicked(nullptr, widgets);
+  case DisplayedPackageQueryKind::LIST_AVAILABLE: {
+    ui_helpers_set_status(widgets->query.status_label, _("Listing packages..."), "blue");
+    DnfBackendSearchOptions options {
+      .latest_only = view_state.latest_only,
+    };
+    package_query_start_list_available_task(widgets, options);
     return;
+  }
   case DisplayedPackageQueryKind::LIST_UPGRADEABLE:
     package_query_on_list_upgradeable_button_clicked(nullptr, widgets);
     return;

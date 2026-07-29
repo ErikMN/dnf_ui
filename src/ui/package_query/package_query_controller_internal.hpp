@@ -31,7 +31,12 @@ bool package_query_clear_displayed_upgradeable_table(MainWindowUiState *widgets)
 void package_query_set_displayed_search_query(MainWindowUiState *widgets,
                                               const std::string &term,
                                               bool search_in_description,
-                                              bool exact_match);
+                                              bool exact_match,
+                                              bool latest_only);
+// -----------------------------------------------------------------------------
+// Remember the List Packages options that produced the current table.
+// -----------------------------------------------------------------------------
+void package_query_set_displayed_list_available_query(MainWindowUiState *widgets, bool latest_only);
 // -----------------------------------------------------------------------------
 // Finish one refresh of the package table and update the details pane.
 // -----------------------------------------------------------------------------
@@ -76,7 +81,7 @@ void package_query_start_list_installed_task(MainWindowUiState *widgets);
 // -----------------------------------------------------------------------------
 // Start one package browse worker.
 // -----------------------------------------------------------------------------
-void package_query_start_list_available_task(MainWindowUiState *widgets);
+void package_query_start_list_available_task(MainWindowUiState *widgets, const DnfBackendSearchOptions &options);
 // -----------------------------------------------------------------------------
 // Start one upgradable-package list worker.
 // -----------------------------------------------------------------------------
