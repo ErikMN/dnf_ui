@@ -96,6 +96,7 @@ TEST_CASE("Package table pending upgrade status uses resolved install row")
   PackageRow installed = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
   installed.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
   MainWindowUiState widgets;

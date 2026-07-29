@@ -203,6 +203,7 @@ TEST_CASE("Package table release columns handle installed rows with update candi
   installed.repo_candidate_version = "1.2.4";
   installed.repo_candidate_release = "1.fc44";
   installed.repo_candidate_repo = "updates";
+  installed.repo_candidate_is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -228,6 +229,7 @@ TEST_CASE("Package table Repo column uses candidate repo for installed update ro
   installed.repo_candidate_version = "1.2.4";
   installed.repo_candidate_release = "1.fc44";
   installed.repo_candidate_repo = "updates";
+  installed.repo_candidate_is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -466,12 +468,14 @@ TEST_CASE("Package table Update Version sorter uses candidate epoch")
   left.repo_candidate_epoch = "0";
   left.repo_candidate_version = "99.0";
   left.repo_candidate_release = "1";
+  left.repo_candidate_is_newest_available = true;
 
   PackageRow right = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64");
   right.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
   right.repo_candidate_epoch = "1";
   right.repo_candidate_version = "1.0";
   right.repo_candidate_release = "1";
+  right.repo_candidate_is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ left, right });
 

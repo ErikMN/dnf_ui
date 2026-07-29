@@ -127,7 +127,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
 
     if (installed_resolution.exact_installed) {
       // Installed-list rows store the matching available upgrade package ID when the backend annotates them.
-      rows.has_install_row = !selected.repo_candidate_nevra.empty();
+      rows.has_install_row = !selected.repo_candidate_nevra.empty() && selected.repo_candidate_is_newest_available;
       rows.install_row.nevra = selected.repo_candidate_nevra;
     } else {
       // Available update rows are already repository package rows.

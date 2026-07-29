@@ -74,6 +74,8 @@ struct PackageRow {
   std::string repo_candidate_version;
   std::string repo_candidate_release;
   std::string repo_candidate_repo;
+  // True when the installed row candidate is also the newest available repo row.
+  bool repo_candidate_is_newest_available = false;
   // True only for the newest available repo row for this package name and architecture.
   bool is_newest_available = false;
 

@@ -76,6 +76,7 @@ TEST_CASE("Pending transaction action rows resolve upgrade from installed packag
   PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
   installed.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -89,6 +90,29 @@ TEST_CASE("Pending transaction action rows resolve upgrade from installed packag
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE(rows.can_try_reinstall);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an installed row cannot upgrade to a hidden intermediate candidate.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows reject installed row with non-newest candidate")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "demo-1.5-1.x86_64";
+  installed.repo_candidate_is_newest_available = false;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+
+  REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(rows.install_is_upgrade);
+  REQUIRE_FALSE(rows.has_install_row);
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == installed.nevra);
 }
 
 // -----------------------------------------------------------------------------

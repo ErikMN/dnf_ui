@@ -671,6 +671,7 @@ TEST_CASE("All-version merge ignores hidden newest candidates for installed row 
   REQUIRE(installed_result->repo_candidate_relation == PackageRepoCandidateRelation::NEWER);
   REQUIRE(installed_result->repo_candidate_nevra == visible_repo_row.nevra);
   REQUIRE(installed_result->repo_candidate_nevra != hidden_newest_row.nevra);
+  REQUIRE_FALSE(installed_result->repo_candidate_is_newest_available);
 }
 
 // -----------------------------------------------------------------------------

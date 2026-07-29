@@ -192,6 +192,33 @@ package_details_context_for_selection(const PackageTableRow &selected, const Ins
 }
 
 // -----------------------------------------------------------------------------
+// Return the visible update candidate that should be shown for this selected row.
+// -----------------------------------------------------------------------------
+static std::optional<PackageRow>
+package_details_upgrade_override_for_selection(const PackageTableRow &selected,
+                                               const InstalledPackageResolution &resolution)
+{
+  if (selected.upgrade_target()) {
+    return selected.row;
+  }
+
+  if (!resolution.exact_installed || selected.row.repo_candidate_relation != PackageRepoCandidateRelation::NEWER ||
+      selected.row.repo_candidate_nevra.empty()) {
+    return std::nullopt;
+  }
+
+  PackageRow update_row;
+  update_row.nevra = selected.row.repo_candidate_nevra;
+  update_row.name = selected.row.name;
+  update_row.epoch = selected.row.repo_candidate_epoch;
+  update_row.version = selected.row.repo_candidate_version;
+  update_row.release = selected.row.repo_candidate_release;
+  update_row.arch = selected.row.arch;
+  update_row.repo = selected.row.repo_candidate_repo;
+  return update_row;
+}
+
+// -----------------------------------------------------------------------------
 // Reset the details panel after repopulating the main package view.
 // -----------------------------------------------------------------------------
 void
@@ -602,12 +629,10 @@ package_details_load_selected_package_info(MainWindowUiState *widgets, const Pac
   std::string details_query_nevra = selected.row.nevra;
   InstalledPackageResolution selected_resolution = dnf_backend_resolve_installed_package(selected.row);
   PackageDetailsContext details_context = package_details_context_for_selection(selected, selected_resolution);
-  std::optional<PackageRow> upgrade_row_override;
-  if (selected.upgrade_target()) {
-    upgrade_row_override = selected.row;
-    if (selected_resolution.has_installed_row) {
-      details_query_nevra = selected_resolution.installed_row.nevra;
-    }
+  std::optional<PackageRow> upgrade_row_override =
+      package_details_upgrade_override_for_selection(selected, selected_resolution);
+  if (selected.upgrade_target() && selected_resolution.has_installed_row) {
+    details_query_nevra = selected_resolution.installed_row.nevra;
   }
 
   widgets->results.selected_nevra = selected.row.nevra;
