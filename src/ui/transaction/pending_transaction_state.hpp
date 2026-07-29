@@ -20,7 +20,7 @@ struct PendingAction {
   std::string nevra;
   // Package spec sent to the transaction client.
   std::string transaction_spec;
-  // Install, upgrade, and downgrade actions replace each other for the same package name and architecture.
+  // Package name and architecture used to replace conflicting pending actions.
   std::string package_key = {};
 };
 

@@ -10,6 +10,7 @@
 #include "i18n.hpp"
 
 #include <exception>
+#include <set>
 
 namespace {
 
@@ -19,6 +20,24 @@ struct PendingRequestBaseDropGuard {
     BaseManager::instance().drop_cached_base();
   }
 };
+
+// -----------------------------------------------------------------------------
+// Return true when one pending action is queued by the install button path.
+// -----------------------------------------------------------------------------
+static bool
+pending_action_is_install_side(PendingAction::Type type)
+{
+  return type == PendingAction::INSTALL || type == PendingAction::UPGRADE || type == PendingAction::DOWNGRADE;
+}
+
+// -----------------------------------------------------------------------------
+// Return true when one pending action changes an installed package directly.
+// -----------------------------------------------------------------------------
+static bool
+pending_action_is_installed_side(PendingAction::Type type)
+{
+  return type == PendingAction::REMOVE || type == PendingAction::REINSTALL;
+}
 
 }
 
@@ -47,7 +66,20 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
   remove.reserve(actions.size());
   reinstall.reserve(actions.size());
 
+  std::set<std::string> install_side_keys;
+  std::set<std::string> installed_side_keys;
+
   for (const auto &action : actions) {
+    if (!pending_action_is_install_side(action.type) && !pending_action_is_installed_side(action.type)) {
+      install.clear();
+      upgrade.clear();
+      downgrade.clear();
+      remove.clear();
+      reinstall.clear();
+      error_out = _("Unknown pending package action.");
+      return false;
+    }
+
     if (action.transaction_spec.empty()) {
       install.clear();
       upgrade.clear();
@@ -56,6 +88,39 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
       reinstall.clear();
       error_out = _("Pending package action is missing its transaction spec.");
       return false;
+    }
+
+    if (action.package_key.empty()) {
+      install.clear();
+      upgrade.clear();
+      downgrade.clear();
+      remove.clear();
+      reinstall.clear();
+      error_out = _("Pending package action is missing its package identity.");
+      return false;
+    }
+
+    if (pending_action_is_install_side(action.type)) {
+      if (installed_side_keys.count(action.package_key) > 0 || !install_side_keys.insert(action.package_key).second) {
+        install.clear();
+        upgrade.clear();
+        downgrade.clear();
+        remove.clear();
+        reinstall.clear();
+        error_out = _("Pending package actions contain conflicting package identities.");
+        return false;
+      }
+    } else if (pending_action_is_installed_side(action.type)) {
+      if (install_side_keys.count(action.package_key) > 0) {
+        install.clear();
+        upgrade.clear();
+        downgrade.clear();
+        remove.clear();
+        reinstall.clear();
+        error_out = _("Pending package actions contain conflicting package identities.");
+        return false;
+      }
+      installed_side_keys.insert(action.package_key);
     }
 
     switch (action.type) {
@@ -75,12 +140,6 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
       reinstall.push_back(action.transaction_spec);
       break;
     default:
-      install.clear();
-      upgrade.clear();
-      downgrade.clear();
-      remove.clear();
-      reinstall.clear();
-      error_out = _("Unknown pending package action.");
       return false;
     }
   }

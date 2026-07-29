@@ -35,6 +35,15 @@ pending_action_is_install_side(PendingAction::Type type)
 }
 
 // -----------------------------------------------------------------------------
+// Return true when one pending action changes an installed package directly.
+// -----------------------------------------------------------------------------
+bool
+pending_action_is_installed_side(PendingAction::Type type)
+{
+  return type == PendingAction::REMOVE || type == PendingAction::REINSTALL;
+}
+
+// -----------------------------------------------------------------------------
 // Remove one pending action by package ID.
 // -----------------------------------------------------------------------------
 void
@@ -61,6 +70,25 @@ remove_pending_install_side_action_by_package_key(std::vector<PendingAction> &ac
 
   for (size_t i = 0; i < actions.size();) {
     if (pending_action_is_install_side(actions[i].type) && actions[i].package_key == package_key) {
+      actions.erase(actions.begin() + i);
+      continue;
+    }
+    ++i;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Remove pending remove or reinstall actions for one package name and architecture.
+// -----------------------------------------------------------------------------
+void
+remove_pending_installed_side_action_by_package_key(std::vector<PendingAction> &actions, const std::string &package_key)
+{
+  if (package_key.empty()) {
+    return;
+  }
+
+  for (size_t i = 0; i < actions.size();) {
+    if (pending_action_is_installed_side(actions[i].type) && actions[i].package_key == package_key) {
       actions.erase(actions.begin() + i);
       continue;
     }
@@ -195,6 +223,7 @@ pending_transaction_mark_install_side_action(std::vector<PendingAction> &actions
   }
 
   remove_pending_install_side_action_by_package_key(actions, action_rows.package_key);
+  remove_pending_installed_side_action_by_package_key(actions, action_rows.package_key);
   if (action_type == PendingAction::UPGRADE) {
     remove_pending_upgrade_by_transaction_spec(actions, transaction_spec);
   }
@@ -205,6 +234,46 @@ pending_transaction_mark_install_side_action(std::vector<PendingAction> &actions
 
   actions.push_back({ action_type, action_rows.install_row.nevra, transaction_spec, action_rows.package_key });
   return true;
+}
+
+// -----------------------------------------------------------------------------
+// Add or replace one pending remove or reinstall action from resolved rows.
+// -----------------------------------------------------------------------------
+static bool
+pending_transaction_mark_installed_side_action(std::vector<PendingAction> &actions,
+                                               const PendingTransactionActionRows &action_rows,
+                                               PendingAction::Type action_type)
+{
+  if (!action_rows.has_installed_row) {
+    return false;
+  }
+
+  remove_pending_install_side_action_by_package_key(actions, action_rows.package_key);
+  remove_pending_action_by_nevra(actions, action_rows.installed_row.nevra);
+
+  actions.push_back(
+      { action_type, action_rows.installed_row.nevra, action_rows.installed_row.nevra, action_rows.package_key });
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+// Add or replace one pending remove action from resolved rows.
+// -----------------------------------------------------------------------------
+bool
+pending_transaction_mark_remove_action(std::vector<PendingAction> &actions,
+                                       const PendingTransactionActionRows &action_rows)
+{
+  return pending_transaction_mark_installed_side_action(actions, action_rows, PendingAction::REMOVE);
+}
+
+// -----------------------------------------------------------------------------
+// Add or replace one pending reinstall action from resolved rows.
+// -----------------------------------------------------------------------------
+bool
+pending_transaction_mark_reinstall_action(std::vector<PendingAction> &actions,
+                                          const PendingTransactionActionRows &action_rows)
+{
+  return pending_transaction_mark_installed_side_action(actions, action_rows, PendingAction::REINSTALL);
 }
 
 // -----------------------------------------------------------------------------

@@ -18,12 +18,15 @@
 TEST_CASE("Pending transaction request builder splits actions by operation type")
 {
   std::vector<PendingAction> actions = {
-    { PendingAction::INSTALL, "demo-install-1-1.x86_64", "demo-install-1-1.x86_64" },
-    { PendingAction::UPGRADE, "demo-upgrade-2-1.x86_64", "demo.x86_64" },
-    { PendingAction::DOWNGRADE, "demo-downgrade-1-1.x86_64", "demo-downgrade-1-1.x86_64" },
-    { PendingAction::REMOVE, "demo-remove-1-1.x86_64", "demo-remove-1-1.x86_64" },
-    { PendingAction::REINSTALL, "demo-reinstall-1-1.x86_64", "demo-reinstall-1-1.x86_64" },
-    { PendingAction::INSTALL, "demo-install-libs-1-1.x86_64", "demo-install-libs-1-1.x86_64" },
+    { PendingAction::INSTALL, "demo-install-1-1.x86_64", "demo-install-1-1.x86_64", "demo-install\nx86_64" },
+    { PendingAction::UPGRADE, "demo-upgrade-2-1.x86_64", "demo.x86_64", "demo\nx86_64" },
+    { PendingAction::DOWNGRADE, "demo-downgrade-1-1.x86_64", "demo-downgrade-1-1.x86_64", "demo-downgrade\nx86_64" },
+    { PendingAction::REMOVE, "demo-remove-1-1.x86_64", "demo-remove-1-1.x86_64", "demo-remove\nx86_64" },
+    { PendingAction::REINSTALL, "demo-reinstall-1-1.x86_64", "demo-reinstall-1-1.x86_64", "demo-reinstall\nx86_64" },
+    { PendingAction::INSTALL,
+      "demo-install-libs-1-1.x86_64",
+      "demo-install-libs-1-1.x86_64",
+      "demo-install-libs\nx86_64" },
   };
 
   TransactionRequest request;
@@ -70,7 +73,7 @@ TEST_CASE("Pending transaction request builder clears stale request data")
   std::string error;
 
   std::vector<PendingAction> actions = {
-    { PendingAction::REMOVE, "demo-remove-1-1.x86_64", "demo-remove-1-1.x86_64" },
+    { PendingAction::REMOVE, "demo-remove-1-1.x86_64", "demo-remove-1-1.x86_64", "demo-remove\nx86_64" },
   };
 
   REQUIRE(pending_transaction_build_request(actions, request, error));
@@ -93,8 +96,11 @@ TEST_CASE("Pending transaction request builder clears stale request data")
 TEST_CASE("Pending transaction request builder rejects unknown action types")
 {
   std::vector<PendingAction> actions = {
-    { PendingAction::INSTALL, "demo-install-1-1.x86_64", "demo-install-1-1.x86_64" },
-    { static_cast<PendingAction::Type>(999), "demo-unknown-1-1.x86_64", "demo-unknown-1-1.x86_64" },
+    { PendingAction::INSTALL, "demo-install-1-1.x86_64", "demo-install-1-1.x86_64", "demo-install\nx86_64" },
+    { static_cast<PendingAction::Type>(999),
+      "demo-unknown-1-1.x86_64",
+      "demo-unknown-1-1.x86_64",
+      "demo-unknown\nx86_64" },
   };
 
   TransactionRequest request;
@@ -115,7 +121,7 @@ TEST_CASE("Pending transaction request builder rejects unknown action types")
 TEST_CASE("Pending transaction request builder rejects missing transaction specs")
 {
   std::vector<PendingAction> actions = {
-    { PendingAction::INSTALL, "demo-install-1-1.x86_64", "" },
+    { PendingAction::INSTALL, "demo-install-1-1.x86_64", "", "demo-install\nx86_64" },
   };
 
   TransactionRequest request;
@@ -136,7 +142,7 @@ TEST_CASE("Pending transaction request builder rejects missing transaction specs
 TEST_CASE("Pending transaction request builder rejects missing downgrade transaction specs")
 {
   std::vector<PendingAction> actions = {
-    { PendingAction::DOWNGRADE, "demo-downgrade-1-1.x86_64", "" },
+    { PendingAction::DOWNGRADE, "demo-downgrade-1-1.x86_64", "", "demo-downgrade\nx86_64" },
   };
 
   TransactionRequest request;
@@ -149,6 +155,62 @@ TEST_CASE("Pending transaction request builder rejects missing downgrade transac
   REQUIRE(request.downgrade.empty());
   REQUIRE(request.remove.empty());
   REQUIRE(request.reinstall.empty());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that request building rejects actions without a package identity.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction request builder rejects missing package identities")
+{
+  std::vector<PendingAction> actions = {
+    { PendingAction::INSTALL, "demo-install-1-1.x86_64", "demo-install-1-1.x86_64" },
+  };
+
+  TransactionRequest request;
+  std::string error;
+
+  REQUIRE_FALSE(pending_transaction_build_request(actions, request, error));
+  REQUIRE_FALSE(error.empty());
+  REQUIRE(request.install.empty());
+  REQUIRE(request.upgrade.empty());
+  REQUIRE(request.downgrade.empty());
+  REQUIRE(request.remove.empty());
+  REQUIRE(request.reinstall.empty());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that request building rejects conflicting package identities.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction request builder rejects package identity conflicts")
+{
+  {
+    std::vector<PendingAction> actions = {
+      { PendingAction::DOWNGRADE, "demo-1.0-1.x86_64", "demo-1.0-1.x86_64", "demo\nx86_64" },
+      { PendingAction::REMOVE, "demo-2.0-1.x86_64", "demo-2.0-1.x86_64", "demo\nx86_64" },
+    };
+
+    TransactionRequest request;
+    std::string error;
+
+    REQUIRE_FALSE(pending_transaction_build_request(actions, request, error));
+    REQUIRE_FALSE(error.empty());
+    REQUIRE(request.downgrade.empty());
+    REQUIRE(request.remove.empty());
+  }
+
+  {
+    std::vector<PendingAction> actions = {
+      { PendingAction::DOWNGRADE, "demo-1.0-1.x86_64", "demo-1.0-1.x86_64", "demo\nx86_64" },
+      { PendingAction::DOWNGRADE, "demo-1.5-1.x86_64", "demo-1.5-1.x86_64", "demo\nx86_64" },
+    };
+
+    TransactionRequest request;
+    std::string error;
+
+    REQUIRE_FALSE(pending_transaction_build_request(actions, request, error));
+    REQUIRE_FALSE(error.empty());
+    REQUIRE(request.downgrade.empty());
+  }
 }
 
 // -----------------------------------------------------------------------------

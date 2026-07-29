@@ -60,6 +60,18 @@ bool pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> 
 bool pending_transaction_mark_install_side_action(std::vector<PendingAction> &actions,
                                                   const PendingTransactionActionRows &rows);
 // -----------------------------------------------------------------------------
+// Add or replace one pending remove action from resolved rows.
+// Returns false when the row has no installed package action.
+// -----------------------------------------------------------------------------
+bool pending_transaction_mark_remove_action(std::vector<PendingAction> &actions,
+                                            const PendingTransactionActionRows &rows);
+// -----------------------------------------------------------------------------
+// Add or replace one pending reinstall action from resolved rows.
+// Returns false when the row has no installed package action.
+// -----------------------------------------------------------------------------
+bool pending_transaction_mark_reinstall_action(std::vector<PendingAction> &actions,
+                                               const PendingTransactionActionRows &rows);
+// -----------------------------------------------------------------------------
 // Return true when self-protection should block the install button path.
 // A normal upgrade is allowed because dnf5daemon still resolves the final preview.
 // -----------------------------------------------------------------------------

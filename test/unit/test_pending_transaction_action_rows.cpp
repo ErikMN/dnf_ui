@@ -398,20 +398,86 @@ TEST_CASE("Pending transaction install-side marking replaces package action")
 
   std::vector<PendingAction> actions = {
     { PendingAction::INSTALL, installed.nevra, installed.nevra, installed.name_arch_key() },
-    { PendingAction::REMOVE, other.nevra, other.nevra },
-    { PendingAction::REINSTALL, "demo-3.0-1.x86_64", "demo-3.0-1.x86_64" },
+    { PendingAction::REMOVE, other.nevra, other.nevra, other.name_arch_key() },
+    { PendingAction::REINSTALL, "demo-3.0-1.x86_64", "demo-3.0-1.x86_64", installed.name_arch_key() },
   };
 
   PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
   REQUIRE(pending_transaction_mark_install_side_action(actions, rows));
 
-  REQUIRE(actions.size() == 3);
+  REQUIRE(actions.size() == 2);
   REQUIRE(actions[0].type == PendingAction::REMOVE);
   REQUIRE(actions[0].nevra == other.nevra);
-  REQUIRE(actions[1].type == PendingAction::REINSTALL);
-  REQUIRE(actions[1].nevra == "demo-3.0-1.x86_64");
-  REQUIRE(actions[2].type == PendingAction::DOWNGRADE);
-  REQUIRE(actions[2].nevra == older.nevra);
+  REQUIRE(actions[1].type == PendingAction::DOWNGRADE);
+  REQUIRE(actions[1].nevra == older.nevra);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that downgrade and remove replace each other for one package name and architecture.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction downgrade and remove replacement is order independent")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  PackageRow older = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows downgrade_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
+  PendingTransactionActionRows installed_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+
+  std::vector<PendingAction> downgrade_then_remove;
+  REQUIRE(pending_transaction_mark_install_side_action(downgrade_then_remove, downgrade_rows));
+  REQUIRE(pending_transaction_mark_remove_action(downgrade_then_remove, installed_rows));
+
+  REQUIRE(downgrade_then_remove.size() == 1);
+  REQUIRE(downgrade_then_remove[0].type == PendingAction::REMOVE);
+  REQUIRE(downgrade_then_remove[0].nevra == installed.nevra);
+  REQUIRE(downgrade_then_remove[0].package_key == installed.name_arch_key());
+
+  std::vector<PendingAction> remove_then_downgrade;
+  REQUIRE(pending_transaction_mark_remove_action(remove_then_downgrade, installed_rows));
+  REQUIRE(pending_transaction_mark_install_side_action(remove_then_downgrade, downgrade_rows));
+
+  REQUIRE(remove_then_downgrade.size() == 1);
+  REQUIRE(remove_then_downgrade[0].type == PendingAction::DOWNGRADE);
+  REQUIRE(remove_then_downgrade[0].nevra == older.nevra);
+  REQUIRE(remove_then_downgrade[0].package_key == older.name_arch_key());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that downgrade and reinstall replace each other for one package name and architecture.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction downgrade and reinstall replacement is order independent")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  PackageRow older = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows downgrade_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
+  PendingTransactionActionRows installed_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+
+  std::vector<PendingAction> downgrade_then_reinstall;
+  REQUIRE(pending_transaction_mark_install_side_action(downgrade_then_reinstall, downgrade_rows));
+  REQUIRE(pending_transaction_mark_reinstall_action(downgrade_then_reinstall, installed_rows));
+
+  REQUIRE(downgrade_then_reinstall.size() == 1);
+  REQUIRE(downgrade_then_reinstall[0].type == PendingAction::REINSTALL);
+  REQUIRE(downgrade_then_reinstall[0].nevra == installed.nevra);
+  REQUIRE(downgrade_then_reinstall[0].package_key == installed.name_arch_key());
+
+  std::vector<PendingAction> reinstall_then_downgrade;
+  REQUIRE(pending_transaction_mark_reinstall_action(reinstall_then_downgrade, installed_rows));
+  REQUIRE(pending_transaction_mark_install_side_action(reinstall_then_downgrade, downgrade_rows));
+
+  REQUIRE(reinstall_then_downgrade.size() == 1);
+  REQUIRE(reinstall_then_downgrade[0].type == PendingAction::DOWNGRADE);
+  REQUIRE(reinstall_then_downgrade[0].nevra == older.nevra);
+  REQUIRE(reinstall_then_downgrade[0].package_key == older.name_arch_key());
 }
 
 // -----------------------------------------------------------------------------
@@ -457,7 +523,7 @@ TEST_CASE("Pending transaction bulk upgrade marking replaces existing package ac
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
   std::vector<PendingAction> actions = {
-    { PendingAction::REMOVE, installed.nevra, installed.nevra },
+    { PendingAction::REMOVE, installed.nevra, installed.nevra, installed.name_arch_key() },
   };
 
   REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, update, nullptr, 0));
