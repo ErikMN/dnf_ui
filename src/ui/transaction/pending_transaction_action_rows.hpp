@@ -16,6 +16,7 @@
 #include "dnf5daemon_client/transaction_service_client.hpp"
 #include "ui/transaction/pending_transaction_state.hpp"
 
+#include <set>
 #include <vector>
 
 struct PendingTransactionActionRows {
@@ -53,6 +54,13 @@ bool pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> 
                                                      const PackageRow &row,
                                                      const TransactionServiceUpgradeTarget *upgrade_target,
                                                      uint64_t upgrade_generation);
+// -----------------------------------------------------------------------------
+// Add or replace one pending upgrade unless this package identity was already handled.
+// Returns false when the row is not a valid upgrade candidate or the package identity was already marked.
+// -----------------------------------------------------------------------------
+bool pending_transaction_mark_unique_upgrade_action(std::vector<PendingAction> &actions,
+                                                    std::set<std::string> &marked_package_keys,
+                                                    const PendingTransactionActionRows &rows);
 // -----------------------------------------------------------------------------
 // Add or replace one pending install, upgrade, or downgrade action from resolved rows.
 // Returns false when the row has no install-button action.

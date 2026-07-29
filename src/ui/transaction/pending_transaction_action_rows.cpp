@@ -299,6 +299,30 @@ pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> &acti
 }
 
 // -----------------------------------------------------------------------------
+// Add or replace one pending upgrade unless this package identity was already handled.
+// -----------------------------------------------------------------------------
+bool
+pending_transaction_mark_unique_upgrade_action(std::vector<PendingAction> &actions,
+                                               std::set<std::string> &marked_package_keys,
+                                               const PendingTransactionActionRows &action_rows)
+{
+  if (!action_rows.install_is_upgrade || !action_rows.has_install_row || action_rows.package_key.empty()) {
+    return false;
+  }
+
+  if (marked_package_keys.count(action_rows.package_key) > 0) {
+    return false;
+  }
+
+  if (!pending_transaction_mark_install_side_action(actions, action_rows)) {
+    return false;
+  }
+
+  marked_package_keys.insert(action_rows.package_key);
+  return true;
+}
+
+// -----------------------------------------------------------------------------
 // Return true when self-protection should block the install button path.
 // A normal upgrade is allowed because dnf5daemon still resolves the final preview.
 // -----------------------------------------------------------------------------

@@ -18,6 +18,7 @@
 #include "ui/transaction/pending_transaction_view.hpp"
 #include "ui/common/ui_helpers.hpp"
 
+#include <set>
 #include <vector>
 
 // -----------------------------------------------------------------------------
@@ -275,10 +276,13 @@ pending_transaction_on_mark_listed_upgrades_button_clicked(GtkButton *, gpointer
   }
 
   std::vector<PackageTableRow> rows = package_table_get_displayed_packages(widgets);
+  std::set<std::string> marked_package_keys;
   size_t marked_count = 0;
   for (const auto &row : rows) {
-    if (pending_transaction_mark_upgrade_action_for_row(
-            widgets->transaction.actions, row.row, row.upgrade_target(), row.upgrade_generation())) {
+    PendingTransactionActionRows action_rows =
+        pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
+    if (pending_transaction_mark_unique_upgrade_action(
+            widgets->transaction.actions, marked_package_keys, action_rows)) {
       ++marked_count;
     }
   }

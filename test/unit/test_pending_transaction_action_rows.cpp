@@ -9,6 +9,7 @@
 #include "ui/transaction/pending_transaction_action_rows.hpp"
 
 #include <optional>
+#include <set>
 #include <vector>
 
 // -----------------------------------------------------------------------------
@@ -616,6 +617,46 @@ TEST_CASE("Pending transaction upgrade marking replaces stale upgrade candidate"
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
   REQUIRE(actions[0].nevra == new_update.nevra);
   REQUIRE(actions[0].transaction_spec == "demo.x86_64");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that bulk marking counts one package identity once.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction bulk upgrade marking deduplicates package identity")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
+
+  PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows installed_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows update_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0);
+
+  std::vector<PendingAction> actions;
+  std::set<std::string> marked_package_keys;
+  size_t marked_count = 0;
+
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, installed_rows)) {
+    ++marked_count;
+  }
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, update_rows)) {
+    ++marked_count;
+  }
+
+  REQUIRE(marked_count == 1);
+  REQUIRE(marked_package_keys.size() == 1);
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::UPGRADE);
+  REQUIRE(actions[0].nevra == update.nevra);
+  REQUIRE(actions[0].transaction_spec == "demo.x86_64");
+  REQUIRE(actions[0].package_key == installed.name_arch_key());
 }
 
 // -----------------------------------------------------------------------------
