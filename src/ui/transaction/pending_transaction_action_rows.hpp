@@ -21,12 +21,14 @@
 struct PendingTransactionActionRows {
   PackageInstallState state = PackageInstallState::AVAILABLE;
   bool install_is_upgrade = false;
+  bool install_is_downgrade = false;
   bool has_install_row = false;
   bool has_installed_row = false;
   // True when the installed package that would be modified owns the running app.
   bool self_protected = false;
   // Fast UI check only. This does not prove that reinstall is available from repositories.
   bool can_try_reinstall = false;
+  std::string package_key;
   std::string upgrade_spec;
   PackageRow install_row;
   PackageRow installed_row;
@@ -51,6 +53,12 @@ bool pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> 
                                                      const PackageRow &row,
                                                      const TransactionServiceUpgradeTarget *upgrade_target,
                                                      uint64_t upgrade_generation);
+// -----------------------------------------------------------------------------
+// Add or replace one pending install, upgrade, or downgrade action from resolved rows.
+// Returns false when the row has no install-button action.
+// -----------------------------------------------------------------------------
+bool pending_transaction_mark_install_side_action(std::vector<PendingAction> &actions,
+                                                  const PendingTransactionActionRows &rows);
 // -----------------------------------------------------------------------------
 // Return true when self-protection should block the install button path.
 // A normal upgrade is allowed because dnf5daemon still resolves the final preview.

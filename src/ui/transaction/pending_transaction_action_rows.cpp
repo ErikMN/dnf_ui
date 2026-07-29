@@ -26,6 +26,15 @@ upgrade_transaction_spec(const PackageRow &row)
 }
 
 // -----------------------------------------------------------------------------
+// Return true when one pending action is queued by the install button path.
+// -----------------------------------------------------------------------------
+bool
+pending_action_is_install_side(PendingAction::Type type)
+{
+  return type == PendingAction::INSTALL || type == PendingAction::UPGRADE || type == PendingAction::DOWNGRADE;
+}
+
+// -----------------------------------------------------------------------------
 // Remove one pending action by package ID.
 // -----------------------------------------------------------------------------
 void
@@ -41,7 +50,26 @@ remove_pending_action_by_nevra(std::vector<PendingAction> &actions, const std::s
 }
 
 // -----------------------------------------------------------------------------
-// Remove stale pending upgrades that target the same daemon upgrade spec.
+// Remove stale pending install, upgrade, or downgrade actions for one package name and architecture.
+// -----------------------------------------------------------------------------
+void
+remove_pending_install_side_action_by_package_key(std::vector<PendingAction> &actions, const std::string &package_key)
+{
+  if (package_key.empty()) {
+    return;
+  }
+
+  for (size_t i = 0; i < actions.size();) {
+    if (pending_action_is_install_side(actions[i].type) && actions[i].package_key == package_key) {
+      actions.erase(actions.begin() + i);
+      continue;
+    }
+    ++i;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Remove older pending upgrades that were queued before package identity was available.
 // -----------------------------------------------------------------------------
 void
 remove_pending_upgrade_by_transaction_spec(std::vector<PendingAction> &actions, const std::string &transaction_spec)
@@ -73,6 +101,8 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
   PendingTransactionActionRows rows;
   rows.state = upgrade_target ? PackageInstallState::UPGRADEABLE : installed_resolution.state;
   rows.install_is_upgrade = rows.state == PackageInstallState::UPGRADEABLE;
+  rows.install_is_downgrade = rows.state == PackageInstallState::DOWNGRADEABLE;
+  rows.package_key = selected.name_arch_key();
   rows.install_row = selected;
   rows.installed_row = selected;
   rows.has_installed_row = installed_resolution.exact_installed;
@@ -111,6 +141,13 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
     return rows;
   }
 
+  // Older available rows can be marked as a downgrade to that exact package ID.
+  if (rows.install_is_downgrade) {
+    rows.has_install_row = true;
+    rows.can_try_reinstall = rows.has_installed_row;
+    return rows;
+  }
+
   // Plain available packages can only be installed.
   if (rows.state == PackageInstallState::AVAILABLE) {
     rows.has_install_row = true;
@@ -134,6 +171,43 @@ pending_transaction_action_rows_for_selection(const PackageRow &selected,
 }
 
 // -----------------------------------------------------------------------------
+// Add or replace one pending install, upgrade, or downgrade action from resolved rows.
+// -----------------------------------------------------------------------------
+bool
+pending_transaction_mark_install_side_action(std::vector<PendingAction> &actions,
+                                             const PendingTransactionActionRows &action_rows)
+{
+  if (!action_rows.has_install_row) {
+    return false;
+  }
+
+  PendingAction::Type action_type = PendingAction::INSTALL;
+  std::string transaction_spec = action_rows.install_row.nevra;
+  if (action_rows.install_is_upgrade) {
+    action_type = PendingAction::UPGRADE;
+    transaction_spec = action_rows.upgrade_spec;
+  } else if (action_rows.install_is_downgrade) {
+    action_type = PendingAction::DOWNGRADE;
+  }
+
+  if (transaction_spec.empty()) {
+    return false;
+  }
+
+  remove_pending_install_side_action_by_package_key(actions, action_rows.package_key);
+  if (action_type == PendingAction::UPGRADE) {
+    remove_pending_upgrade_by_transaction_spec(actions, transaction_spec);
+  }
+  remove_pending_action_by_nevra(actions, action_rows.install_row.nevra);
+  if (action_rows.has_installed_row) {
+    remove_pending_action_by_nevra(actions, action_rows.installed_row.nevra);
+  }
+
+  actions.push_back({ action_type, action_rows.install_row.nevra, transaction_spec, action_rows.package_key });
+  return true;
+}
+
+// -----------------------------------------------------------------------------
 // Add or replace one pending upgrade action from a package table row.
 // -----------------------------------------------------------------------------
 bool
@@ -148,14 +222,10 @@ pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> &acti
     return false;
   }
 
-  remove_pending_upgrade_by_transaction_spec(actions, action_rows.upgrade_spec);
-  remove_pending_action_by_nevra(actions, row.nevra);
-  if (action_rows.has_installed_row) {
-    remove_pending_action_by_nevra(actions, action_rows.installed_row.nevra);
+  if (!pending_transaction_mark_install_side_action(actions, action_rows)) {
+    return false;
   }
-  remove_pending_action_by_nevra(actions, action_rows.install_row.nevra);
 
-  actions.push_back({ PendingAction::UPGRADE, action_rows.install_row.nevra, action_rows.upgrade_spec });
   return true;
 }
 

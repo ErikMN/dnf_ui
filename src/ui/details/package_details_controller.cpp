@@ -297,8 +297,12 @@ update_selected_package_actions(MainWindowUiState *widgets,
   const std::string install_nevra = action_rows.has_install_row ? action_rows.install_row.nevra : selected.row.nevra;
   const std::string installed_nevra =
       action_rows.has_installed_row ? action_rows.installed_row.nevra : selected.row.nevra;
-  ui_helpers_update_action_button_labels_for_selection(
-      widgets, install_nevra, installed_nevra, installed_nevra, action_rows.install_is_upgrade);
+  ui_helpers_update_action_button_labels_for_selection(widgets,
+                                                       install_nevra,
+                                                       installed_nevra,
+                                                       installed_nevra,
+                                                       action_rows.install_is_upgrade,
+                                                       action_rows.install_is_downgrade);
   set_details_status_text(widgets, selected_package_status_text(widgets, selected, action_rows));
 }
 

@@ -72,7 +72,8 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
   PendingTransactionActionRows action_rows =
       pending_transaction_action_rows_for_selection(pkg, selected.upgrade_target(), selected.upgrade_generation());
   if (!action_rows.has_install_row) {
-    ui_helpers_set_status(widgets->query.status_label, _("No install or upgrade action is available."), "gray");
+    ui_helpers_set_status(
+        widgets->query.status_label, _("No install, upgrade, or downgrade action is available."), "gray");
     return;
   }
 
@@ -82,8 +83,13 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  // Add or remove the pending install or upgrade action.
-  PendingAction::Type action_type = action_rows.install_is_upgrade ? PendingAction::UPGRADE : PendingAction::INSTALL;
+  // Add or remove the pending install, upgrade, or downgrade action.
+  PendingAction::Type action_type = PendingAction::INSTALL;
+  if (action_rows.install_is_upgrade) {
+    action_type = PendingAction::UPGRADE;
+  } else if (action_rows.install_is_downgrade) {
+    action_type = PendingAction::DOWNGRADE;
+  }
   PendingAction::Type existing_type;
   bool has_existing = pending_transaction_get_action_type(widgets, action_rows.install_row.nevra, existing_type);
 
@@ -92,33 +98,30 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
     pending_transaction_refresh_pending_tab(widgets);
     ui_helpers_set_status(widgets->query.status_label, (std::string(_("Unmarked: ")) + pkg.name).c_str(), "gray");
   } else {
-    if (action_type == PendingAction::UPGRADE) {
-      bool marked = pending_transaction_mark_upgrade_action_for_row(
-          widgets->transaction.actions, pkg, selected.upgrade_target(), selected.upgrade_generation());
-      if (!marked) {
-        package_query_clear_displayed_upgradeable_table(widgets);
-        ui_helpers_set_status(
-            widgets->query.status_label, _("Upgrade information changed. Press List Upgradable to reload."), "blue");
-        return;
-      }
-    } else {
-      // Replace any related pending action with install.
-      pending_transaction_remove_action(widgets, pkg.nevra);
-      if (action_rows.has_installed_row) {
-        pending_transaction_remove_action(widgets, action_rows.installed_row.nevra);
-      }
-      pending_transaction_remove_action(widgets, action_rows.install_row.nevra);
-      widgets->transaction.actions.push_back(
-          { action_type, action_rows.install_row.nevra, action_rows.install_row.nevra });
+    bool marked = pending_transaction_mark_install_side_action(widgets->transaction.actions, action_rows);
+    if (!marked) {
+      package_query_clear_displayed_upgradeable_table(widgets);
+      ui_helpers_set_status(
+          widgets->query.status_label, _("Upgrade information changed. Press List Upgradable to reload."), "blue");
+      return;
     }
     pending_transaction_refresh_pending_tab(widgets);
-    const char *message = action_rows.install_is_upgrade ? _("Marked for upgrade: ") : _("Marked for install: ");
+    const char *message = _("Marked for install: ");
+    if (action_rows.install_is_upgrade) {
+      message = _("Marked for upgrade: ");
+    } else if (action_rows.install_is_downgrade) {
+      message = _("Marked for downgrade: ");
+    }
     ui_helpers_set_status(widgets->query.status_label, (std::string(message) + pkg.name).c_str(), "blue");
   }
 
   const std::string installed_nevra = action_rows.has_installed_row ? action_rows.installed_row.nevra : pkg.nevra;
-  ui_helpers_update_action_button_labels_for_selection(
-      widgets, action_rows.install_row.nevra, installed_nevra, installed_nevra, action_rows.install_is_upgrade);
+  ui_helpers_update_action_button_labels_for_selection(widgets,
+                                                       action_rows.install_row.nevra,
+                                                       installed_nevra,
+                                                       installed_nevra,
+                                                       action_rows.install_is_upgrade,
+                                                       action_rows.install_is_downgrade);
   pending_transaction_invalidate_service_preview(widgets);
 
   // Refresh status badges without rebuilding the package table.
@@ -188,7 +191,8 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
                                                        install_nevra,
                                                        action_rows.installed_row.nevra,
                                                        action_rows.installed_row.nevra,
-                                                       action_rows.install_is_upgrade);
+                                                       action_rows.install_is_upgrade,
+                                                       action_rows.install_is_downgrade);
   pending_transaction_invalidate_service_preview(widgets);
 
   // Refresh status badges without rebuilding the package table.
@@ -260,7 +264,8 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
                                                        install_nevra,
                                                        action_rows.installed_row.nevra,
                                                        action_rows.installed_row.nevra,
-                                                       action_rows.install_is_upgrade);
+                                                       action_rows.install_is_upgrade,
+                                                       action_rows.install_is_downgrade);
   pending_transaction_invalidate_service_preview(widgets);
 
   package_table_refresh_statuses(widgets);
