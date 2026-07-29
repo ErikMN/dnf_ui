@@ -96,8 +96,10 @@ callbacks run on the GTK thread before they update widgets.
 
 The Latest only checkbox is enabled by default. It keeps Search and List
 Packages in the compact one-row-per-package view. When disabled, those two
-queries show exact package versions. List Installed and List Upgradable do not
-use this checkbox.
+queries show exact package versions. Older repository versions can then be
+inspected and marked for downgrade. Intermediate newer versions remain visible
+for inspection, but only the newest available version can be marked for upgrade.
+List Installed and List Upgradable do not use this checkbox.
 
 The bottom bar shows the visible row count on the left and the last completed
 package query time on the right.
@@ -108,7 +110,8 @@ by the query cache layer. Repository refreshes, transaction follow-up refreshes,
 and installed-state refreshes clear cached search rows and advance that epoch,
 so older search workers cannot repopulate the cache with rows the UI has already
 invalidated. Dropping the cached Base to save memory does not invalidate search
-rows by itself.
+rows by itself. All-version searches are not stored in this cache because they
+can be much larger than the normal compact result.
 
 [src/ui/refresh/repository_refresh_controller.cpp](../src/ui/refresh/repository_refresh_controller.cpp)
 owns the Refresh Repositories button workflow. It refreshes dnf5daemon metadata,
@@ -209,7 +212,7 @@ handles the package action buttons.
 
 It is responsible for:
 
-- marking packages for install, upgrade, remove, or reinstall
+- marking packages for install, upgrade, downgrade, remove, or reinstall
 - marking all listed upgrade candidates as pending upgrade actions
 - validating self-protected package rules
 - clearing pending actions
@@ -246,6 +249,16 @@ name and architecture spec for dnf5daemon. The table keeps the installed version
 in the Version column and shows the candidate version in the Update column. The
 Repo column shows the repository that provides the update. Remove and reinstall
 act on the currently installed NEVRA for the same package name and architecture.
+
+Downgradeable rows are older repository versions of an installed package. The
+main action becomes `Downgrade`, and the transaction request uses the selected
+exact NEVRA. Install, upgrade, and downgrade actions are unique by package name
+and architecture, so marking another install-side target for the same package
+replaces the previous one. Remove and reinstall actions remain tied to exact
+installed NEVRAs, so parallel installed versions can be handled independently.
+
+Mark Listed Upgrades marks only valid upgrade candidates from the current table.
+It does not mark downgradeable rows or intermediate newer rows.
 
 [src/ui/transaction/pending_transaction_action_rows.cpp](../src/ui/transaction/pending_transaction_action_rows.cpp) keeps those
 row-selection rules in one place. This is needed because an update can be shown

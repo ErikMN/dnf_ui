@@ -42,7 +42,13 @@ changes when the preview is built.
 
 Upgrade-all requests are separate from explicit package action lists. DNF UI
 asks dnf5daemon to prepare its native Upgrade All transaction. Selected package
-upgrades are sent as explicit upgrade specs.
+upgrades are sent as explicit upgrade specs. Selected downgrades are sent as
+exact NEVRA specs so the daemon is asked for the version the user selected.
+
+Install, upgrade, and downgrade are install-side actions. Only one install-side
+action is kept for one package name and architecture at a time. Remove and
+reinstall actions are tied to exact installed NEVRAs, so systems with parallel
+installed versions can mark those installed versions independently.
 
 ## GUI flow
 
@@ -69,7 +75,8 @@ When the user clicks Mark Listed Upgrades, the GUI marks the upgrade candidates
 currently shown in the package table as normal pending upgrade actions. The user
 can then remove individual actions before clicking Apply. This path sends
 explicit upgrade specs to dnf5daemon instead of using the daemon-side Upgrade
-All shortcut.
+All shortcut. Downgradeable rows and intermediate newer rows are not included
+by Mark Listed Upgrades.
 
 ```mermaid
 flowchart TD
@@ -131,6 +138,10 @@ instead of hiding part of the transaction from the user.
 After preview, DNF UI rejects transactions that would downgrade, remove, or
 replace the running app package. It also rejects transactions that would remove
 or replace the daemon needed for package changes. Normal upgrades are allowed.
+
+The preview is still authoritative. A pending downgrade records an exact NEVRA
+chosen from the table, but the user must still review the resolved daemon
+transaction before apply.
 
 If Upgrade All resolves to an empty preview, the GUI reports that all packages
 are already up to date. If a selected package action resolves to an empty

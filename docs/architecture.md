@@ -178,18 +178,20 @@ changelog metadata, after releasing the shared Base read lock.
 
 ## Package list model
 
-The main list shows one row for each package name and architecture pair.
+With Latest only enabled, the main list shows one row for each package name and
+architecture pair. With Latest only disabled, Search and List Packages show one
+row per exact available NEVRA and add missing exact installed NEVRAs.
 
-When repository metadata is available, repository candidates are shown. Installed
-packages that do not have a visible repository candidate are added as local-only
-rows. Installed packages can also be shown as upgradeable or newer than the
-repository candidate.
+When repository metadata is available, repository candidates are shown.
+Installed packages that do not have a visible repository candidate are added as
+local-only rows. Installed packages can also be shown as upgradeable, older in
+the repository, or newer than the repository candidate.
 
 The installed snapshot in [src/dnf_backend/dnf_state.cpp](../src/dnf_backend/dnf_state.cpp)
 is important because it lets the UI answer:
 
 - whether an exact NEVRA is installed
-- whether a row is available, installed, local-only, or upgradeable
+- whether a row is available, installed, local-only, upgradeable, or downgradeable
 - whether a package owns the running GUI executable and must be protected from removal inside the app
 
 ## Transaction boundary

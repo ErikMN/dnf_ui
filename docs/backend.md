@@ -63,7 +63,8 @@ not own libdnf5 objects and may survive shared Base destruction. Explicit
 repository refresh, installed-state refresh, transaction completion, and Clear
 Cache invalidate them. Backend operations that need current package data resolve
 that data through the current Base instead of treating cached rows as
-authoritative libdnf5 state.
+authoritative libdnf5 state. All-version searches bypass this cache because
+they can contain many more rows than the compact Latest only view.
 
 ## Repository refresh
 
@@ -135,14 +136,16 @@ The browse and search views merge repository candidates with installed-only
 packages. The visible result keeps one row for each package name and
 architecture pair when Latest only is enabled. When Latest only is disabled,
 the visible result keeps one row per exact available NEVRA and adds missing
-exact installed NEVRAs.
+exact installed NEVRAs. Duplicate repository copies of the same exact NEVRA are
+hidden.
 
 Normal search is substring based. If the search term contains `*` or `?`, normal search treats it as a wildcard pattern. Exact search remains literal.
 
 The GTK controller captures the description, exact-match, and Latest only
 checkboxes once for each search request. That same option snapshot is used for
 the search cache key and passed to the backend worker, so a queued search does
-not depend on later checkbox changes.
+not depend on later checkbox changes. Changing Latest only does not reload the
+table by itself. It affects the next Search or List Packages request.
 
 The List Upgradable view uses dnf5daemon to decide which upgrades exist. The worker refreshes installed-package state, loads the daemon upgrade targets, asks libdnf5 only for matching package metadata, and then refreshes installed-package state again. If installed state changed while the daemon result was being loaded, the result is rejected and the user must reload List Upgradable. The GTK completion stores the daemon targets in the shared daemon upgrade snapshot only when it accepts the matching table rows. Missing metadata does not hide a daemon-reported upgrade. In that case the table keeps a basic row built from the daemon target.
 
@@ -168,10 +171,15 @@ the backend resolves them together from one snapshot.
 The same snapshot also lets the UI resolve the installed package behind an
 upgradable repository candidate. Upgrade actions keep the visible update NEVRA
 for UI navigation, but send a package name and architecture spec to
-dnf5daemon. Remove and reinstall use the currently installed NEVRA for the same
-package name and architecture.
+dnf5daemon. Downgrade actions send the selected exact older NEVRA. Remove and
+reinstall use the exact installed NEVRA.
 
 If the visible row is the installed package and a newer repository candidate was found, the query row carries the matching available candidate NEVRA. The UI uses that stored package ID for the upgrade action without doing another package query from the GTK thread.
+
+Only the newest available row for a package name and architecture can become a
+normal upgrade action. Intermediate newer rows remain visible for inspection,
+but they cannot be marked as upgrades because dnf5daemon upgrades by package
+spec and may resolve a newer candidate than the selected row.
 
 The snapshot is updated only after a complete installed-package scan. Cancelled
 queries do not publish partial installed state.
@@ -193,7 +201,12 @@ when repository metadata contains a newer or older candidate without duplicating
 rows. The same resolved value also carries exact-installed state and the
 installed row for the same package name and architecture.
 
-The generic Status column is local package metadata. It can say that a newer package exists in enabled repository metadata, but it is not a transaction promise. The List Upgradable view is stricter: it shows the current daemon upgrade targets and keeps the daemon target on the table row so the update columns and Mark for Upgrade use the same snapshot. Transaction preview and apply always go through dnf5daemon.
+The generic Status column is local package metadata. It can say that a newer or
+older package exists in enabled repository metadata, but it is not a transaction
+promise. The List Upgradable view is stricter: it shows the current daemon
+upgrade targets and keeps the daemon target on the table row so the update
+columns and Mark for Upgrade use the same snapshot. Transaction preview and
+apply always go through dnf5daemon.
 
 ## Self protection
 
@@ -249,8 +262,9 @@ and apply go through dnf5daemon so privileged package changes stay outside the
 GTK process.
 
 Selected package upgrades are sent to dnf5daemon as explicit upgrade specs.
-Upgrade All uses dnf5daemon's native upgrade-all behavior instead of building a
-local list of upgrade specs.
+Selected downgrades are sent as exact NEVRA specs through dnf5daemon's
+downgrade method. Upgrade All uses dnf5daemon's native upgrade-all behavior
+instead of building a local list of upgrade specs.
 
 The dnf5daemon client builds `TransactionPreview` values from daemon replies and
 fails closed when a daemon transaction item cannot be represented by the UI
