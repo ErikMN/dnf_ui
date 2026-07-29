@@ -62,6 +62,19 @@ pending_action_matches_row(const PendingAction &action,
                            const PackageTableRow &row,
                            const PendingTransactionActionRows &action_rows)
 {
+  if (action.type == PendingAction::REMOVE || action.type == PendingAction::REINSTALL) {
+    return action_rows.has_installed_row && row.row.nevra == action_rows.installed_row.nevra &&
+        action.nevra == action_rows.installed_row.nevra;
+  }
+
+  if (action.type == PendingAction::INSTALL || action.type == PendingAction::DOWNGRADE) {
+    return action.nevra == row.row.nevra;
+  }
+
+  if (action.type != PendingAction::UPGRADE) {
+    return false;
+  }
+
   if (action.nevra == row.row.nevra) {
     return true;
   }
