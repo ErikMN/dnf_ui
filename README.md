@@ -60,7 +60,7 @@ There are other applications for this like [GNOME Software](https://apps.gnome.o
 - Search repo packages together with installed-only local RPMs
 - List available, installed and upgradable packages
 - View package details, files, dependencies, and changelog information
-- Mark packages for install, upgrade, reinstall, and removal
+- Mark packages for install, upgrade, downgrade, reinstall, and removal
 - Upgrade all installed packages with available updates
 - Review a transaction summary before applying changes
 - Apply transactions through DNF5 dnf5daemon with Polkit authorization
@@ -69,10 +69,15 @@ There are other applications for this like [GNOME Software](https://apps.gnome.o
 - Export the visible package list as CSV
 - Browse read-only DNF transaction history
 
-The main browse and search views keep one visible row per package name and
-architecture. Repo candidates stay visible as usual, and locally installed RPMs
-that are not present in enabled repositories are listed as `Installed (local
-only)`.
+Search and List Packages use the compact `Latest only` view by default. That
+keeps one visible row per package name and architecture, with update columns
+showing the newest available version when one exists.
+
+Disabling `Latest only` shows distinct exact package versions instead. The
+globally newest available version can be marked for upgrade, older available
+versions can be marked for downgrade, and intermediate newer versions remain
+visible for inspection. Locally installed RPMs that are not present in enabled
+repositories are listed as `Installed (local only)`.
 
 ## Why?
 

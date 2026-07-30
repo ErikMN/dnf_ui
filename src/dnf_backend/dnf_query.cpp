@@ -97,14 +97,14 @@ remember_newest_row(std::map<std::string, PackageRow> &rows_by_name_arch, const 
 }
 
 // -----------------------------------------------------------------------------
-// Return each installed package name once.
-// Repo annotation only needs candidates for names that are already installed.
+// Return each package name once.
+// Repo annotation only needs candidates for names present in the selected rows.
 // -----------------------------------------------------------------------------
 static std::vector<std::string>
-installed_package_names(const std::vector<PackageRow> &installed_rows)
+package_names_from_rows(const std::vector<PackageRow> &package_rows)
 {
   std::set<std::string> names;
-  for (const auto &row : installed_rows) {
+  for (const auto &row : package_rows) {
     names.insert(row.name);
   }
 
@@ -311,16 +311,16 @@ collect_available_view_rows(libdnf5::Base &base,
 }
 
 // -----------------------------------------------------------------------------
-// Collect repo candidates only for package names that are installed locally.
-// This keeps installed-list annotation from scanning unrelated repo packages.
+// Collect newest repo candidates only for package names present in the selected rows.
+// This keeps annotation and exact-package lookup from scanning unrelated repo packages.
 // -----------------------------------------------------------------------------
 static std::map<std::string, PackageRow>
-collect_available_rows_for_installed_names(libdnf5::Base &base,
-                                           GCancellable *cancellable,
-                                           const std::vector<PackageRow> &installed_rows)
+collect_newest_available_rows_for_package_names(libdnf5::Base &base,
+                                                GCancellable *cancellable,
+                                                const std::vector<PackageRow> &package_rows)
 {
   std::map<std::string, PackageRow> rows_by_name_arch;
-  std::vector<std::string> names = installed_package_names(installed_rows);
+  std::vector<std::string> names = package_names_from_rows(package_rows);
   if (names.empty()) {
     return rows_by_name_arch;
   }
@@ -622,7 +622,7 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
       // is available, but it must not make the installed list fail.
       annotate_installed_rows_with_repo_candidates_best_effort(
           installed.rows, cancellable, [&base, &installed](GCancellable *annotation_cancellable) {
-            return collect_available_rows_for_installed_names(base, annotation_cancellable, installed.rows);
+            return collect_newest_available_rows_for_package_names(base, annotation_cancellable, installed.rows);
           });
       if (package_query_cancelled(cancellable)) {
         return {};
@@ -750,7 +750,7 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
 
   annotate_installed_rows_with_repo_candidates_best_effort(
       packages, nullptr, [&base, &packages](GCancellable *annotation_cancellable) {
-        return collect_available_rows_for_installed_names(base, annotation_cancellable, packages);
+        return collect_newest_available_rows_for_package_names(base, annotation_cancellable, packages);
       });
 
   return packages;
@@ -777,7 +777,7 @@ dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra)
   }
 
   visible_rows.newest_available_by_name_arch =
-      collect_available_rows_for_installed_names(base, nullptr, visible_rows.rows);
+      collect_newest_available_rows_for_package_names(base, nullptr, visible_rows.rows);
   for (auto &row : visible_rows.rows) {
     auto newest_it = visible_rows.newest_available_by_name_arch.find(row.name_arch_key());
     row.is_newest_available =
