@@ -55,16 +55,47 @@ status_cell_icon(GtkWidget *cell)
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the current table uses compact package rows.
+// Compact views show one package stream row, so installed actions are shown on the visible update row.
+// -----------------------------------------------------------------------------
+static bool
+displayed_view_projects_installed_actions(const MainWindowUiState *widgets)
+{
+  if (!widgets) {
+    return false;
+  }
+
+  const DisplayedPackageQueryState &displayed = widgets->query_state.displayed_query;
+  if (displayed.kind == DisplayedPackageQueryKind::LIST_UPGRADEABLE) {
+    return true;
+  }
+  if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
+    return displayed.latest_only;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
 // Return true when one pending action matches one package table row.
 // -----------------------------------------------------------------------------
 static bool
-pending_action_matches_row(const PendingAction &action,
+pending_action_matches_row(const MainWindowUiState *widgets,
+                           const PendingAction &action,
                            const PackageTableRow &row,
                            const PendingTransactionActionRows &action_rows)
 {
   if (action.type == PendingAction::REMOVE || action.type == PendingAction::REINSTALL) {
-    return action_rows.has_installed_row && row.row.nevra == action_rows.installed_row.nevra &&
-        action.nevra == action_rows.installed_row.nevra;
+    if (!action_rows.has_installed_row || action.nevra != action_rows.installed_row.nevra) {
+      return false;
+    }
+
+    if (row.row.nevra == action_rows.installed_row.nevra) {
+      return true;
+    }
+
+    return displayed_view_projects_installed_actions(widgets);
   }
 
   if (action.type == PendingAction::INSTALL || action.type == PendingAction::DOWNGRADE) {
@@ -101,7 +132,7 @@ package_table_pending_action_for_resolved_row(MainWindowUiState *widgets,
                                               PendingAction::Type &out_type)
 {
   for (const auto &action : widgets->transaction.actions) {
-    if (pending_action_matches_row(action, row, action_rows)) {
+    if (pending_action_matches_row(widgets, action, row, action_rows)) {
       out_type = action.type;
       return true;
     }

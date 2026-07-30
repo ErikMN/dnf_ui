@@ -48,6 +48,26 @@ require_stored_status_matches_pending_action(MainWindowUiState &widgets, Package
 }
 
 // -----------------------------------------------------------------------------
+// Mark the test table as a compact List Packages view.
+// -----------------------------------------------------------------------------
+static void
+set_compact_package_view(MainWindowUiState &widgets)
+{
+  widgets.query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  widgets.query_state.displayed_query.latest_only = true;
+}
+
+// -----------------------------------------------------------------------------
+// Mark the test table as an all-version List Packages view.
+// -----------------------------------------------------------------------------
+static void
+set_all_version_package_view(MainWindowUiState &widgets)
+{
+  widgets.query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  widgets.query_state.displayed_query.latest_only = false;
+}
+
+// -----------------------------------------------------------------------------
 // Verify that pending installs use the same Status text in stored and visible paths.
 // -----------------------------------------------------------------------------
 TEST_CASE("Package table pending install status is shared")
@@ -111,9 +131,9 @@ TEST_CASE("Package table pending upgrade status uses resolved install row")
 }
 
 // -----------------------------------------------------------------------------
-// Verify that update rows do not show pending removal queued for the installed row.
+// Verify that compact update rows show pending removal queued for the installed row.
 // -----------------------------------------------------------------------------
-TEST_CASE("Package table pending removal status stays on exact installed row")
+TEST_CASE("Package table compact update row shows pending removal")
 {
   reset_backend_globals();
 
@@ -122,6 +142,7 @@ TEST_CASE("Package table pending removal status stays on exact installed row")
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
   MainWindowUiState widgets;
+  set_compact_package_view(widgets);
   widgets.transaction.actions = {
     { PendingAction::REMOVE, installed.nevra, installed.nevra },
   };
@@ -129,24 +150,15 @@ TEST_CASE("Package table pending removal status stays on exact installed row")
   PackageItem item;
   item.row = update;
 
-  PackageTableRow table_row {
-    .row = item.row,
-    .daemon_upgrade = item.daemon_upgrade,
-  };
-
-  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
-      table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
-  PendingAction::Type action_type;
-  REQUIRE_FALSE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
-
+  require_stored_status_matches_pending_action(widgets, item, "Pending Removal");
   item.row = installed;
   require_stored_status_matches_pending_action(widgets, item, "Pending Removal");
 }
 
 // -----------------------------------------------------------------------------
-// Verify that update rows do not show pending reinstall queued for the installed row.
+// Verify that compact update rows show pending reinstall queued for the installed row.
 // -----------------------------------------------------------------------------
-TEST_CASE("Package table pending reinstall status stays on exact installed row")
+TEST_CASE("Package table compact update row shows pending reinstall")
 {
   reset_backend_globals();
 
@@ -155,6 +167,7 @@ TEST_CASE("Package table pending reinstall status stays on exact installed row")
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
   MainWindowUiState widgets;
+  set_compact_package_view(widgets);
   widgets.transaction.actions = {
     { PendingAction::REINSTALL, installed.nevra, installed.nevra },
   };
@@ -162,16 +175,7 @@ TEST_CASE("Package table pending reinstall status stays on exact installed row")
   PackageItem item;
   item.row = update;
 
-  PackageTableRow table_row {
-    .row = item.row,
-    .daemon_upgrade = item.daemon_upgrade,
-  };
-
-  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
-      table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
-  PendingAction::Type action_type;
-  REQUIRE_FALSE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
-
+  require_stored_status_matches_pending_action(widgets, item, "Pending Reinstall");
   item.row = installed;
   require_stored_status_matches_pending_action(widgets, item, "Pending Reinstall");
 }
@@ -216,6 +220,7 @@ TEST_CASE("Package table pending removal status does not leak to exact available
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
   MainWindowUiState widgets;
+  set_all_version_package_view(widgets);
   widgets.transaction.actions = {
     { PendingAction::REMOVE, installed.nevra, installed.nevra, installed.name_arch_key() },
   };
@@ -246,6 +251,7 @@ TEST_CASE("Package table pending reinstall status does not leak to exact availab
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
   MainWindowUiState widgets;
+  set_all_version_package_view(widgets);
   widgets.transaction.actions = {
     { PendingAction::REINSTALL, installed.nevra, installed.nevra, installed.name_arch_key() },
   };

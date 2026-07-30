@@ -339,7 +339,7 @@ pending_transaction_install_action_blocked_by_self_protection(const PendingTrans
 bool
 pending_transaction_activation_should_remove(const PackageRow &selected, const PendingTransactionActionRows &rows)
 {
-  return rows.has_installed_row && selected.nevra == rows.installed_row.nevra;
+  return rows.has_installed_row && selected.nevra == rows.installed_row.nevra && !rows.install_is_upgrade;
 }
 
 // -----------------------------------------------------------------------------

@@ -114,6 +114,7 @@ TEST_CASE("Pending transaction action rows reject installed row with non-newest 
   REQUIRE_FALSE(rows.has_install_row);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
+  REQUIRE_FALSE(pending_transaction_activation_should_remove(installed, rows));
 }
 
 // -----------------------------------------------------------------------------
