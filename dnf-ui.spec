@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.4.3
+Version:        0.5.0
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Thu Jul 30 2026 ErikMN <dnfui@proton.me> - 0.5.0-1
+- Add optional all-version browsing for Search and List Packages
+- Add downgrade support for selected older package versions
+- Keep Latest only as the default compact package view
+- Update package details, status text, documentation, translations, and tests for multi-version browsing
+
 * Sun Jul 26 2026 ErikMN <dnfui@proton.me> - 0.4.3-1
 - Align transaction documentation with prepared dnf5daemon sessions
 - Make repository key trust prompts cancellable
