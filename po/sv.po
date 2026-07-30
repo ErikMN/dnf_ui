@@ -935,6 +935,12 @@ msgstr[1] "Rensade %zu väntande åtgärder."
 msgid "Pending package action is missing its transaction spec."
 msgstr "Väntande paketåtgärd saknar transaktionsspecifikation."
 
+msgid "Pending package action is missing its package identity."
+msgstr "Väntande paketåtgärd saknar paketidentitet."
+
+msgid "Pending package actions contain conflicting package identities."
+msgstr "Väntande paketåtgärder innehåller motstridiga paketidentiteter."
+
 msgid "Unknown pending package action."
 msgstr "Okänd väntande paketåtgärd."
 
