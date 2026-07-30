@@ -207,6 +207,10 @@ package_details_upgrade_override_for_selection(const PackageTableRow &selected,
     return std::nullopt;
   }
 
+  if (selected.row.repo_candidate_is_newest_available) {
+    return std::nullopt;
+  }
+
   PackageRow update_row;
   update_row.nevra = selected.row.repo_candidate_nevra;
   update_row.name = selected.row.name;
