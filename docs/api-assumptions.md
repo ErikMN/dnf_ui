@@ -75,7 +75,7 @@ Maintenance check:
 - If installed-row annotation or daemon-target metadata loading changes,
   verify `package_query.hpp` in the build image and rerun the backend tests.
 
-## dnf5daemon upgrade requests
+## dnf5daemon package action requests
 
 Code:
 
@@ -84,10 +84,15 @@ Code:
 
 Assumption:
 
+- dnf5daemon exposes `install(as, a{sv})`, `upgrade(as, a{sv})`,
+  `downgrade(as, a{sv})`, `remove(as, a{sv})`, and
+  `reinstall(as, a{sv})` on the rpm transaction interface.
 - dnf5daemon `upgrade` with explicit package specs marks those packages for
   upgrade in the daemon session.
 - dnf5daemon `upgrade` with an empty package list prepares its native Upgrade
   All transaction.
+- dnf5daemon `downgrade` with explicit package specs marks those packages for
+  downgrade in the daemon session.
 
 Source:
 
@@ -101,8 +106,12 @@ Why this matters:
   install specs. DNF UI sends the package name and architecture for selected
   upgrades because exact candidate NEVRAs can fail with no match even though the
   package is correctly shown as upgradable.
-- If the resolved preview would remove or replace DNF UI itself, the preview is
-  rejected before the user can apply it. Normal upgrades are allowed.
+- Selected downgrades are different. DNF UI sends the exact selected older NEVRA
+  to the daemon's `downgrade` method because the user chose a specific package
+  version from the table.
+- If the resolved preview would downgrade, remove, or replace DNF UI itself,
+  the preview is rejected before the user can apply it. Normal upgrades are
+  allowed.
 - Do not document this as bit-for-bit equivalence with every possible `dnf`
   command-line configuration, plugin, or option. The maintained guarantee is
   that DNF UI sends the upgrade request through the app's configured backend and
@@ -114,10 +123,13 @@ Tests:
 - pending transaction request builder tests
 - transaction preview tests
 - empty upgrade-all preview test path
+- optional native downgrade preview test path
 
 Maintenance check:
 
-- If upgrade-all behavior changes, verify `goal.hpp`, then test preview and apply in Docker before any native system test.
+- If upgrade, downgrade, or upgrade-all behavior changes, verify the dnf5daemon
+  D-Bus API in the build environment, then test preview and apply in Docker
+  before any native system test.
 
 ## dnf5daemon upgrade target listing
 
@@ -271,7 +283,8 @@ Assumptions:
   and `load_system_repo=false`, then explicitly expires and reloads repositories.
 - Session cleanup uses `org.rpm.dnf.v0.SessionManager.close_session(o) -> (b)`.
 - Package specs are marked on the session through these rpm interface methods:
-  `install(as, a{sv})`, `remove(as, a{sv})`, `reinstall(as, a{sv})`, and `upgrade(as, a{sv})`.
+  `install(as, a{sv})`, `upgrade(as, a{sv})`, `downgrade(as, a{sv})`,
+  `remove(as, a{sv})`, and `reinstall(as, a{sv})`.
 - Preview is resolved through `org.rpm.dnf.v0.Goal.resolve(a{sv}) -> (a(sssa{sv}a{sv})u)`.
 - Resolver result `0` means success, `1` means success with warnings, and `2`
   means resolve failure.
@@ -287,8 +300,8 @@ Assumptions:
 - Signal subscriptions invoke callbacks in the subscribing thread's
   thread-default main context.
 - A dnf5daemon session is tied to the D-Bus connection that created it.
-- DNF UI rejects previews that would remove or replace the running app package.
-  Normal package upgrades are allowed.
+- DNF UI rejects previews that would downgrade, remove, or replace the running
+  app package. Normal package upgrades are allowed.
 - DNF UI rejects previews that would remove or replace `dnf5daemon-server`,
   because later package changes depend on that daemon.
 - The app keeps one shared system bus connection so the session used for preview

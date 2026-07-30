@@ -35,13 +35,24 @@ TEST_CASE("Package query cache key includes search options")
 {
   reset_backend_globals();
 
-  REQUIRE(package_query_cache_key_for("bash", backend_search_options(false, false)) == "name:contains:bash");
+  REQUIRE(package_query_cache_key_for("bash", backend_search_options(false, false)) == "name:contains:latest:bash");
 
-  REQUIRE(package_query_cache_key_for("bash", backend_search_options(false, true)) == "name:exact:bash");
+  REQUIRE(package_query_cache_key_for("bash", backend_search_options(false, true)) == "name:exact:latest:bash");
 
-  REQUIRE(package_query_cache_key_for("bash", backend_search_options(true, false)) == "desc:contains:bash");
+  REQUIRE(package_query_cache_key_for("bash", backend_search_options(true, false)) == "desc:contains:latest:bash");
 
-  REQUIRE(package_query_cache_key_for("bash", backend_search_options(true, true)) == "desc:exact:bash");
+  REQUIRE(package_query_cache_key_for("bash", backend_search_options(true, true)) == "desc:exact:latest:bash");
+
+  REQUIRE(package_query_cache_key_for("bash", backend_search_options(false, false, false)) == "name:contains:all:bash");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that only compact latest-only searches use the in-memory search cache.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package query cache is used only for latest-only searches")
+{
+  REQUIRE(package_query_cache_should_use(backend_search_options(false, false)));
+  REQUIRE_FALSE(package_query_cache_should_use(backend_search_options(false, false, false)));
 }
 
 // -----------------------------------------------------------------------------

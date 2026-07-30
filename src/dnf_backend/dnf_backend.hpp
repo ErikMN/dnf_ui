@@ -74,6 +74,10 @@ struct PackageRow {
   std::string repo_candidate_version;
   std::string repo_candidate_release;
   std::string repo_candidate_repo;
+  // True when the installed row candidate is also the newest available repo row.
+  bool repo_candidate_is_newest_available = false;
+  // True only for the newest available repo row for this package name and architecture.
+  bool is_newest_available = false;
 
   // libdnf EVR comparison adapter.
   const std::string &get_epoch() const
@@ -120,6 +124,7 @@ struct PackageRow {
 enum class PackageInstallState {
   AVAILABLE,
   UPGRADEABLE,
+  DOWNGRADEABLE,
   INSTALLED,
   LOCAL_ONLY,
   INSTALLED_NEWER_THAN_REPO,
@@ -235,6 +240,11 @@ struct TransactionHistoryPage {
   bool has_more = false;
 };
 
+enum class PackageDetailsContext {
+  INSTALLED_CONTEXT,
+  SELECTED_VERSION,
+};
+
 // -----------------------------------------------------------------------------
 // Convert one transaction history action to user-facing text.
 // -----------------------------------------------------------------------------
@@ -265,6 +275,8 @@ bool dnf_backend_history_text_matches_filter_for_tests(const std::string &text, 
 struct DnfBackendSearchOptions {
   bool search_in_description = false;
   bool exact_match = false;
+  // Keep the current one-row-per-package view unless the caller asks for exact versions.
+  bool latest_only = true;
 };
 
 // -----------------------------------------------------------------------------
@@ -324,7 +336,8 @@ std::vector<PackageRow> dnf_backend_get_installed_package_rows_interruptible(GCa
 // -----------------------------------------------------------------------------
 // Query the merged browse view shown by "List Packages".
 // -----------------------------------------------------------------------------
-std::vector<PackageRow> dnf_backend_get_browse_package_rows_interruptible(GCancellable *cancellable);
+std::vector<PackageRow> dnf_backend_get_browse_package_rows_interruptible(const DnfBackendSearchOptions &search_options,
+                                                                          GCancellable *cancellable);
 
 // -----------------------------------------------------------------------------
 // Return available package metadata for exact daemon-selected NEVRAs.
@@ -354,14 +367,21 @@ std::vector<PackageRow> dnf_backend_get_available_package_rows_by_nevra(const st
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_package_info(const std::string &pkg_nevra);
 std::string dnf_backend_get_package_info(const std::string &pkg_nevra, const PackageRow *upgrade_row_override);
+std::string dnf_backend_get_package_info(const std::string &pkg_nevra,
+                                         PackageDetailsContext context,
+                                         const PackageRow *upgrade_row_override = nullptr);
 // -----------------------------------------------------------------------------
 // Return the installed file list for one NEVRA.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_installed_package_files(const std::string &pkg_nevra, size_t max_files_for_display = 1500);
+std::string dnf_backend_get_installed_package_files(const std::string &pkg_nevra,
+                                                    PackageDetailsContext context,
+                                                    size_t max_files_for_display = 1500);
 // -----------------------------------------------------------------------------
 // Return formatted dependency details for one NEVRA.
 // -----------------------------------------------------------------------------
 std::string dnf_backend_get_package_deps(const std::string &pkg_nevra);
+std::string dnf_backend_get_package_deps(const std::string &pkg_nevra, PackageDetailsContext context);
 // -----------------------------------------------------------------------------
 // Return formatted changelog entries for one NEVRA.
 // -----------------------------------------------------------------------------

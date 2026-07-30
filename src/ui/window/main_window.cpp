@@ -190,6 +190,7 @@ create_main_window_ui_state(const AppWidgets *ui)
   widgets->query.status_label = GTK_LABEL(ui->status_label);
   widgets->query.desc_checkbox = GTK_CHECK_BUTTON(ui->desc_checkbox);
   widgets->query.exact_checkbox = GTK_CHECK_BUTTON(ui->exact_checkbox);
+  widgets->query.latest_checkbox = GTK_CHECK_BUTTON(ui->latest_checkbox);
 
   widgets->results.list_scroller = GTK_SCROLLED_WINDOW(ui->scrolled_list);
   widgets->results.inner_paned = GTK_PANED(ui->inner_paned);
@@ -310,6 +311,11 @@ setup_css(MainWindowUiState *widgets)
                                     "  background-color: #f3e5bf; "
                                     "  border-color: #d6b862; "
                                     "  color: #4a3505; "
+                                    "} "
+                                    ".package-status-downgradeable { "
+                                    "  background-color: #eadcf4; "
+                                    "  border-color: #c5a3d9; "
+                                    "  color: #432052; "
                                     "} "
                                     ".package-status-installed-newer { "
                                     "  background-color: #f0ddd6; "

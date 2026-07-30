@@ -60,9 +60,20 @@ package_query_cache_key_for(const std::string &term, const DnfBackendSearchOptio
 {
   std::string key = (options.search_in_description ? "desc:" : "name:");
   key += (options.exact_match ? "exact:" : "contains:");
+  key += (options.latest_only ? "latest:" : "all:");
   key += term;
 
   return key;
+}
+
+// -----------------------------------------------------------------------------
+// Cache only the normal compact search view.
+// All-version searches can be much larger than the current table.
+// -----------------------------------------------------------------------------
+bool
+package_query_cache_should_use(const DnfBackendSearchOptions &options)
+{
+  return options.latest_only;
 }
 
 // -----------------------------------------------------------------------------

@@ -411,10 +411,12 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
   package_details_cancel_active_load(widgets);
   pending_transaction_invalidate_service_preview(widgets);
   widgets->transaction.preview_upgrade_all = request.upgrade_all;
-  DNFUI_TRACE("Transaction preview request start upgrade_all=%d install=%zu upgrade=%zu remove=%zu reinstall=%zu",
+  DNFUI_TRACE("Transaction preview request start upgrade_all=%d install=%zu upgrade=%zu downgrade=%zu remove=%zu "
+              "reinstall=%zu",
               request.upgrade_all ? 1 : 0,
               request.install.size(),
               request.upgrade.size(),
+              request.downgrade.size(),
               request.remove.size(),
               request.reinstall.size());
   ui_helpers_set_status(widgets->query.status_label, _("Preparing transaction preview..."), "blue");
@@ -458,14 +460,16 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
         }
 
         if (td->preview.empty()) {
-          DNFUI_TRACE("Transaction preview request empty upgrade_all=%d install=%zu upgrade=%zu remove=%zu "
-                      "reinstall=%zu path=%s",
-                      td->request.upgrade_all ? 1 : 0,
-                      td->request.install.size(),
-                      td->request.upgrade.size(),
-                      td->request.remove.size(),
-                      td->request.reinstall.size(),
-                      td->transaction_path.c_str());
+          DNFUI_TRACE(
+              "Transaction preview request empty upgrade_all=%d install=%zu upgrade=%zu downgrade=%zu remove=%zu "
+              "reinstall=%zu path=%s",
+              td->request.upgrade_all ? 1 : 0,
+              td->request.install.size(),
+              td->request.upgrade.size(),
+              td->request.downgrade.size(),
+              td->request.remove.size(),
+              td->request.reinstall.size(),
+              td->transaction_path.c_str());
           if (!td->transaction_path.empty()) {
             transaction_service_client_release_request_async(td->transaction_path);
             td->transaction_path.clear();
@@ -511,9 +515,11 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
               },
               cancellable);
         } else if (td) {
-          DNFUI_TRACE("Transaction preview worker start upgrade_all=0 install=%zu upgrade=%zu remove=%zu reinstall=%zu",
+          DNFUI_TRACE("Transaction preview worker start upgrade_all=0 install=%zu upgrade=%zu downgrade=%zu remove=%zu "
+                      "reinstall=%zu",
                       td->request.install.size(),
                       td->request.upgrade.size(),
+                      td->request.downgrade.size(),
                       td->request.remove.size(),
                       td->request.reinstall.size());
           if (!pending_transaction_validate_request(td->request, error)) {

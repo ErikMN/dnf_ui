@@ -50,6 +50,7 @@ color_print "$FMT_GREEN" "*** Running dnf5daemon transaction client tests... ***
   -e DNFUI_TEST_DNF5DAEMON=1 \
   -e DNFUI_TEST_DNF5DAEMON_INSTALL_SPEC="$INSTALL_SPEC" \
   -e DNFUI_TEST_DNF5DAEMON_INSTALL_NAME="$INSTALL_NAME" \
+  -e DNFUI_TEST_DNF5DAEMON_DOWNGRADE_SPEC \
   -v "$HOST_DIR:/workspace" \
   -v "$CACHE_VOLUME_NAME:/var/cache/libdnf5" \
   "$IMAGE_NAME" \

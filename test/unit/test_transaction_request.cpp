@@ -24,6 +24,7 @@ TEST_CASE("Transaction request empty state reflects queued actions")
 
   request.install.push_back("example-install-spec");
   request.upgrade.push_back("example-upgrade-spec");
+  request.downgrade.push_back("example-downgrade-spec");
   request.remove.push_back("example-remove-spec");
   request.reinstall.push_back("example-reinstall-spec");
 
@@ -80,6 +81,20 @@ TEST_CASE("Transaction request validation rejects an empty upgrade package spec"
 }
 
 // -----------------------------------------------------------------------------
+// Verify that validation rejects empty downgrade specs before service work starts.
+// -----------------------------------------------------------------------------
+TEST_CASE("Transaction request validation rejects an empty downgrade package spec")
+{
+  TransactionRequest request;
+  std::string error;
+
+  request.downgrade.push_back("");
+
+  REQUIRE_FALSE(request.validate(error));
+  REQUIRE(error == "Transaction request contains an empty downgrade package spec.");
+}
+
+// -----------------------------------------------------------------------------
 // Verify that validation rejects empty remove specs before service work starts.
 // -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects an empty remove package spec")
@@ -132,7 +147,7 @@ TEST_CASE("Transaction request validation rejects mixed upgrade-all requests")
   std::string error;
 
   request.upgrade_all = true;
-  request.upgrade.push_back("example-upgrade-spec");
+  request.downgrade.push_back("example-downgrade-spec");
 
   REQUIRE_FALSE(request.validate(error));
   REQUIRE(error == "Upgrade all cannot be combined with other package actions.");
@@ -147,6 +162,20 @@ TEST_CASE("Transaction request validation accepts upgrade-all requests")
   std::string error = "stale";
 
   request.upgrade_all = true;
+
+  REQUIRE(request.validate(error));
+  REQUIRE(error.empty());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an explicit downgrade request is valid as a standalone request.
+// -----------------------------------------------------------------------------
+TEST_CASE("Transaction request validation accepts downgrade requests")
+{
+  TransactionRequest request;
+  std::string error = "stale";
+
+  request.downgrade.push_back("example-downgrade-spec");
 
   REQUIRE(request.validate(error));
   REQUIRE(error.empty());
@@ -182,6 +211,21 @@ TEST_CASE("Transaction request validation rejects duplicate package specs")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that validation rejects the same downgrade spec repeated in the downgrade list.
+// -----------------------------------------------------------------------------
+TEST_CASE("Transaction request validation rejects duplicate downgrade package specs")
+{
+  TransactionRequest request;
+  std::string error;
+
+  request.downgrade.push_back("example-downgrade-spec");
+  request.downgrade.push_back("example-downgrade-spec");
+
+  REQUIRE_FALSE(request.validate(error));
+  REQUIRE(error == "Transaction request contains a duplicate downgrade package spec.");
+}
+
+// -----------------------------------------------------------------------------
 // Verify that validation rejects the same package spec in different action lists.
 // -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation rejects conflicting package actions")
@@ -197,6 +241,52 @@ TEST_CASE("Transaction request validation rejects conflicting package actions")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that validation rejects downgrade specs that conflict with another action list.
+// -----------------------------------------------------------------------------
+TEST_CASE("Transaction request validation rejects conflicting downgrade actions")
+{
+  {
+    TransactionRequest request;
+    std::string error;
+    request.install.push_back("example-package-spec");
+    request.downgrade.push_back("example-package-spec");
+
+    REQUIRE_FALSE(request.validate(error));
+    REQUIRE(error == "Transaction request contains conflicting package actions.");
+  }
+
+  {
+    TransactionRequest request;
+    std::string error;
+    request.upgrade.push_back("example-package-spec");
+    request.downgrade.push_back("example-package-spec");
+
+    REQUIRE_FALSE(request.validate(error));
+    REQUIRE(error == "Transaction request contains conflicting package actions.");
+  }
+
+  {
+    TransactionRequest request;
+    std::string error;
+    request.downgrade.push_back("example-package-spec");
+    request.remove.push_back("example-package-spec");
+
+    REQUIRE_FALSE(request.validate(error));
+    REQUIRE(error == "Transaction request contains conflicting package actions.");
+  }
+
+  {
+    TransactionRequest request;
+    std::string error;
+    request.downgrade.push_back("example-package-spec");
+    request.reinstall.push_back("example-package-spec");
+
+    REQUIRE_FALSE(request.validate(error));
+    REQUIRE(error == "Transaction request contains conflicting package actions.");
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Verify that validation accepts normal mixed package action requests.
 // -----------------------------------------------------------------------------
 TEST_CASE("Transaction request validation accepts mixed non empty package specs")
@@ -206,6 +296,7 @@ TEST_CASE("Transaction request validation accepts mixed non empty package specs"
 
   request.install.push_back("example-install-spec");
   request.upgrade.push_back("example-upgrade-spec");
+  request.downgrade.push_back("example-downgrade-spec");
   request.remove.push_back("example-remove-spec");
   request.reinstall.push_back("example-reinstall-spec");
 

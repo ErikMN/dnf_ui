@@ -15,11 +15,13 @@
 // Pending actions for mark --> review --> apply workflow
 // -----------------------------------------------------------------------------
 struct PendingAction {
-  enum Type { INSTALL, UPGRADE, REMOVE, REINSTALL } type;
+  enum Type { INSTALL, UPGRADE, DOWNGRADE, REMOVE, REINSTALL } type;
   // Package row shown in the pending list.
   std::string nevra;
   // Package spec sent to the transaction client.
   std::string transaction_spec;
+  // Package name and architecture used to replace conflicting pending actions.
+  std::string package_key = {};
 };
 
 // -----------------------------------------------------------------------------

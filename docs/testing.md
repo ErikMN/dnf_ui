@@ -44,9 +44,10 @@ Key files:
 These tests protect:
 
 - package search and merge behavior
+- Latest only and all-version package query behavior
 - config file parsing and fallback behavior
 - installed snapshot behavior
-- pending transaction action row selection for install, upgrade, remove, and reinstall
+- pending transaction action row selection for install, upgrade, downgrade, remove, and reinstall
 - package table CSV export formatting
 - package table column text and sorting behavior
 - dnf5daemon transaction preview parsing, upgrade-target parsing, and failure handling
@@ -90,6 +91,9 @@ make dnf5daemontest
 The native dnf5daemon tests may install and remove `cowsay` unless
 `DNFUI_TEST_DNF5DAEMON_INSTALL_SPEC` is set to another package.
 The script restores whether the test package was installed before the run.
+The optional downgrade preview test runs when
+`DNFUI_TEST_DNF5DAEMON_DOWNGRADE_SPEC` names a safe installed package version
+that can be downgraded in the test environment.
 Native apply tests are skipped by default because they require dnf5daemon
 authorization. Run them explicitly with:
 
@@ -212,7 +216,8 @@ MEMCHECK_SMOKE_TIMEOUT=10m make memcheck
 
 ### Package table memory regression check
 
-Use this before releases that change package table storage, package query workers, or List Upgradable row handling:
+Use this before releases that change package table storage, package query
+workers, all-version listing, or List Upgradable row handling:
 
 1. Start DNF UI and record process memory after the first window is idle:
 
@@ -223,14 +228,19 @@ grep -E 'Rss|Pss|Private' "/proc/$pid/smaps_rollup"
 
 2. Run `List Packages` ten times, waiting for each run to finish before recording memory again.
 3. Repeat with `List Installed`, a broad `Search`, and `List Upgradable`.
-4. Alternate `List Upgradable` and `List Packages` a few times to verify old daemon-backed rows are released.
-5. A high but stable value is acceptable. Continued substantial growth after every completed run is a release blocker.
-6. Run `make memcheck-app` once if memory keeps growing or if table row ownership changed.
+4. Repeat Search and List Packages with Latest only disabled.
+5. Alternate Latest only and all-version searches to verify all-version rows do
+   not accumulate outside the visible table.
+6. Alternate `List Upgradable` and `List Packages` a few times to verify old daemon-backed rows are released.
+7. A high but stable value is acceptable. Continued substantial growth after every completed run is a release blocker.
+8. Run `make memcheck-app` once if memory keeps growing or if table row ownership changed.
 
 ## Docker notes
 
 - `make dockerrun` starts a system bus in the container and uses dnf5daemon
-- `make dockerdnf5daemontest` runs upgrade-target listing, preview, apply, remove, reinstall, and failure checks against dnf5daemon
+- `make dockerdnf5daemontest` runs upgrade-target listing, preview, downgrade
+  preview when configured, apply, remove, reinstall, and failure checks against
+  dnf5daemon
 - The dnf5daemon failure checks include applying a prepared session after another
   session changed package state. The stale prepared session must fail and remain
   releasable.
@@ -278,3 +288,26 @@ behavior on native Fedora with a real desktop Polkit prompt.
 
 For package apply behavior, use test packages that are safe to install and
 remove in the test environment.
+
+## Multi-version package browsing checks
+
+Use these checks after changes to Latest only, package queries, package table
+display, or pending action identity:
+
+1. Start with Latest only enabled.
+2. Run Search and List Packages and verify the compact one-row-per-package view.
+3. Disable Latest only and run the same query again.
+4. Verify that distinct exact NEVRAs can appear as separate rows.
+5. Verify that duplicate repository copies of the same exact NEVRA are hidden.
+6. Verify that older repository versions show `Older in repository`.
+7. Verify that intermediate newer versions can be selected for Details but
+   cannot be marked for upgrade.
+8. Verify that the newest available version remains the only normal upgrade
+   target.
+9. Verify that downgradeable rows mark a pending downgrade using the selected
+   exact NEVRA.
+10. Verify that removing or reinstalling one exact installed NEVRA does not
+    change pending actions for another installed NEVRA with the same name and
+    architecture.
+11. Verify that List Installed, List Upgradable, Upgrade All, and Mark Listed
+    Upgrades do not depend on the Latest only checkbox.

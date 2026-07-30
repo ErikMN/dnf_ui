@@ -32,7 +32,8 @@ find_update_pair_from_installed_annotation(PackageRow &installed_out, PackageRow
 
     update_out = candidates.front();
     InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(update_out);
-    if (!resolution.has_installed_row) {
+    if (resolution.exact_installed || !resolution.has_installed_row ||
+        resolution.state != PackageInstallState::UPGRADEABLE) {
       continue;
     }
     installed_out = resolution.installed_row;
@@ -40,6 +41,73 @@ find_update_pair_from_installed_annotation(PackageRow &installed_out, PackageRow
   }
 
   return false;
+}
+
+int
+compare_backend_test_row_evr(const PackageRow &left, const PackageRow &right)
+{
+  int result = dnf_backend_compare_epoch_version_text(left.epoch, left.version, right.epoch, right.version);
+  if (result != 0) {
+    return result;
+  }
+
+  return dnf_backend_compare_rpm_version_text(left.release, right.release);
+}
+
+bool
+find_parallel_installed_versions(PackageRow &older_out, PackageRow &newer_out)
+{
+  auto installed_rows = dnf_backend_get_installed_package_rows_interruptible(nullptr);
+
+  for (size_t i = 0; i < installed_rows.size(); ++i) {
+    for (size_t j = i + 1; j < installed_rows.size(); ++j) {
+      if (installed_rows[i].name_arch_key() != installed_rows[j].name_arch_key() ||
+          installed_rows[i].nevra == installed_rows[j].nevra) {
+        continue;
+      }
+
+      if (compare_backend_test_row_evr(installed_rows[i], installed_rows[j]) <= 0) {
+        older_out = installed_rows[i];
+        newer_out = installed_rows[j];
+      } else {
+        older_out = installed_rows[j];
+        newer_out = installed_rows[i];
+      }
+      return true;
+    }
+  }
+
+  return false;
+}
+
+PackageRow
+make_backend_test_row(const std::string &nevra,
+                      const std::string &name,
+                      const std::string &version,
+                      const std::string &release,
+                      const std::string &arch,
+                      const std::string &repo)
+{
+  PackageRow row;
+  row.nevra = nevra;
+  row.name = name;
+  row.version = version;
+  row.release = release;
+  row.arch = arch;
+  row.repo = repo;
+  return row;
+}
+
+const PackageRow *
+find_backend_test_row_by_nevra(const std::vector<PackageRow> &rows, const std::string &nevra)
+{
+  for (const auto &row : rows) {
+    if (row.nevra == nevra) {
+      return &row;
+    }
+  }
+
+  return nullptr;
 }
 
 } // namespace
@@ -220,7 +288,8 @@ TEST_CASE("Daemon upgrade metadata lookup does not publish installed state")
 {
   reset_backend_globals();
 
-  std::vector<PackageRow> rows = dnf_backend_get_browse_package_rows_interruptible(nullptr);
+  std::vector<PackageRow> rows =
+      dnf_backend_get_browse_package_rows_interruptible(backend_search_options(false, false), nullptr);
   std::string target_nevra;
   for (const auto &row : rows) {
     if (row.repo != "@System") {
@@ -377,6 +446,46 @@ TEST_CASE("Package info formatting can use explicit upgrade details")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that selected-version details describe the exact selected NEVRA.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package info selected-version mode uses selected package metadata")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  PackageRow update_row;
+  if (!find_update_pair_from_installed_annotation(installed_row, update_row)) {
+    SUCCEED("No installed package with a newer repo candidate in the test environment.");
+    return;
+  }
+
+  auto info = dnf_backend_get_package_info(update_row.nevra, PackageDetailsContext::SELECTED_VERSION);
+
+  REQUIRE(info.find("Package ID: " + update_row.nevra) != std::string::npos);
+  REQUIRE(info.find("Package ID: " + installed_row.nevra) == std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installed context keeps exact installed package metadata.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package info installed context keeps exact installed version")
+{
+  reset_backend_globals();
+
+  PackageRow older_row;
+  PackageRow newer_row;
+  if (!find_parallel_installed_versions(older_row, newer_row)) {
+    SUCCEED("No parallel installed package versions in the test environment.");
+    return;
+  }
+
+  auto info = dnf_backend_get_package_info(older_row.nevra);
+
+  REQUIRE(info.find("Package ID: " + older_row.nevra) != std::string::npos);
+  REQUIRE(info.find("Package ID: " + newer_row.nevra) == std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
 // Structured package row metadata tests
 // -----------------------------------------------------------------------------
 
@@ -434,6 +543,195 @@ TEST_CASE("Search results keep one visible EVR per package name and architecture
     INFO(key);
     REQUIRE(versions.size() == 1);
   }
+}
+
+// -----------------------------------------------------------------------------
+// Verify that the default browse view keeps the current latest-only row contract.
+// -----------------------------------------------------------------------------
+TEST_CASE("Browse results keep one latest row per package name and architecture by default")
+{
+  reset_backend_globals();
+
+  auto results = dnf_backend_get_browse_package_rows_interruptible(backend_search_options(false, false), nullptr);
+  REQUIRE(!results.empty());
+
+  std::set<std::string> keys;
+  for (const auto &row : results) {
+    INFO(row.nevra);
+    REQUIRE(keys.insert(row.name_arch_key()).second);
+    if (row.repo != "@System") {
+      REQUIRE(row.is_newest_available);
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Verify that all-version browse rows are exact package versions without duplicate NEVRAs.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version browse results keep one row per exact NEVRA")
+{
+  reset_backend_globals();
+
+  auto results =
+      dnf_backend_get_browse_package_rows_interruptible(backend_search_options(false, false, false), nullptr);
+  REQUIRE(!results.empty());
+
+  std::set<std::string> nevras;
+  for (const auto &row : results) {
+    INFO(row.nevra);
+    REQUIRE(nevras.insert(row.nevra).second);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Verify that all-version browse keeps installed packages visible by exact package ID.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version browse results include every installed NEVRA")
+{
+  reset_backend_globals();
+
+  auto installed = dnf_backend_get_installed_package_rows_interruptible(nullptr);
+  REQUIRE(!installed.empty());
+
+  auto results =
+      dnf_backend_get_browse_package_rows_interruptible(backend_search_options(false, false, false), nullptr);
+  auto result_nevras = package_row_nevras(results);
+
+  for (const auto &row : installed) {
+    INFO(row.nevra);
+    REQUIRE(result_nevras.count(row.nevra) == 1);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Verify that all-version searches return exact package versions without duplicate NEVRAs.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version search results keep one row per exact NEVRA")
+{
+  reset_backend_globals();
+
+  auto results =
+      dnf_backend_search_package_rows_interruptible("bash", backend_search_options(false, false, false), nullptr);
+  REQUIRE(!results.empty());
+
+  std::set<std::string> nevras;
+  for (const auto &row : results) {
+    INFO(row.nevra);
+    REQUIRE(nevras.insert(row.nevra).second);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Verify that exact-version available views keep distinct available EVRs.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version merge keeps distinct available package versions")
+{
+  PackageRow older = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "fedora");
+  PackageRow newer = make_backend_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64", "updates");
+
+  dnf_backend_internal::AvailableViewRows available;
+  available.newest_available_by_name_arch.emplace(newer.name_arch_key(), newer);
+  dnf_backend_internal::add_available_view_row(available, older);
+  dnf_backend_internal::add_available_view_row(available, newer);
+
+  dnf_backend_internal::InstalledQueryResult installed;
+  auto rows = dnf_backend_internal::visible_rows_from_available_view(std::move(available), installed);
+
+  const PackageRow *older_result = find_backend_test_row_by_nevra(rows, older.nevra);
+  const PackageRow *newer_result = find_backend_test_row_by_nevra(rows, newer.nevra);
+
+  REQUIRE(older_result != nullptr);
+  REQUIRE(newer_result != nullptr);
+  REQUIRE_FALSE(older_result->is_newest_available);
+  REQUIRE(newer_result->is_newest_available);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that exact-version available views hide duplicate repository copies.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version merge hides duplicate available repository copies")
+{
+  PackageRow first_repo = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "fedora");
+  PackageRow second_repo = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "updates");
+
+  dnf_backend_internal::AvailableViewRows available;
+  available.newest_available_by_name_arch.emplace(first_repo.name_arch_key(), first_repo);
+  dnf_backend_internal::add_available_view_row(available, first_repo);
+  dnf_backend_internal::add_available_view_row(available, second_repo);
+
+  dnf_backend_internal::InstalledQueryResult installed;
+  auto rows = dnf_backend_internal::visible_rows_from_available_view(std::move(available), installed);
+
+  REQUIRE(rows.size() == 1);
+  REQUIRE(rows.front().nevra == first_repo.nevra);
+  REQUIRE(rows.front().repo == first_repo.repo);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an installed row is compared against the newest visible candidate.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version merge ignores hidden newest candidates for installed row annotation")
+{
+  PackageRow installed_row = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "@System");
+  PackageRow visible_repo_row = make_backend_test_row("demo-1.5-1.x86_64", "demo", "1.5", "1", "x86_64", "fedora");
+  PackageRow hidden_newest_row = make_backend_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64", "updates");
+
+  dnf_backend_internal::AvailableViewRows available;
+  available.newest_available_by_name_arch.emplace(hidden_newest_row.name_arch_key(), hidden_newest_row);
+  dnf_backend_internal::add_available_view_row(available, visible_repo_row);
+
+  dnf_backend_internal::InstalledQueryResult installed;
+  installed.rows = { installed_row };
+  installed.nevras = { installed_row.nevra };
+  installed.rows_by_name_arch.emplace(installed_row.name_arch_key(), installed_row);
+
+  auto rows = dnf_backend_internal::visible_rows_from_available_view(std::move(available), installed);
+  const PackageRow *installed_result = find_backend_test_row_by_nevra(rows, installed_row.nevra);
+
+  REQUIRE(installed_result != nullptr);
+  REQUIRE(installed_result->repo_candidate_relation == PackageRepoCandidateRelation::NEWER);
+  REQUIRE(installed_result->repo_candidate_nevra == visible_repo_row.nevra);
+  REQUIRE(installed_result->repo_candidate_nevra != hidden_newest_row.nevra);
+  REQUIRE_FALSE(installed_result->repo_candidate_is_newest_available);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that exact-version available views keep every installed NEVRA.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version merge keeps distinct installed package versions")
+{
+  PackageRow installed_one = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "@System");
+  PackageRow installed_two = make_backend_test_row("demo-1.1-1.x86_64", "demo", "1.1", "1", "x86_64", "@System");
+
+  dnf_backend_internal::AvailableViewRows available;
+
+  dnf_backend_internal::InstalledQueryResult installed;
+  installed.rows = { installed_one, installed_two };
+  installed.nevras = { installed_one.nevra, installed_two.nevra };
+  installed.rows_by_name_arch.emplace(installed_two.name_arch_key(), installed_two);
+
+  auto rows = dnf_backend_internal::visible_rows_from_available_view(std::move(available), installed);
+
+  REQUIRE(find_backend_test_row_by_nevra(rows, installed_one.nevra) != nullptr);
+  REQUIRE(find_backend_test_row_by_nevra(rows, installed_two.nevra) != nullptr);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that cancelling all-version browse returns no rows and does not publish a partial installed snapshot.
+// -----------------------------------------------------------------------------
+TEST_CASE("Cancelled all-version browse returns no results")
+{
+  reset_backend_globals();
+
+  GCancellable *cancellable = g_cancellable_new();
+  g_cancellable_cancel(cancellable);
+
+  auto results =
+      dnf_backend_get_browse_package_rows_interruptible(backend_search_options(false, false, false), cancellable);
+
+  REQUIRE(results.empty());
+  REQUIRE(dnf_backend_installed_snapshot_size_for_tests() == 0);
+  g_object_unref(cancellable);
 }
 
 // -----------------------------------------------------------------------------
@@ -521,6 +819,25 @@ TEST_CASE("File list query uses installed package for update rows")
 
   REQUIRE(upgrade_files.find("File list available only for installed packages.") == std::string::npos);
   REQUIRE(upgrade_files == installed_files);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that selected-version file lookup does not use another installed version.
+// -----------------------------------------------------------------------------
+TEST_CASE("File list selected-version mode requires exact installed package")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  PackageRow update_row;
+  if (!find_update_pair_from_installed_annotation(installed_row, update_row)) {
+    SUCCEED("No installed package with a newer repo candidate in the test environment.");
+    return;
+  }
+
+  auto files = dnf_backend_get_installed_package_files(update_row.nevra, PackageDetailsContext::SELECTED_VERSION, 1500);
+
+  REQUIRE(files.find("File list available only for installed packages.") != std::string::npos);
 }
 
 // -----------------------------------------------------------------------------
@@ -627,9 +944,9 @@ TEST_CASE("Installed package resolution reports upgradeable rows")
 }
 
 // -----------------------------------------------------------------------------
-// Verify that installed package resolution reports installed rows newer than the selected repo row.
+// Verify that installed package resolution reports older available rows.
 // -----------------------------------------------------------------------------
-TEST_CASE("Installed package resolution reports installed-newer rows")
+TEST_CASE("Installed package resolution reports downgradeable rows")
 {
   reset_backend_globals();
 
@@ -648,7 +965,7 @@ TEST_CASE("Installed package resolution reports installed-newer rows")
 
   InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(older_repo_row);
 
-  REQUIRE(resolution.state == PackageInstallState::INSTALLED_NEWER_THAN_REPO);
+  REQUIRE(resolution.state == PackageInstallState::DOWNGRADEABLE);
   REQUIRE_FALSE(resolution.exact_installed);
   REQUIRE(resolution.has_installed_row);
   REQUIRE(resolution.installed_row.nevra == installed_row.nevra);
@@ -689,6 +1006,8 @@ TEST_CASE("Default install state sort keeps installed rows first")
   REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::LOCAL_ONLY) <
           dnf_backend_get_install_state_sort_rank(PackageInstallState::UPGRADEABLE));
   REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::UPGRADEABLE) <
+          dnf_backend_get_install_state_sort_rank(PackageInstallState::DOWNGRADEABLE));
+  REQUIRE(dnf_backend_get_install_state_sort_rank(PackageInstallState::DOWNGRADEABLE) <
           dnf_backend_get_install_state_sort_rank(PackageInstallState::AVAILABLE));
 }
 

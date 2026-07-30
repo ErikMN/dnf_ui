@@ -38,15 +38,16 @@ release_request_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
 }
 
 // -----------------------------------------------------------------------------
-// Return true if a resolved daemon preview would remove or replace the running DNF UI package.
+// Return true if a resolved daemon preview would downgrade, remove, or replace the running DNF UI package.
 // Normal upgrades are allowed; destructive actions are rejected after dnf5daemon
 // has resolved dependency, obsolete, and replacement actions.
 // -----------------------------------------------------------------------------
 bool
-transaction_preview_removes_or_replaces_self_protected_package(const TransactionPreview &preview)
+transaction_preview_changes_self_protected_package(const TransactionPreview &preview)
 {
   std::vector<std::string> labels;
-  labels.reserve(preview.remove.size() + preview.replaced.size());
+  labels.reserve(preview.downgrade.size() + preview.remove.size() + preview.replaced.size());
+  labels.insert(labels.end(), preview.downgrade.begin(), preview.downgrade.end());
   labels.insert(labels.end(), preview.remove.begin(), preview.remove.end());
   labels.insert(labels.end(), preview.replaced.begin(), preview.replaced.end());
 
@@ -54,7 +55,7 @@ transaction_preview_removes_or_replaces_self_protected_package(const Transaction
 }
 
 // -----------------------------------------------------------------------------
-// Reject daemon previews that would remove or replace DNF UI itself.
+// Reject daemon previews that would downgrade, remove, or replace DNF UI itself.
 // -----------------------------------------------------------------------------
 bool
 verify_preview_keeps_running_app_package(const TransactionPreview &preview,
@@ -64,9 +65,9 @@ verify_preview_keeps_running_app_package(const TransactionPreview &preview,
 {
   try {
     // A fresh app start may not have published the installed snapshot yet.
-    // Refresh from the local rpmdb before checking whether the preview removes or replaces DNF UI itself.
+    // Refresh from the local rpmdb before checking whether the preview modifies DNF UI itself.
     dnf_backend_refresh_installed_nevras();
-    if (transaction_preview_removes_or_replaces_self_protected_package(preview)) {
+    if (transaction_preview_changes_self_protected_package(preview)) {
       error_out = unsafe_message;
       return false;
     }
@@ -126,11 +127,10 @@ bool
 transaction_service_client_testonly_verify_preview_keeps_running_app_package(const TransactionPreview &preview,
                                                                              std::string &error_out)
 {
-  return verify_preview_keeps_running_app_package(
-      preview,
-      error_out,
-      "This transaction would remove or replace DNF UI itself.",
-      "Could not verify whether this transaction would remove or replace DNF UI.");
+  return verify_preview_keeps_running_app_package(preview,
+                                                  error_out,
+                                                  "This transaction would downgrade, remove, or replace DNF UI itself.",
+                                                  "Could not verify whether this transaction would modify DNF UI.");
 }
 #endif
 
@@ -182,8 +182,8 @@ transaction_service_client_preview_request(const TransactionRequest &request,
   if (!verify_preview_keeps_running_app_package(
           preview_out,
           error_out,
-          _("This transaction would remove or replace DNF UI itself."),
-          _("Could not verify whether this transaction would remove or replace DNF UI."))) {
+          _("This transaction would downgrade, remove, or replace DNF UI itself."),
+          _("Could not verify whether this transaction would modify DNF UI."))) {
     std::string release_error;
     transaction_service_client_release_transaction_request(connection, transaction_path_out, release_error);
     transaction_path_out.clear();
@@ -237,11 +237,10 @@ transaction_service_client_preview_upgrade_all_request(TransactionPreview &previ
     transaction_path_out.clear();
   };
 
-  if (!verify_preview_keeps_running_app_package(
-          preview_out,
-          error_out,
-          _("Upgrade All would remove or replace DNF UI itself."),
-          _("Could not verify whether Upgrade All would remove or replace DNF UI."))) {
+  if (!verify_preview_keeps_running_app_package(preview_out,
+                                                error_out,
+                                                _("Upgrade All would downgrade, remove, or replace DNF UI itself."),
+                                                _("Could not verify whether Upgrade All would modify DNF UI."))) {
     release_preview_session();
     g_object_unref(connection);
     return false;

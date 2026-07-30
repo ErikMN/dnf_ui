@@ -66,7 +66,8 @@ void
 package_query_set_displayed_search_query(MainWindowUiState *widgets,
                                          const std::string &term,
                                          bool search_in_description,
-                                         bool exact_match)
+                                         bool exact_match,
+                                         bool latest_only)
 {
   if (!widgets) {
     return;
@@ -77,6 +78,22 @@ package_query_set_displayed_search_query(MainWindowUiState *widgets,
   widgets->query_state.displayed_query.search_term = term;
   widgets->query_state.displayed_query.search_in_description = search_in_description;
   widgets->query_state.displayed_query.exact_match = exact_match;
+  widgets->query_state.displayed_query.latest_only = latest_only;
+}
+
+// -----------------------------------------------------------------------------
+// Remember the List Packages options that produced the current table.
+// -----------------------------------------------------------------------------
+void
+package_query_set_displayed_list_available_query(MainWindowUiState *widgets, bool latest_only)
+{
+  if (!widgets) {
+    return;
+  }
+
+  widgets->query_state.displayed_query = DisplayedPackageQueryState();
+  widgets->query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  widgets->query_state.displayed_query.latest_only = latest_only;
 }
 
 // -----------------------------------------------------------------------------
@@ -151,6 +168,7 @@ package_query_set_idle_controls_sensitive(MainWindowUiState *widgets, bool sensi
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.entry), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.desc_checkbox), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.exact_checkbox), sensitive);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.latest_checkbox), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.history_list), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_button), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_available_button), sensitive);

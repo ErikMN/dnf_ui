@@ -26,6 +26,8 @@ package_table_status_text(PackageInstallState state)
     return _("Installed (newer than repo)");
   case PackageInstallState::UPGRADEABLE:
     return _("Newer in repository");
+  case PackageInstallState::DOWNGRADEABLE:
+    return _("Older in repository");
   case PackageInstallState::AVAILABLE:
   default:
     return _("Available");
@@ -53,13 +55,57 @@ status_cell_icon(GtkWidget *cell)
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the current table uses compact package rows.
+// Compact views show one package stream row, so installed actions are shown on the visible update row.
+// -----------------------------------------------------------------------------
+static bool
+displayed_view_projects_installed_actions(const MainWindowUiState *widgets)
+{
+  if (!widgets) {
+    return false;
+  }
+
+  const DisplayedPackageQueryState &displayed = widgets->query_state.displayed_query;
+  if (displayed.kind == DisplayedPackageQueryKind::LIST_UPGRADEABLE) {
+    return true;
+  }
+  if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
+    return displayed.latest_only;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
 // Return true when one pending action matches one package table row.
 // -----------------------------------------------------------------------------
 static bool
-pending_action_matches_row(const PendingAction &action,
+pending_action_matches_row(const MainWindowUiState *widgets,
+                           const PendingAction &action,
                            const PackageTableRow &row,
                            const PendingTransactionActionRows &action_rows)
 {
+  if (action.type == PendingAction::REMOVE || action.type == PendingAction::REINSTALL) {
+    if (!action_rows.has_installed_row || action.nevra != action_rows.installed_row.nevra) {
+      return false;
+    }
+
+    if (row.row.nevra == action_rows.installed_row.nevra) {
+      return true;
+    }
+
+    return displayed_view_projects_installed_actions(widgets);
+  }
+
+  if (action.type == PendingAction::INSTALL || action.type == PendingAction::DOWNGRADE) {
+    return action.nevra == row.row.nevra;
+  }
+
+  if (action.type != PendingAction::UPGRADE) {
+    return false;
+  }
+
   if (action.nevra == row.row.nevra) {
     return true;
   }
@@ -86,7 +132,7 @@ package_table_pending_action_for_resolved_row(MainWindowUiState *widgets,
                                               PendingAction::Type &out_type)
 {
   for (const auto &action : widgets->transaction.actions) {
-    if (pending_action_matches_row(action, row, action_rows)) {
+    if (pending_action_matches_row(widgets, action, row, action_rows)) {
       out_type = action.type;
       return true;
     }
@@ -105,6 +151,8 @@ package_table_pending_action_status_text(PendingAction::Type action_type, Packag
   case PendingAction::INSTALL:
   case PendingAction::UPGRADE:
     return install_state == PackageInstallState::UPGRADEABLE ? _("Pending Upgrade") : _("Pending Install");
+  case PendingAction::DOWNGRADE:
+    return _("Pending Downgrade");
   case PendingAction::REINSTALL:
     return _("Pending Reinstall");
   case PendingAction::REMOVE:
@@ -123,6 +171,7 @@ package_table_pending_action_css_class_for_type(PendingAction::Type action_type)
   switch (action_type) {
   case PendingAction::INSTALL:
   case PendingAction::UPGRADE:
+  case PendingAction::DOWNGRADE:
     return "package-status-pending-install";
   case PendingAction::REINSTALL:
     return "package-status-pending-reinstall";
@@ -143,6 +192,8 @@ pending_icon_name(PendingAction::Type action_type, PackageInstallState install_s
   case PendingAction::INSTALL:
   case PendingAction::UPGRADE:
     return install_state == PackageInstallState::UPGRADEABLE ? "view-refresh-symbolic" : "list-add-symbolic";
+  case PendingAction::DOWNGRADE:
+    return "view-refresh-symbolic";
   case PendingAction::REINSTALL:
     return "view-refresh-symbolic";
   case PendingAction::REMOVE:
@@ -165,6 +216,8 @@ status_icon_name(PackageInstallState state)
     return "object-select-symbolic";
   case PackageInstallState::UPGRADEABLE:
     return "view-refresh-symbolic";
+  case PackageInstallState::DOWNGRADEABLE:
+    return "view-refresh-symbolic";
   case PackageInstallState::AVAILABLE:
   default:
     return "list-add-symbolic";
@@ -181,6 +234,7 @@ package_table_clear_status_css(GtkWidget *cell)
   gtk_widget_remove_css_class(cell, "package-status-installed");
   gtk_widget_remove_css_class(cell, "package-status-local-only");
   gtk_widget_remove_css_class(cell, "package-status-upgradeable");
+  gtk_widget_remove_css_class(cell, "package-status-downgradeable");
   gtk_widget_remove_css_class(cell, "package-status-installed-newer");
   package_table_clear_pending_action_css(cell);
 
@@ -242,6 +296,8 @@ package_table_update_resolved_status_label(GtkWidget *cell,
       gtk_widget_add_css_class(cell, "package-status-installed-newer");
     } else if (install_state == PackageInstallState::UPGRADEABLE) {
       gtk_widget_add_css_class(cell, "package-status-upgradeable");
+    } else if (install_state == PackageInstallState::DOWNGRADEABLE) {
+      gtk_widget_add_css_class(cell, "package-status-downgradeable");
     } else {
       gtk_widget_add_css_class(cell, "package-status-available");
     }

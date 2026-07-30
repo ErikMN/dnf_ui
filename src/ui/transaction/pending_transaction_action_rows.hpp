@@ -16,17 +16,20 @@
 #include "dnf5daemon_client/transaction_service_client.hpp"
 #include "ui/transaction/pending_transaction_state.hpp"
 
+#include <set>
 #include <vector>
 
 struct PendingTransactionActionRows {
   PackageInstallState state = PackageInstallState::AVAILABLE;
   bool install_is_upgrade = false;
+  bool install_is_downgrade = false;
   bool has_install_row = false;
   bool has_installed_row = false;
   // True when the installed package that would be modified owns the running app.
   bool self_protected = false;
   // Fast UI check only. This does not prove that reinstall is available from repositories.
   bool can_try_reinstall = false;
+  std::string package_key;
   std::string upgrade_spec;
   PackageRow install_row;
   PackageRow installed_row;
@@ -52,11 +55,40 @@ bool pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> 
                                                      const TransactionServiceUpgradeTarget *upgrade_target,
                                                      uint64_t upgrade_generation);
 // -----------------------------------------------------------------------------
+// Add or replace one pending upgrade unless this package identity was already handled.
+// Returns false when the row is not a valid upgrade candidate or the package identity was already marked.
+// -----------------------------------------------------------------------------
+bool pending_transaction_mark_unique_upgrade_action(std::vector<PendingAction> &actions,
+                                                    std::set<std::string> &marked_package_keys,
+                                                    const PendingTransactionActionRows &rows);
+// -----------------------------------------------------------------------------
+// Add or replace one pending install, upgrade, or downgrade action from resolved rows.
+// Returns false when the row has no install-button action.
+// -----------------------------------------------------------------------------
+bool pending_transaction_mark_install_side_action(std::vector<PendingAction> &actions,
+                                                  const PendingTransactionActionRows &rows);
+// -----------------------------------------------------------------------------
+// Add or replace one pending remove action from resolved rows.
+// Returns false when the row has no installed package action.
+// -----------------------------------------------------------------------------
+bool pending_transaction_mark_remove_action(std::vector<PendingAction> &actions,
+                                            const PendingTransactionActionRows &rows);
+// -----------------------------------------------------------------------------
+// Add or replace one pending reinstall action from resolved rows.
+// Returns false when the row has no installed package action.
+// -----------------------------------------------------------------------------
+bool pending_transaction_mark_reinstall_action(std::vector<PendingAction> &actions,
+                                               const PendingTransactionActionRows &rows);
+// -----------------------------------------------------------------------------
 // Return true when self-protection should block the install button path.
 // A normal upgrade is allowed because dnf5daemon still resolves the final preview.
 // -----------------------------------------------------------------------------
 bool pending_transaction_install_action_blocked_by_self_protection(const PendingTransactionActionRows &rows,
                                                                    bool self_protected);
+// -----------------------------------------------------------------------------
+// Return true when activating this visible row should use the remove action.
+// -----------------------------------------------------------------------------
+bool pending_transaction_activation_should_remove(const PackageRow &selected, const PendingTransactionActionRows &rows);
 
 // -----------------------------------------------------------------------------
 // EOF

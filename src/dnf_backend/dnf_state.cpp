@@ -117,8 +117,11 @@ resolve_installed_package_locked(const PackageRow &row)
     return resolution;
   }
 
-  if (libdnf5::rpm::evrcmp(row, resolution.installed_row) > 0) {
+  int cmp = libdnf5::rpm::evrcmp(row, resolution.installed_row);
+  if (cmp > 0) {
     resolution.state = PackageInstallState::UPGRADEABLE;
+  } else if (cmp < 0) {
+    resolution.state = PackageInstallState::DOWNGRADEABLE;
   } else {
     resolution.state = PackageInstallState::INSTALLED_NEWER_THAN_REPO;
   }
@@ -290,9 +293,11 @@ dnf_backend_get_install_state_sort_rank(PackageInstallState state)
     return 2;
   case PackageInstallState::UPGRADEABLE:
     return 3;
+  case PackageInstallState::DOWNGRADEABLE:
+    return 4;
   case PackageInstallState::AVAILABLE:
   default:
-    return 4;
+    return 5;
   }
 }
 

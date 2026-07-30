@@ -73,6 +73,11 @@ remove_test_package
 run_daemon_test "dnf5daemon client previews upgrade-all requests"
 remove_test_package
 
+if [ -n "${DNFUI_TEST_DNF5DAEMON_DOWNGRADE_SPEC:-}" ]; then
+  run_daemon_test "dnf5daemon client previews downgrade requests"
+  remove_test_package
+fi
+
 run_daemon_test "dnf5daemon client lists upgrade targets"
 remove_test_package
 

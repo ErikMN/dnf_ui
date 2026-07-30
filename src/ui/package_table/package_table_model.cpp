@@ -123,7 +123,10 @@ package_table_fill_item_display_values(PackageItem &item, const InstalledPackage
     return;
   }
 
-  if (!resolution.exact_installed && resolution.has_installed_row) {
+  const bool newest_actionable_upgrade =
+      resolution.state == PackageInstallState::UPGRADEABLE && item.row.is_newest_available;
+
+  if (!resolution.exact_installed && resolution.has_installed_row && newest_actionable_upgrade) {
     // The table column is named Version, so keep it aligned with the Info tab Version field.
     values.version = resolution.installed_row.version;
     values.release = resolution.installed_row.release;
@@ -131,7 +134,8 @@ package_table_fill_item_display_values(PackageItem &item, const InstalledPackage
     item.current_evr = sort_evr_from_row(resolution.installed_row);
   }
 
-  if (resolution.state == PackageInstallState::UPGRADEABLE) {
+  if (resolution.state == PackageInstallState::UPGRADEABLE &&
+      (resolution.exact_installed || newest_actionable_upgrade)) {
     values.update_version =
         item.row.repo_candidate_version.empty() ? item.row.version : item.row.repo_candidate_version;
     values.update_release =

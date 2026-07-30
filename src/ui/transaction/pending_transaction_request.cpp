@@ -10,6 +10,7 @@
 #include "i18n.hpp"
 
 #include <exception>
+#include <set>
 
 namespace {
 
@@ -20,6 +21,24 @@ struct PendingRequestBaseDropGuard {
   }
 };
 
+// -----------------------------------------------------------------------------
+// Return true when one pending action is queued by the install button path.
+// -----------------------------------------------------------------------------
+static bool
+pending_action_is_install_side(PendingAction::Type type)
+{
+  return type == PendingAction::INSTALL || type == PendingAction::UPGRADE || type == PendingAction::DOWNGRADE;
+}
+
+// -----------------------------------------------------------------------------
+// Return true when one pending action changes an installed package directly.
+// -----------------------------------------------------------------------------
+static bool
+pending_action_is_installed_side(PendingAction::Type type)
+{
+  return type == PendingAction::REMOVE || type == PendingAction::REINSTALL;
+}
+
 }
 
 // -----------------------------------------------------------------------------
@@ -29,29 +48,79 @@ static bool
 build_pending_transaction_specs(const std::vector<PendingAction> &actions,
                                 std::vector<std::string> &install,
                                 std::vector<std::string> &upgrade,
+                                std::vector<std::string> &downgrade,
                                 std::vector<std::string> &remove,
                                 std::vector<std::string> &reinstall,
                                 std::string &error_out)
 {
   install.clear();
   upgrade.clear();
+  downgrade.clear();
   remove.clear();
   reinstall.clear();
   error_out.clear();
 
   install.reserve(actions.size());
   upgrade.reserve(actions.size());
+  downgrade.reserve(actions.size());
   remove.reserve(actions.size());
   reinstall.reserve(actions.size());
 
+  std::set<std::string> install_side_keys;
+  std::set<std::string> installed_side_keys;
+
   for (const auto &action : actions) {
+    if (!pending_action_is_install_side(action.type) && !pending_action_is_installed_side(action.type)) {
+      install.clear();
+      upgrade.clear();
+      downgrade.clear();
+      remove.clear();
+      reinstall.clear();
+      error_out = _("Unknown pending package action.");
+      return false;
+    }
+
     if (action.transaction_spec.empty()) {
       install.clear();
       upgrade.clear();
+      downgrade.clear();
       remove.clear();
       reinstall.clear();
       error_out = _("Pending package action is missing its transaction spec.");
       return false;
+    }
+
+    if (action.package_key.empty()) {
+      install.clear();
+      upgrade.clear();
+      downgrade.clear();
+      remove.clear();
+      reinstall.clear();
+      error_out = _("Pending package action is missing its package identity.");
+      return false;
+    }
+
+    if (pending_action_is_install_side(action.type)) {
+      if (installed_side_keys.count(action.package_key) > 0 || !install_side_keys.insert(action.package_key).second) {
+        install.clear();
+        upgrade.clear();
+        downgrade.clear();
+        remove.clear();
+        reinstall.clear();
+        error_out = _("Pending package actions contain conflicting package identities.");
+        return false;
+      }
+    } else if (pending_action_is_installed_side(action.type)) {
+      if (install_side_keys.count(action.package_key) > 0) {
+        install.clear();
+        upgrade.clear();
+        downgrade.clear();
+        remove.clear();
+        reinstall.clear();
+        error_out = _("Pending package actions contain conflicting package identities.");
+        return false;
+      }
+      installed_side_keys.insert(action.package_key);
     }
 
     switch (action.type) {
@@ -61,6 +130,9 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
     case PendingAction::UPGRADE:
       upgrade.push_back(action.transaction_spec);
       break;
+    case PendingAction::DOWNGRADE:
+      downgrade.push_back(action.transaction_spec);
+      break;
     case PendingAction::REMOVE:
       remove.push_back(action.transaction_spec);
       break;
@@ -68,11 +140,6 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
       reinstall.push_back(action.transaction_spec);
       break;
     default:
-      install.clear();
-      upgrade.clear();
-      remove.clear();
-      reinstall.clear();
-      error_out = _("Unknown pending package action.");
       return false;
     }
   }
@@ -90,11 +157,11 @@ pending_transaction_build_request(const std::vector<PendingAction> &actions,
 {
   request.upgrade_all = false;
   return build_pending_transaction_specs(
-      actions, request.install, request.upgrade, request.remove, request.reinstall, error_out);
+      actions, request.install, request.upgrade, request.downgrade, request.remove, request.reinstall, error_out);
 }
 
 // -----------------------------------------------------------------------------
-// Reject direct remove or reinstall requests for the package owning the running GUI.
+// Reject direct downgrade, remove, or reinstall requests for the package owning the running GUI.
 // Selected upgrades are allowed here and checked again after dnf5daemon resolves the preview.
 // -----------------------------------------------------------------------------
 bool
@@ -103,6 +170,13 @@ pending_transaction_validate_request(const TransactionRequest &request, std::str
   PendingRequestBaseDropGuard base_drop_guard;
 
   try {
+    for (const auto &spec : request.downgrade) {
+      if (dnf_backend_is_self_protected_transaction_spec(spec)) {
+        error_out = _("DNF UI cannot downgrade the package that owns the running application while it is running.");
+        return false;
+      }
+    }
+
     for (const auto &spec : request.remove) {
       // Re-check remove specs so stale UI state or bypassed button sensitivity cannot remove the running app.
       if (dnf_backend_is_self_protected_transaction_spec(spec)) {

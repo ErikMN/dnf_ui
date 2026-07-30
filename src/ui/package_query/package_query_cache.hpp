@@ -18,6 +18,10 @@
 // -----------------------------------------------------------------------------
 std::string package_query_cache_key_for(const std::string &term, const DnfBackendSearchOptions &options);
 // -----------------------------------------------------------------------------
+// Return true when a search result should use the small in-memory cache.
+// -----------------------------------------------------------------------------
+bool package_query_cache_should_use(const DnfBackendSearchOptions &options);
+// -----------------------------------------------------------------------------
 // Clear all cached package query results.
 // -----------------------------------------------------------------------------
 void package_query_cache_clear();
