@@ -61,20 +61,7 @@ status_cell_icon(GtkWidget *cell)
 static bool
 displayed_view_projects_installed_actions(const MainWindowUiState *widgets)
 {
-  if (!widgets) {
-    return false;
-  }
-
-  const DisplayedPackageQueryState &displayed = widgets->query_state.displayed_query;
-  if (displayed.kind == DisplayedPackageQueryKind::LIST_UPGRADEABLE) {
-    return true;
-  }
-  if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
-      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
-    return displayed.latest_only;
-  }
-
-  return false;
+  return widgets && displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
 }
 
 // -----------------------------------------------------------------------------

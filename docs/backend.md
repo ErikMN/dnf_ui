@@ -248,12 +248,15 @@ dependencies, and changelog use the installed counterpart when it is known. The
 Info tab uses the attached daemon target for the upgradable version line instead
 of asking libdnf5 to choose a separate candidate.
 
-Normal newest-upgrade rows also use installed context for Info, Files, and
-Dependencies so they keep the same presentation as Latest only mode. Exact
-selected-version rows use selected-version context instead. That lets older
-repository versions and intermediate newer versions show their own Info,
-Dependencies, and Changelog entries, while Files stays available only when that
-exact NEVRA is installed.
+Newest upgrade rows in compact Search and List Packages views use installed
+context for Info, Files, and Dependencies so they match the installed version
+and Update Version columns. List Upgradable rows also use installed context
+because dnf5daemon provides the upgrade target.
+
+When Latest only is disabled, each available row uses selected-version context,
+including the globally newest available version. This makes Info, Dependencies,
+and Changelog describe the exact selected NEVRA. Files remains available only
+when that exact NEVRA is installed.
 
 ## Transactions
 

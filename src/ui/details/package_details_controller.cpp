@@ -174,7 +174,9 @@ selected_package_status_text(MainWindowUiState *widgets,
 // Return the package version context used by the details tabs.
 // -----------------------------------------------------------------------------
 static PackageDetailsContext
-package_details_context_for_selection(const PackageTableRow &selected, const InstalledPackageResolution &resolution)
+package_details_context_for_selection(const MainWindowUiState *widgets,
+                                      const PackageTableRow &selected,
+                                      const InstalledPackageResolution &resolution)
 {
   if (selected.upgrade_target()) {
     return PackageDetailsContext::INSTALLED_CONTEXT;
@@ -184,7 +186,9 @@ package_details_context_for_selection(const PackageTableRow &selected, const Ins
     return PackageDetailsContext::INSTALLED_CONTEXT;
   }
 
-  if (resolution.state == PackageInstallState::UPGRADEABLE && selected.row.is_newest_available) {
+  const bool compact_view = widgets && displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+
+  if (compact_view && resolution.state == PackageInstallState::UPGRADEABLE && selected.row.is_newest_available) {
     return PackageDetailsContext::INSTALLED_CONTEXT;
   }
 
@@ -574,7 +578,7 @@ load_selected_package_details_page(MainWindowUiState *widgets, DeferredDetailsPa
     return;
   }
   InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(selected.row);
-  PackageDetailsContext details_context = package_details_context_for_selection(selected, resolution);
+  PackageDetailsContext details_context = package_details_context_for_selection(widgets, selected, resolution);
 
   DeferredDetailsUiState ui = deferred_details_ui_state(widgets, page);
   if (!ui.buffer || !ui.loaded_nevra || !ui.cancellable || *ui.cancellable ||
@@ -632,7 +636,7 @@ package_details_load_selected_package_info(MainWindowUiState *widgets, const Pac
 
   std::string details_query_nevra = selected.row.nevra;
   InstalledPackageResolution selected_resolution = dnf_backend_resolve_installed_package(selected.row);
-  PackageDetailsContext details_context = package_details_context_for_selection(selected, selected_resolution);
+  PackageDetailsContext details_context = package_details_context_for_selection(widgets, selected, selected_resolution);
   std::optional<PackageRow> upgrade_row_override =
       package_details_upgrade_override_for_selection(selected, selected_resolution);
   if (selected.upgrade_target() && selected_resolution.has_installed_row) {

@@ -58,7 +58,9 @@ PackageTableRow package_table_row_from_item(const PackageItem &item);
 void package_table_fill_item_status(MainWindowUiState *widgets,
                                     PackageItem &item,
                                     const InstalledPackageResolution &resolution);
-void package_table_fill_item_display_values(PackageItem &item, const InstalledPackageResolution &resolution);
+void package_table_fill_item_display_values(PackageItem &item,
+                                            const InstalledPackageResolution &resolution,
+                                            bool compact_view);
 
 std::string package_table_column_text(const PackageItem &item, PackageColumnKind kind);
 int package_table_column_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_data);

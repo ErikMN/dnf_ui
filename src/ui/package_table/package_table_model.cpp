@@ -92,7 +92,9 @@ package_table_fill_item_status(MainWindowUiState *widgets,
 // Snapshot display values that depend on installed-package state.
 // -----------------------------------------------------------------------------
 void
-package_table_fill_item_display_values(PackageItem &item, const InstalledPackageResolution &resolution)
+package_table_fill_item_display_values(PackageItem &item,
+                                       const InstalledPackageResolution &resolution,
+                                       bool compact_view)
 {
   PackageTableDisplayValues values {
     .version = item.row.version,
@@ -126,7 +128,10 @@ package_table_fill_item_display_values(PackageItem &item, const InstalledPackage
   const bool newest_actionable_upgrade =
       resolution.state == PackageInstallState::UPGRADEABLE && item.row.is_newest_available;
 
-  if (!resolution.exact_installed && resolution.has_installed_row && newest_actionable_upgrade) {
+  const bool project_available_upgrade =
+      compact_view && !resolution.exact_installed && resolution.has_installed_row && newest_actionable_upgrade;
+
+  if (project_available_upgrade) {
     // The table column is named Version, so keep it aligned with the Info tab Version field.
     values.version = resolution.installed_row.version;
     values.release = resolution.installed_row.release;
@@ -135,7 +140,7 @@ package_table_fill_item_display_values(PackageItem &item, const InstalledPackage
   }
 
   if (resolution.state == PackageInstallState::UPGRADEABLE &&
-      (resolution.exact_installed || newest_actionable_upgrade)) {
+      (resolution.exact_installed || project_available_upgrade)) {
     values.update_version =
         item.row.repo_candidate_version.empty() ? item.row.version : item.row.repo_candidate_version;
     values.update_release =
@@ -165,6 +170,15 @@ package_table_fill_item_display_values(PackageItem &item, const InstalledPackage
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the current table uses compact package rows.
+// -----------------------------------------------------------------------------
+static bool
+package_table_uses_compact_rows(const MainWindowUiState *widgets)
+{
+  return widgets && displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+}
+
+// -----------------------------------------------------------------------------
 // Wrap one package row in a GObject so GTK list models can sort and select it.
 // -----------------------------------------------------------------------------
 GObject *
@@ -174,13 +188,16 @@ make_package_object(MainWindowUiState *widgets, const PackageRow &row)
   auto *item = new PackageItem;
   item->row = row;
   InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item->row);
-  package_table_fill_item_display_values(*item, resolution);
+  package_table_fill_item_display_values(*item, resolution, package_table_uses_compact_rows(widgets));
   package_table_fill_item_status(widgets, *item, resolution);
   g_object_set_qdata_full(obj, package_row_quark(), item, +[](gpointer p) { delete static_cast<PackageItem *>(p); });
 
   return obj;
 }
 
+// -----------------------------------------------------------------------------
+// Wrap one package row in a GObject so the ColumnView can sort and select rows without owning backend data directly.
+// -----------------------------------------------------------------------------
 GObject *
 make_package_object(MainWindowUiState *widgets, const PackageTableRow &row)
 {
@@ -189,7 +206,7 @@ make_package_object(MainWindowUiState *widgets, const PackageTableRow &row)
   item->row = row.row;
   item->daemon_upgrade = row.daemon_upgrade;
   InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item->row);
-  package_table_fill_item_display_values(*item, resolution);
+  package_table_fill_item_display_values(*item, resolution, package_table_uses_compact_rows(widgets));
   package_table_fill_item_status(widgets, *item, resolution);
   g_object_set_qdata_full(obj, package_row_quark(), item, +[](gpointer p) { delete static_cast<PackageItem *>(p); });
 

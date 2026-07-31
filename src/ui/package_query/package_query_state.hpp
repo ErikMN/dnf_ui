@@ -35,6 +35,24 @@ struct DisplayedPackageQueryState {
 };
 
 // -----------------------------------------------------------------------------
+// Return true when the displayed package table uses one compact row per package stream.
+// -----------------------------------------------------------------------------
+inline bool
+displayed_package_query_uses_compact_rows(const DisplayedPackageQueryState &displayed)
+{
+  if (displayed.kind == DisplayedPackageQueryKind::LIST_UPGRADEABLE) {
+    return true;
+  }
+
+  if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
+    return displayed.latest_only;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
 // Runtime state for the active background package query flow
 // -----------------------------------------------------------------------------
 struct PackageQueryState {
