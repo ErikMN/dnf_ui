@@ -35,6 +35,27 @@ package_table_status_text(PackageInstallState state)
 }
 
 // -----------------------------------------------------------------------------
+// Return display text for one package table row after action rows have been resolved.
+// -----------------------------------------------------------------------------
+const char *
+package_table_status_text_for_resolved_row(const PackageTableRow &row,
+                                           const PendingTransactionActionRows &action_rows,
+                                           bool exact_available_rows)
+{
+  if (action_rows.state == PackageInstallState::UPGRADEABLE && exact_available_rows) {
+    if (action_rows.has_installed_row && row.row.nevra == action_rows.installed_row.nevra) {
+      return _("Installed, update available");
+    }
+
+    if (action_rows.has_install_row && row.row.nevra == action_rows.install_row.nevra) {
+      return _("Available update");
+    }
+  }
+
+  return package_table_status_text(action_rows.state);
+}
+
+// -----------------------------------------------------------------------------
 // Return the text label inside a Status cell.
 // -----------------------------------------------------------------------------
 static GtkWidget *
@@ -55,13 +76,30 @@ status_cell_icon(GtkWidget *cell)
 }
 
 // -----------------------------------------------------------------------------
-// Return true when the current table uses compact package rows.
-// Compact views show one package stream row, so installed actions are shown on the visible update row.
+// Return true when the current table may show installed-row actions on update rows.
 // -----------------------------------------------------------------------------
 static bool
 displayed_view_projects_installed_actions(const MainWindowUiState *widgets)
 {
   return widgets && displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+}
+
+// -----------------------------------------------------------------------------
+// Return true when the current table may show upgrade actions on installed rows.
+// -----------------------------------------------------------------------------
+static bool
+displayed_view_projects_upgrade_actions(const MainWindowUiState *widgets)
+{
+  return widgets && displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
+}
+
+// -----------------------------------------------------------------------------
+// Return true when the current table shows exact available repository rows.
+// -----------------------------------------------------------------------------
+static bool
+displayed_view_uses_exact_available_rows(const MainWindowUiState *widgets)
+{
+  return widgets && displayed_package_query_uses_exact_available_rows(widgets->query_state.displayed_query);
 }
 
 // -----------------------------------------------------------------------------
@@ -100,10 +138,16 @@ pending_action_matches_row(const MainWindowUiState *widgets,
   }
 
   if (action_rows.has_install_row && action.nevra == action_rows.install_row.nevra) {
-    return true;
+    return pending_transaction_selection_allows_install_action(
+        row.row, action_rows, displayed_view_projects_upgrade_actions(widgets));
   }
 
-  return action_rows.has_installed_row && action.nevra == action_rows.installed_row.nevra;
+  if (action_rows.has_installed_row && action.nevra == action_rows.installed_row.nevra) {
+    return pending_transaction_selection_allows_install_action(
+        row.row, action_rows, displayed_view_projects_upgrade_actions(widgets));
+  }
+
+  return false;
 }
 
 // -----------------------------------------------------------------------------
@@ -218,6 +262,7 @@ package_table_clear_status_css(GtkWidget *cell)
   gtk_widget_remove_css_class(cell, "package-status-installed");
   gtk_widget_remove_css_class(cell, "package-status-local-only");
   gtk_widget_remove_css_class(cell, "package-status-upgradeable");
+  gtk_widget_remove_css_class(cell, "package-status-installed-upgradeable");
   gtk_widget_remove_css_class(cell, "package-status-downgradeable");
   gtk_widget_remove_css_class(cell, "package-status-installed-newer");
   package_table_clear_pending_action_css(cell);
@@ -248,8 +293,9 @@ package_table_update_resolved_status_label(GtkWidget *cell,
                                            const PendingTransactionActionRows &action_rows)
 {
   PackageInstallState install_state = action_rows.state;
+  const bool exact_available_rows = displayed_view_uses_exact_available_rows(widgets);
 
-  const char *text = package_table_status_text(install_state);
+  const char *text = package_table_status_text_for_resolved_row(row, action_rows, exact_available_rows);
   const char *icon_name = status_icon_name(install_state);
   PendingAction::Type action_type;
   bool has_pending_action = package_table_pending_action_for_resolved_row(widgets, row, action_rows, action_type);
@@ -279,7 +325,11 @@ package_table_update_resolved_status_label(GtkWidget *cell,
     } else if (install_state == PackageInstallState::INSTALLED_NEWER_THAN_REPO) {
       gtk_widget_add_css_class(cell, "package-status-installed-newer");
     } else if (install_state == PackageInstallState::UPGRADEABLE) {
-      gtk_widget_add_css_class(cell, "package-status-upgradeable");
+      if (exact_available_rows && action_rows.has_installed_row && row.row.nevra == action_rows.installed_row.nevra) {
+        gtk_widget_add_css_class(cell, "package-status-installed-upgradeable");
+      } else {
+        gtk_widget_add_css_class(cell, "package-status-upgradeable");
+      }
     } else if (install_state == PackageInstallState::DOWNGRADEABLE) {
       gtk_widget_add_css_class(cell, "package-status-downgradeable");
     } else {

@@ -99,6 +99,8 @@ Packages in the compact one-row-per-package view. When disabled, those two
 queries show exact package versions. Older repository versions can then be
 inspected and marked for downgrade. Intermediate newer versions remain visible
 for inspection, but only the newest available version can be marked for upgrade.
+All-version views use separate Status labels for the installed row and the available update row.
+This keeps the rows from looking like the same action target.
 List Installed and List Upgradable do not use this checkbox.
 
 The bottom bar shows the visible row count on the left and the last completed

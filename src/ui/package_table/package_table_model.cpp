@@ -61,6 +61,24 @@ sort_evr_from_daemon_target(const TransactionServiceUpgradeTarget &target)
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the current table uses compact package rows.
+// -----------------------------------------------------------------------------
+static bool
+package_table_uses_compact_rows(const MainWindowUiState *widgets)
+{
+  return widgets && displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+}
+
+// -----------------------------------------------------------------------------
+// Return true when the current table shows exact available repository rows.
+// -----------------------------------------------------------------------------
+static bool
+package_table_uses_exact_available_rows(const MainWindowUiState *widgets)
+{
+  return widgets && displayed_package_query_uses_exact_available_rows(widgets->query_state.displayed_query);
+}
+
+// -----------------------------------------------------------------------------
 // Snapshot the visible status text and its sort order for one package row.
 // -----------------------------------------------------------------------------
 void
@@ -85,7 +103,8 @@ package_table_fill_item_status(MainWindowUiState *widgets,
     return;
   }
 
-  item.status_text = package_table_status_text(install_state);
+  item.status_text = package_table_status_text_for_resolved_row(
+      table_row, action_rows, package_table_uses_exact_available_rows(widgets));
 }
 
 // -----------------------------------------------------------------------------
@@ -167,15 +186,6 @@ package_table_fill_item_display_values(PackageItem &item,
   } else {
     item.display_values.reset();
   }
-}
-
-// -----------------------------------------------------------------------------
-// Return true when the current table uses compact package rows.
-// -----------------------------------------------------------------------------
-static bool
-package_table_uses_compact_rows(const MainWindowUiState *widgets)
-{
-  return widgets && displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
 }
 
 // -----------------------------------------------------------------------------

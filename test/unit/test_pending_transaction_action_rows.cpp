@@ -6,6 +6,7 @@
 
 #include "test_utils.hpp"
 #include "upgrade/daemon_upgrade_state.hpp"
+#include "ui/package_query/package_query_state.hpp"
 #include "ui/transaction/pending_transaction_action_rows.hpp"
 
 #include <optional>
@@ -46,6 +47,32 @@ make_test_upgrade_target(const char *nevra,
   target.full_nevra = nevra;
   target.repo_id = "updates";
   return target;
+}
+
+// -----------------------------------------------------------------------------
+// Verify the view rules used by upgrade action projection.
+// -----------------------------------------------------------------------------
+TEST_CASE("Displayed package query state separates compact rows from upgrade projection")
+{
+  DisplayedPackageQueryState displayed;
+
+  displayed.kind = DisplayedPackageQueryKind::LIST_INSTALLED;
+  displayed.latest_only = false;
+  REQUIRE_FALSE(displayed_package_query_uses_compact_rows(displayed));
+  REQUIRE(displayed_package_query_projects_upgrade_actions(displayed));
+  REQUIRE_FALSE(displayed_package_query_uses_exact_available_rows(displayed));
+
+  displayed.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  displayed.latest_only = false;
+  REQUIRE_FALSE(displayed_package_query_uses_compact_rows(displayed));
+  REQUIRE_FALSE(displayed_package_query_projects_upgrade_actions(displayed));
+  REQUIRE(displayed_package_query_uses_exact_available_rows(displayed));
+
+  displayed.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  displayed.latest_only = true;
+  REQUIRE(displayed_package_query_uses_compact_rows(displayed));
+  REQUIRE(displayed_package_query_projects_upgrade_actions(displayed));
+  REQUIRE_FALSE(displayed_package_query_uses_exact_available_rows(displayed));
 }
 
 // -----------------------------------------------------------------------------
@@ -414,7 +441,7 @@ TEST_CASE("Pending transaction action rows reject stale daemon upgrade target")
   REQUIRE_FALSE(rows.has_install_row);
 
   std::vector<PendingAction> actions;
-  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, update, &target, snapshot.generation));
+  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, update, &target, snapshot.generation, false));
   REQUIRE(actions.empty());
 }
 
@@ -441,7 +468,8 @@ TEST_CASE("Pending transaction upgrade marking uses daemon target")
   DaemonUpgradeSnapshot snapshot = state.snapshot();
 
   std::vector<PendingAction> actions;
-  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, update_metadata, &target, snapshot.generation));
+  REQUIRE(
+      pending_transaction_mark_upgrade_action_for_row(actions, update_metadata, &target, snapshot.generation, false));
 
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
@@ -565,10 +593,10 @@ TEST_CASE("Pending transaction bulk upgrade marking ignores non upgrade rows")
 
   std::vector<PendingAction> actions;
 
-  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, update, nullptr, 0));
-  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, intermediate, nullptr, 0));
-  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, downgrade, nullptr, 0));
-  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, available, nullptr, 0));
+  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, update, nullptr, 0, false));
+  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, intermediate, nullptr, 0, false));
+  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, downgrade, nullptr, 0, false));
+  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, available, nullptr, 0, false));
 
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
@@ -593,7 +621,7 @@ TEST_CASE("Pending transaction bulk upgrade marking replaces existing package ac
     { PendingAction::REMOVE, installed.nevra, installed.nevra, installed.name_arch_key() },
   };
 
-  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, update, nullptr, 0));
+  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, update, nullptr, 0, false));
 
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
@@ -619,7 +647,7 @@ TEST_CASE("Pending transaction upgrade marking replaces stale upgrade candidate"
     { PendingAction::UPGRADE, old_update.nevra, "demo.x86_64" },
   };
 
-  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, new_update, nullptr, 0));
+  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, new_update, nullptr, 0, false));
 
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
@@ -651,10 +679,10 @@ TEST_CASE("Pending transaction bulk upgrade marking deduplicates package identit
   std::set<std::string> marked_package_keys;
   size_t marked_count = 0;
 
-  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, installed_rows)) {
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, installed, installed_rows, true)) {
     ++marked_count;
   }
-  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, update_rows)) {
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, update, update_rows, true)) {
     ++marked_count;
   }
 
@@ -663,6 +691,73 @@ TEST_CASE("Pending transaction bulk upgrade marking deduplicates package identit
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
   REQUIRE(actions[0].nevra == update.nevra);
+  REQUIRE(actions[0].transaction_spec == "demo.x86_64");
+  REQUIRE(actions[0].package_key == installed.name_arch_key());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that all-version bulk marking only uses the exact available upgrade row.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction all-version bulk upgrade marking uses exact row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
+
+  PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows installed_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows update_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0);
+
+  std::vector<PendingAction> actions;
+  std::set<std::string> marked_package_keys;
+  size_t marked_count = 0;
+
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, installed, installed_rows, false)) {
+    ++marked_count;
+  }
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, update, update_rows, false)) {
+    ++marked_count;
+  }
+
+  REQUIRE(marked_count == 1);
+  REQUIRE(marked_package_keys.size() == 1);
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::UPGRADE);
+  REQUIRE(actions[0].nevra == update.nevra);
+  REQUIRE(actions[0].transaction_spec == "demo.x86_64");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that List Installed bulk marking can use the installed row's upgrade target.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction list installed bulk upgrade marking uses installed row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+
+  std::vector<PendingAction> actions;
+  std::set<std::string> marked_package_keys;
+
+  REQUIRE(pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, installed, rows, true));
+
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::UPGRADE);
+  REQUIRE(actions[0].nevra == installed.repo_candidate_nevra);
   REQUIRE(actions[0].transaction_spec == "demo.x86_64");
   REQUIRE(actions[0].package_key == installed.name_arch_key());
 }

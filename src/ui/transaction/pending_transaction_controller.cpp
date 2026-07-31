@@ -72,7 +72,9 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
   // Resolve the package ID to queue before adding an install or upgrade action.
   PendingTransactionActionRows action_rows =
       pending_transaction_action_rows_for_selection(pkg, selected.upgrade_target(), selected.upgrade_generation());
-  if (!action_rows.has_install_row) {
+  const bool projects_upgrade_actions =
+      displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
+  if (!pending_transaction_selection_allows_install_action(pkg, action_rows, projects_upgrade_actions)) {
     ui_helpers_set_status(
         widgets->query.status_label, _("No install, upgrade, or downgrade action is available."), "gray");
     return;
@@ -277,13 +279,15 @@ pending_transaction_on_mark_listed_upgrades_button_clicked(GtkButton *, gpointer
   }
 
   std::vector<PackageTableRow> rows = package_table_get_displayed_packages(widgets);
+  const bool projects_upgrade_actions =
+      displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
   std::set<std::string> marked_package_keys;
   size_t marked_count = 0;
   for (const auto &row : rows) {
     PendingTransactionActionRows action_rows =
         pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
     if (pending_transaction_mark_unique_upgrade_action(
-            widgets->transaction.actions, marked_package_keys, action_rows)) {
+            widgets->transaction.actions, marked_package_keys, row.row, action_rows, projects_upgrade_actions)) {
       ++marked_count;
     }
   }

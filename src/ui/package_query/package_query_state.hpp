@@ -53,6 +53,39 @@ displayed_package_query_uses_compact_rows(const DisplayedPackageQueryState &disp
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the displayed package table may project upgrade actions onto installed rows.
+// -----------------------------------------------------------------------------
+inline bool
+displayed_package_query_projects_upgrade_actions(const DisplayedPackageQueryState &displayed)
+{
+  if (displayed.kind == DisplayedPackageQueryKind::LIST_INSTALLED ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_UPGRADEABLE) {
+    return true;
+  }
+
+  if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
+    return displayed.latest_only;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Return true when available repository rows are shown as exact package versions.
+// -----------------------------------------------------------------------------
+inline bool
+displayed_package_query_uses_exact_available_rows(const DisplayedPackageQueryState &displayed)
+{
+  if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
+    return !displayed.latest_only;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
 // Runtime state for the active background package query flow
 // -----------------------------------------------------------------------------
 struct PackageQueryState {

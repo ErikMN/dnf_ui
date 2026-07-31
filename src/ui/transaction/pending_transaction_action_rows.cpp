@@ -199,6 +199,25 @@ pending_transaction_action_rows_for_selection(const PackageRow &selected,
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the selected row may use its install, upgrade, or downgrade action.
+// -----------------------------------------------------------------------------
+bool
+pending_transaction_selection_allows_install_action(const PackageRow &selected,
+                                                    const PendingTransactionActionRows &rows,
+                                                    bool projects_upgrade_actions)
+{
+  if (!rows.has_install_row) {
+    return false;
+  }
+
+  if (selected.nevra == rows.install_row.nevra) {
+    return true;
+  }
+
+  return projects_upgrade_actions && rows.install_is_upgrade;
+}
+
+// -----------------------------------------------------------------------------
 // Return true when the selected row may modify its installed package.
 // -----------------------------------------------------------------------------
 bool
@@ -302,11 +321,13 @@ bool
 pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> &actions,
                                                 const PackageRow &row,
                                                 const TransactionServiceUpgradeTarget *upgrade_target,
-                                                uint64_t upgrade_generation)
+                                                uint64_t upgrade_generation,
+                                                bool projects_upgrade_actions)
 {
   PendingTransactionActionRows action_rows =
       pending_transaction_action_rows_for_selection(row, upgrade_target, upgrade_generation);
-  if (!action_rows.install_is_upgrade || !action_rows.has_install_row) {
+  if (!action_rows.install_is_upgrade ||
+      !pending_transaction_selection_allows_install_action(row, action_rows, projects_upgrade_actions)) {
     return false;
   }
 
@@ -323,9 +344,15 @@ pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> &acti
 bool
 pending_transaction_mark_unique_upgrade_action(std::vector<PendingAction> &actions,
                                                std::set<std::string> &marked_package_keys,
-                                               const PendingTransactionActionRows &action_rows)
+                                               const PackageRow &selected,
+                                               const PendingTransactionActionRows &action_rows,
+                                               bool projects_upgrade_actions)
 {
-  if (!action_rows.install_is_upgrade || !action_rows.has_install_row || action_rows.package_key.empty()) {
+  if (!action_rows.install_is_upgrade || action_rows.package_key.empty()) {
+    return false;
+  }
+
+  if (!pending_transaction_selection_allows_install_action(selected, action_rows, projects_upgrade_actions)) {
     return false;
   }
 

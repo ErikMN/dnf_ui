@@ -49,6 +49,14 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
                                                        const InstalledPackageResolution &installed_resolution);
 
 // -----------------------------------------------------------------------------
+// Return true when the selected row may use its install, upgrade, or downgrade action.
+// Some views may project an upgrade onto the installed package stream.
+// Exact-version available rows only allow the row whose package ID is the action target.
+// -----------------------------------------------------------------------------
+bool pending_transaction_selection_allows_install_action(const PackageRow &selected,
+                                                         const PendingTransactionActionRows &rows,
+                                                         bool projects_upgrade_actions);
+// -----------------------------------------------------------------------------
 // Return true when the selected row may modify its installed package.
 // -----------------------------------------------------------------------------
 bool pending_transaction_selection_allows_installed_action(const PackageRow &selected,
@@ -62,14 +70,17 @@ bool pending_transaction_selection_allows_installed_action(const PackageRow &sel
 bool pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> &actions,
                                                      const PackageRow &row,
                                                      const TransactionServiceUpgradeTarget *upgrade_target,
-                                                     uint64_t upgrade_generation);
+                                                     uint64_t upgrade_generation,
+                                                     bool projects_upgrade_actions);
 // -----------------------------------------------------------------------------
 // Add or replace one pending upgrade unless this package identity was already handled.
 // Returns false when the row is not a valid upgrade candidate or the package identity was already marked.
 // -----------------------------------------------------------------------------
 bool pending_transaction_mark_unique_upgrade_action(std::vector<PendingAction> &actions,
                                                     std::set<std::string> &marked_package_keys,
-                                                    const PendingTransactionActionRows &rows);
+                                                    const PackageRow &selected,
+                                                    const PendingTransactionActionRows &rows,
+                                                    bool projects_upgrade_actions);
 // -----------------------------------------------------------------------------
 // Add or replace one pending install, upgrade, or downgrade action from resolved rows.
 // Returns false when the row has no install-button action.

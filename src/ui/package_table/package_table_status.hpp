@@ -20,6 +20,12 @@ struct MainWindowUiState;
 // -----------------------------------------------------------------------------
 const char *package_table_status_text(PackageInstallState state);
 // -----------------------------------------------------------------------------
+// Return display text for one package table row after action rows have been resolved.
+// -----------------------------------------------------------------------------
+const char *package_table_status_text_for_resolved_row(const PackageTableRow &row,
+                                                       const PendingTransactionActionRows &action_rows,
+                                                       bool exact_available_rows);
+// -----------------------------------------------------------------------------
 // Return the pending action for one package table row using already-resolved action rows.
 // -----------------------------------------------------------------------------
 bool package_table_pending_action_for_resolved_row(MainWindowUiState *widgets,

@@ -878,45 +878,48 @@ finish_package_table_view(MainWindowUiState *widgets,
     restore_package_view_sort_state(view, sort_kind, sort_order);
   }
 
-  g_signal_connect(view,
-                   "activate",
-                   G_CALLBACK(+[](GtkColumnView *self, guint position, gpointer user_data) {
-                     MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
-                     GtkSelectionModel *model = gtk_column_view_get_model(self);
-                     if (!model || !GTK_IS_SINGLE_SELECTION(model)) {
-                       return;
-                     }
+  g_signal_connect(
+      view,
+      "activate",
+      G_CALLBACK(+[](GtkColumnView *self, guint position, gpointer user_data) {
+        MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
+        GtkSelectionModel *model = gtk_column_view_get_model(self);
+        if (!model || !GTK_IS_SINGLE_SELECTION(model)) {
+          return;
+        }
 
-                     GtkSingleSelection *sel = GTK_SINGLE_SELECTION(model);
-                     GListModel *items_model = gtk_single_selection_get_model(sel);
-                     if (!items_model) {
-                       return;
-                     }
+        GtkSingleSelection *sel = GTK_SINGLE_SELECTION(model);
+        GListModel *items_model = gtk_single_selection_get_model(sel);
+        if (!items_model) {
+          return;
+        }
 
-                     GObject *obj = G_OBJECT(g_list_model_get_item(items_model, position));
-                     if (!obj) {
-                       return;
-                     }
+        GObject *obj = G_OBJECT(g_list_model_get_item(items_model, position));
+        if (!obj) {
+          return;
+        }
 
-                     const PackageItem *item = package_item_from_object(obj);
-                     if (!item) {
-                       g_object_unref(obj);
-                       return;
-                     }
+        const PackageItem *item = package_item_from_object(obj);
+        if (!item) {
+          g_object_unref(obj);
+          return;
+        }
 
-                     PackageTableRow row = package_table_row_from_item(*item);
-                     PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
-                         row.row, row.upgrade_target(), row.upgrade_generation());
-                     gtk_single_selection_set_selected(sel, position);
-                     g_object_unref(obj);
+        PackageTableRow row = package_table_row_from_item(*item);
+        PendingTransactionActionRows action_rows =
+            pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
+        const bool projects_upgrade_actions =
+            displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
+        gtk_single_selection_set_selected(sel, position);
+        g_object_unref(obj);
 
-                     if (action_rows.has_install_row) {
-                       pending_transaction_on_install_button_clicked(nullptr, widgets);
-                     } else if (pending_transaction_activation_should_remove(row.row, action_rows)) {
-                       pending_transaction_on_remove_button_clicked(nullptr, widgets);
-                     }
-                   }),
-                   widgets);
+        if (pending_transaction_selection_allows_install_action(row.row, action_rows, projects_upgrade_actions)) {
+          pending_transaction_on_install_button_clicked(nullptr, widgets);
+        } else if (pending_transaction_activation_should_remove(row.row, action_rows)) {
+          pending_transaction_on_remove_button_clicked(nullptr, widgets);
+        }
+      }),
+      widgets);
 
   gtk_scrolled_window_set_child(widgets->results.list_scroller, GTK_WIDGET(view));
 

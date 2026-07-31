@@ -167,7 +167,9 @@ selected_package_status_text(MainWindowUiState *widgets,
     return package_table_pending_action_status_text(action_type, action_rows.state);
   }
 
-  return package_table_status_text(action_rows.state);
+  const bool exact_available_rows =
+      widgets && displayed_package_query_uses_exact_available_rows(widgets->query_state.displayed_query);
+  return package_table_status_text_for_resolved_row(selected, action_rows, exact_available_rows);
 }
 
 // -----------------------------------------------------------------------------
@@ -318,6 +320,10 @@ update_selected_package_actions(MainWindowUiState *widgets,
   // Compact upgrade rows represent the installed package stream.
   // Exact-version rows expose installed actions only when that exact NEVRA is installed.
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+  const bool projects_upgrade_actions =
+      displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
+  const bool allows_install_action =
+      pending_transaction_selection_allows_install_action(selected.row, action_rows, projects_upgrade_actions);
   const bool allows_installed_action =
       pending_transaction_selection_allows_installed_action(selected.row, action_rows, compact_view);
 
@@ -326,14 +332,13 @@ update_selected_package_actions(MainWindowUiState *widgets,
   bool install_blocked =
       pending_transaction_install_action_blocked_by_self_protection(action_rows, action_rows.self_protected);
 
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button),
-                           action_rows.has_install_row && !install_blocked);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), allows_install_action && !install_blocked);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button),
                            allows_installed_action && !action_rows.self_protected);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
                            allows_installed_action && action_rows.can_try_reinstall && !action_rows.self_protected);
 
-  const std::string install_nevra = action_rows.has_install_row ? action_rows.install_row.nevra : selected.row.nevra;
+  const std::string install_nevra = allows_install_action ? action_rows.install_row.nevra : "";
   const std::string installed_action_nevra = allows_installed_action ? action_rows.installed_row.nevra : "";
 
   ui_helpers_update_action_button_labels_for_selection(widgets,

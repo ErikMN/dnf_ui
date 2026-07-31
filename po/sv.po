@@ -700,6 +700,12 @@ msgstr "Installerat (nyare än förrådet)"
 msgid "Newer in repository"
 msgstr "Nyare i förråd"
 
+msgid "Installed, update available"
+msgstr "Installerat, uppdatering finns"
+
+msgid "Available update"
+msgstr "Tillgänglig uppdatering"
+
 msgid "Older in repository"
 msgstr "Äldre i förråd"
 

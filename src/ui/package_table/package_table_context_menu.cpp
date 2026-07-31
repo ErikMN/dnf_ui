@@ -67,6 +67,10 @@ package_table_show_context_menu(GtkWidget *anchor,
       pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
 
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+  const bool projects_upgrade_actions =
+      displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
+  const bool allows_install_action =
+      pending_transaction_selection_allows_install_action(row.row, action_rows, projects_upgrade_actions);
   const bool allows_installed_action =
       pending_transaction_selection_allows_installed_action(row.row, action_rows, compact_view);
 
@@ -79,7 +83,7 @@ package_table_show_context_menu(GtkWidget *anchor,
   bool can_reinstall = allows_installed_action && action_rows.can_try_reinstall && !action_rows.self_protected;
 
   PendingAction::Type pending_install_type;
-  bool has_pending_install = action_rows.has_install_row &&
+  bool has_pending_install = allows_install_action &&
       pending_transaction_get_action_type(widgets, action_rows.install_row.nevra, pending_install_type);
 
   PendingAction::Type pending_destructive_type;
@@ -116,7 +120,7 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              install_label,
-                             action_rows.has_install_row && !install_blocked,
+                             allows_install_action && !install_blocked,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
