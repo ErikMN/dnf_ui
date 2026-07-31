@@ -78,11 +78,8 @@ pending_action_matches_row(const MainWindowUiState *widgets,
       return false;
     }
 
-    if (row.row.nevra == action_rows.installed_row.nevra) {
-      return true;
-    }
-
-    return displayed_view_projects_installed_actions(widgets);
+    return pending_transaction_selection_allows_installed_action(
+        row.row, action_rows, displayed_view_projects_installed_actions(widgets));
   }
 
   if (action.type == PendingAction::INSTALL || action.type == PendingAction::DOWNGRADE) {

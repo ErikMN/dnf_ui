@@ -315,8 +315,12 @@ update_selected_package_actions(MainWindowUiState *widgets,
   PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_resolved_selection(
       selected.row, selected.upgrade_target(), selected.upgrade_generation(), resolution);
 
-  // Install and upgrade use the available package row.
-  // Remove and reinstall use the installed package row.
+  // Compact upgrade rows represent the installed package stream.
+  // Exact-version rows expose installed actions only when that exact NEVRA is installed.
+  const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+  const bool allows_installed_action =
+      pending_transaction_selection_allows_installed_action(selected.row, action_rows, compact_view);
+
   // Self-protected packages stay viewable, but the running app must not remove
   // or replace the RPM that owns its current executable.
   bool install_blocked =
@@ -325,17 +329,17 @@ update_selected_package_actions(MainWindowUiState *widgets,
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button),
                            action_rows.has_install_row && !install_blocked);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button),
-                           action_rows.has_installed_row && !action_rows.self_protected);
+                           allows_installed_action && !action_rows.self_protected);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
-                           action_rows.can_try_reinstall && !action_rows.self_protected);
+                           allows_installed_action && action_rows.can_try_reinstall && !action_rows.self_protected);
 
   const std::string install_nevra = action_rows.has_install_row ? action_rows.install_row.nevra : selected.row.nevra;
-  const std::string installed_nevra =
-      action_rows.has_installed_row ? action_rows.installed_row.nevra : selected.row.nevra;
+  const std::string installed_action_nevra = allows_installed_action ? action_rows.installed_row.nevra : "";
+
   ui_helpers_update_action_button_labels_for_selection(widgets,
                                                        install_nevra,
-                                                       installed_nevra,
-                                                       installed_nevra,
+                                                       installed_action_nevra,
+                                                       installed_action_nevra,
                                                        action_rows.install_is_upgrade,
                                                        action_rows.install_is_downgrade);
   set_details_status_text(widgets, selected_package_status_text(widgets, selected, action_rows));

@@ -152,9 +152,9 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
   PendingTransactionActionRows action_rows =
       pending_transaction_action_rows_for_selection(pkg, selected.upgrade_target(), selected.upgrade_generation());
 
-  // Removal checks the installed row.
-  // Upgrade candidates use the currently installed NEVRA for removal.
-  if (!action_rows.has_installed_row) {
+  const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+
+  if (!pending_transaction_selection_allows_installed_action(pkg, action_rows, compact_view)) {
     ui_helpers_set_status(widgets->query.status_label, _("Package is not installed."), "gray");
     return;
   }
@@ -215,8 +215,9 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
   PendingTransactionActionRows action_rows =
       pending_transaction_action_rows_for_selection(pkg, selected.upgrade_target(), selected.upgrade_generation());
 
-  // Reinstall must check the installed package, not the visible update row.
-  if (!action_rows.has_installed_row) {
+  const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+
+  if (!pending_transaction_selection_allows_installed_action(pkg, action_rows, compact_view)) {
     ui_helpers_set_status(widgets->query.status_label, _("Package is not installed."), "gray");
     return;
   }

@@ -35,6 +35,7 @@ struct PendingTransactionActionRows {
   PackageRow installed_row;
 };
 
+// -----------------------------------------------------------------------------
 // Resolve package IDs for a row that may carry a dnf5daemon upgrade target.
 // -----------------------------------------------------------------------------
 PendingTransactionActionRows
@@ -46,6 +47,14 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
                                                        const TransactionServiceUpgradeTarget *upgrade_target,
                                                        uint64_t upgrade_generation,
                                                        const InstalledPackageResolution &installed_resolution);
+
+// -----------------------------------------------------------------------------
+// Return true when the selected row may modify its installed package.
+// -----------------------------------------------------------------------------
+bool pending_transaction_selection_allows_installed_action(const PackageRow &selected,
+                                                           const PendingTransactionActionRows &rows,
+                                                           bool compact_view);
+
 // -----------------------------------------------------------------------------
 // Add or replace one pending upgrade action from a package row with an optional daemon target.
 // Returns false when the row is not an upgrade candidate.

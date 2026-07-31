@@ -199,6 +199,25 @@ pending_transaction_action_rows_for_selection(const PackageRow &selected,
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the selected row may modify its installed package.
+// -----------------------------------------------------------------------------
+bool
+pending_transaction_selection_allows_installed_action(const PackageRow &selected,
+                                                      const PendingTransactionActionRows &rows,
+                                                      bool compact_view)
+{
+  if (!rows.has_installed_row) {
+    return false;
+  }
+
+  if (selected.nevra == rows.installed_row.nevra) {
+    return true;
+  }
+
+  return compact_view && rows.install_is_upgrade;
+}
+
+// -----------------------------------------------------------------------------
 // Add or replace one pending install, upgrade, or downgrade action from resolved rows.
 // -----------------------------------------------------------------------------
 bool

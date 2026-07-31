@@ -65,6 +65,8 @@ TEST_CASE("Pending transaction action rows resolve plain available package")
   REQUIRE(rows.install_row.nevra == available.nevra);
   REQUIRE_FALSE(rows.has_installed_row);
   REQUIRE_FALSE(rows.can_try_reinstall);
+  REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(available, rows, false));
+  REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(available, rows, true));
 }
 
 // -----------------------------------------------------------------------------
@@ -140,7 +142,7 @@ TEST_CASE("Pending transaction action rows allow protected upgrade action")
 }
 
 // -----------------------------------------------------------------------------
-// Verify that an update candidate upgrades itself but removes the installed row.
+// Verify that an update candidate exposes installed actions only in compact views.
 // -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction action rows resolve upgrade from available update row")
 {
@@ -162,6 +164,8 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE(rows.can_try_reinstall);
+  REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(update, rows, false));
+  REQUIRE(pending_transaction_selection_allows_installed_action(update, rows, true));
 }
 
 // -----------------------------------------------------------------------------
@@ -202,10 +206,11 @@ TEST_CASE("Pending transaction activation removes exact installed row only")
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE(pending_transaction_activation_should_remove(installed, rows));
+  REQUIRE(pending_transaction_selection_allows_installed_action(installed, rows, false));
 }
 
 // -----------------------------------------------------------------------------
-// Verify that an older available row can be marked as an exact downgrade.
+// Verify that an older available row can be downgraded but cannot modify the installed row.
 // -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction action rows resolve downgrade from available row")
 {
@@ -234,6 +239,8 @@ TEST_CASE("Pending transaction action rows resolve downgrade from available row"
   REQUIRE(actions[0].nevra == older.nevra);
   REQUIRE(actions[0].transaction_spec == older.nevra);
   REQUIRE(actions[0].package_key == older.name_arch_key());
+  REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(older, rows, false));
+  REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(older, rows, true));
 }
 
 // -----------------------------------------------------------------------------

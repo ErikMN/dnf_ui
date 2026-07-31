@@ -728,6 +728,9 @@ TEST_CASE("Package table sorter keeps existing item values after installed snaps
   reset_backend_globals();
 
   MainWindowUiState widgets;
+  widgets.query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  widgets.query_state.displayed_query.latest_only = true;
+
   PackageRow installed = make_table_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 

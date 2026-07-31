@@ -247,8 +247,13 @@ as `Upgrade`. The pending row keeps the visible update NEVRA so the user can
 jump back to the selected package, but the transaction request uses a package
 name and architecture spec for dnf5daemon. The table keeps the installed version
 in the Version column and shows the candidate version in the Update column. The
-Repo column shows the repository that provides the update. Remove and reinstall
-act on the currently installed NEVRA for the same package name and architecture.
+Repo column shows the repository that provides the update.
+
+In compact Search, List Packages, and List Upgradable views, Remove and
+Reinstall act on the currently installed NEVRA represented by the compact
+upgrade row. When Latest only is disabled, available rows represent exact
+repository versions, so Remove and Reinstall are available only on exact
+installed rows.
 
 Downgradeable rows are older repository versions of an installed package. The
 main action becomes `Downgrade`, and the transaction request uses the selected

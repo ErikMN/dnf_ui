@@ -66,20 +66,24 @@ package_table_show_context_menu(GtkWidget *anchor,
   PendingTransactionActionRows action_rows =
       pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
 
+  const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
+  const bool allows_installed_action =
+      pending_transaction_selection_allows_installed_action(row.row, action_rows, compact_view);
+
   // Match the main action buttons: install and upgrade use the available row,
   // while remove and reinstall use the installed row.
   // Keep the running app visible in the table, but block context-menu actions
   // that would modify the package currently owning this executable.
   bool install_blocked =
       pending_transaction_install_action_blocked_by_self_protection(action_rows, action_rows.self_protected);
-  bool can_reinstall = action_rows.can_try_reinstall && !action_rows.self_protected;
+  bool can_reinstall = allows_installed_action && action_rows.can_try_reinstall && !action_rows.self_protected;
 
   PendingAction::Type pending_install_type;
   bool has_pending_install = action_rows.has_install_row &&
       pending_transaction_get_action_type(widgets, action_rows.install_row.nevra, pending_install_type);
 
   PendingAction::Type pending_destructive_type;
-  bool has_pending_destructive = action_rows.has_installed_row &&
+  bool has_pending_destructive = allows_installed_action &&
       pending_transaction_get_action_type(widgets, action_rows.installed_row.nevra, pending_destructive_type);
 
   // Keep context menu actions aligned with the normal package action buttons.
@@ -123,7 +127,7 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              remove_label,
-                             action_rows.has_installed_row && !action_rows.self_protected,
+                             allows_installed_action && !action_rows.self_protected,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
