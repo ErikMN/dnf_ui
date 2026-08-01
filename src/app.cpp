@@ -167,11 +167,6 @@ static void
 on_installed_refresh_task(GTask *task, gpointer, gpointer, GCancellable *)
 {
   try {
-    // Drop the shared Base before scanning installed packages.
-    // A query waiting on the Base lock must not acquire an older Base after
-    // this refresh publishes newer installed state.
-    BaseManager::instance().drop_cached_base();
-
     const bool changed = dnf_backend_refresh_installed_nevras();
     if (changed) {
       DaemonUpgradeState::instance().mark_stale();

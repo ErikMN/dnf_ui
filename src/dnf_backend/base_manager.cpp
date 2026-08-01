@@ -573,6 +573,24 @@ BaseManager::acquire_system_only_read()
 }
 
 // -----------------------------------------------------------------------------
+// Drop the cached Base and return serialized access to a temporary system-only Base.
+// -----------------------------------------------------------------------------
+TemporaryBaseRead
+BaseManager::acquire_system_only_read_after_dropping_cached_base()
+{
+  std::unique_lock<std::mutex> lock(base_mutex);
+  base_ptr.reset();
+  trim_free_heap();
+
+  auto built_base = build_initialized_system_only_base();
+  if (!built_base) {
+    throw std::runtime_error("System-only backend initialization failed (Base is null).");
+  }
+
+  return TemporaryBaseRead(std::move(built_base), BaseGuard(std::move(lock)));
+}
+
+// -----------------------------------------------------------------------------
 // Build a private Base for long read-only history scans.
 // The manager lock protects Base construction and destruction, but not the scan.
 // This keeps normal package queries from waiting behind a long history search.

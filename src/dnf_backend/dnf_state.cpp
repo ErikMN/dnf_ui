@@ -257,7 +257,7 @@ dnf_backend_refresh_installed_nevras()
   InstalledQueryResult installed;
   std::set<std::string> protected_names;
   {
-    auto read = BaseManager::instance().acquire_system_only_read();
+    auto read = BaseManager::instance().acquire_system_only_read_after_dropping_cached_base();
     libdnf5::Base &base = *read.base;
     const DnfBackendSearchOptions search_options {};
     installed = collect_installed_rows(base, nullptr, search_options);

@@ -117,6 +117,10 @@ class BaseManager {
   // -----------------------------------------------------------------------------
   TemporaryBaseRead acquire_system_only_read();
   // -----------------------------------------------------------------------------
+  // Drop the cached Base and return serialized access to a temporary system-only Base.
+  // -----------------------------------------------------------------------------
+  TemporaryBaseRead acquire_system_only_read_after_dropping_cached_base();
+  // -----------------------------------------------------------------------------
   // Build a private Base for long read-only history scans.
   // -----------------------------------------------------------------------------
   std::shared_ptr<libdnf5::Base> build_transaction_history_base();

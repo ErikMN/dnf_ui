@@ -5,10 +5,14 @@
 #include "dnf_backend/dnf_internal.hpp"
 #include "test_utils.hpp"
 
+#include <atomic>
+#include <chrono>
+#include <future>
 #include <map>
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -145,6 +149,49 @@ TEST_CASE("BaseManager cache drop keeps generation stable")
   mgr.drop_cached_base();
 
   REQUIRE(mgr.current_generation() == before);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installed-state refresh reads cannot race with cached Base recreation.
+// -----------------------------------------------------------------------------
+TEST_CASE("BaseManager system-only refresh read drops cached Base before holding the lock")
+{
+  auto &mgr = BaseManager::instance();
+  mgr.reset_for_tests();
+
+  REQUIRE_NOTHROW(mgr.acquire_read());
+  REQUIRE(mgr.has_cached_base_for_tests());
+
+  {
+    auto read = mgr.acquire_system_only_read_after_dropping_cached_base();
+    REQUIRE(read.base != nullptr);
+  }
+
+  REQUIRE_FALSE(mgr.has_cached_base_for_tests());
+
+  std::atomic<bool> reader_started { false };
+  std::future<bool> normal_reader;
+  {
+    auto read = mgr.acquire_system_only_read_after_dropping_cached_base();
+    REQUIRE(read.base != nullptr);
+
+    normal_reader = std::async(std::launch::async, [&mgr, &reader_started]() {
+      reader_started.store(true, std::memory_order_relaxed);
+      auto normal_read = mgr.acquire_read();
+      (void)normal_read;
+      return true;
+    });
+
+    for (int i = 0; i < 50 && !reader_started.load(std::memory_order_relaxed); ++i) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    REQUIRE(reader_started.load(std::memory_order_relaxed));
+    REQUIRE(normal_reader.wait_for(std::chrono::milliseconds(50)) == std::future_status::timeout);
+  }
+
+  REQUIRE(normal_reader.get());
+  REQUIRE(mgr.has_cached_base_for_tests());
+  mgr.reset_for_tests();
 }
 
 // -----------------------------------------------------------------------------
