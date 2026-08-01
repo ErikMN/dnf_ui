@@ -140,6 +140,9 @@ The controller records the selected NEVRA and backend generation when each task
 starts. If the selected package changes or the backend generation changes, the
 old result is ignored. Changelog loading can require extra repository metadata
 for available packages, so it remains separate from the normal Info load.
+Rows with an upgrade target keep a separate changelog target so the Changelog
+tab can show the update package while Info, Files, and Dependencies still use
+the installed package context.
 When the Status column is hidden, the Info tab keeps Status as a live label
 outside the fetched package metadata text, so pending transaction changes do not
 leave stale Status text in the details panel.

@@ -51,6 +51,7 @@ struct PackageResultsWidgets {
   GtkLabel *count_label = nullptr;
   std::string selected_nevra;
   std::string details_query_nevra;
+  std::string changelog_query_nevra;
   std::string files_loaded_nevra;
   std::string deps_loaded_nevra;
   std::string changelog_loaded_nevra;

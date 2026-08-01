@@ -110,6 +110,23 @@ deferred_details_ui_state(MainWindowUiState *widgets, DeferredDetailsPage page)
 }
 
 // -----------------------------------------------------------------------------
+// Return the NEVRA used to load one deferred details tab.
+// -----------------------------------------------------------------------------
+static const std::string *
+deferred_details_query_nevra(const MainWindowUiState *widgets, DeferredDetailsPage page)
+{
+  if (!widgets) {
+    return nullptr;
+  }
+
+  if (page == DeferredDetailsPage::CHANGELOG) {
+    return &widgets->results.changelog_query_nevra;
+  }
+
+  return &widgets->results.details_query_nevra;
+}
+
+// -----------------------------------------------------------------------------
 // Complete the package details task when the user cancels the current request.
 // -----------------------------------------------------------------------------
 static void
@@ -242,6 +259,7 @@ package_details_reset_details_view(MainWindowUiState *widgets)
   widgets->results.deps_loaded_nevra.clear();
   widgets->results.changelog_loaded_nevra.clear();
   widgets->results.details_query_nevra.clear();
+  widgets->results.changelog_query_nevra.clear();
   set_details_status_text(widgets, nullptr);
   set_details_text(widgets->results.details_buffer, _("Select a package for details."));
   set_details_text(widgets->results.files_buffer, _("Select an installed package to view its file list."));
@@ -261,6 +279,7 @@ package_details_clear_selected_package_state(MainWindowUiState *widgets)
 
   widgets->results.selected_nevra.clear();
   widgets->results.details_query_nevra.clear();
+  widgets->results.changelog_query_nevra.clear();
   widgets->results.files_loaded_nevra.clear();
   widgets->results.deps_loaded_nevra.clear();
   widgets->results.changelog_loaded_nevra.clear();
@@ -539,6 +558,7 @@ on_deferred_details_task_finished(GObject *, GAsyncResult *res, gpointer user_da
   }
 
   DeferredDetailsUiState ui = deferred_details_ui_state(widgets, td->page);
+  const std::string *current_query_nevra = deferred_details_query_nevra(widgets, td->page);
 
   GCancellable *c = g_task_get_cancellable(task);
   if (c && ui.cancellable && *ui.cancellable == c) {
@@ -547,8 +567,8 @@ on_deferred_details_task_finished(GObject *, GAsyncResult *res, gpointer user_da
   }
 
   if (td->generation != BaseManager::instance().current_generation() ||
-      widgets->results.selected_nevra != td->selected_nevra ||
-      widgets->results.details_query_nevra != td->details_query_nevra) {
+      widgets->results.selected_nevra != td->selected_nevra || !current_query_nevra ||
+      *current_query_nevra != td->details_query_nevra) {
     g_free(text);
     if (error) {
       g_error_free(error);
@@ -578,10 +598,15 @@ on_deferred_details_task_finished(GObject *, GAsyncResult *res, gpointer user_da
 static void
 load_selected_package_details_page(MainWindowUiState *widgets, DeferredDetailsPage page)
 {
-  if (!widgets || widgets->results.selected_nevra.empty() || widgets->results.details_query_nevra.empty() ||
-      widgets->results.package_details_cancellable) {
+  if (!widgets || widgets->results.selected_nevra.empty() || widgets->results.package_details_cancellable) {
     return;
   }
+
+  const std::string *query_nevra = deferred_details_query_nevra(widgets, page);
+  if (!query_nevra || query_nevra->empty()) {
+    return;
+  }
+
   PackageTableRow selected;
   if (!package_table_get_selected_package(widgets, selected) || selected.row.nevra != widgets->results.selected_nevra) {
     return;
@@ -590,8 +615,7 @@ load_selected_package_details_page(MainWindowUiState *widgets, DeferredDetailsPa
   PackageDetailsContext details_context = package_details_context_for_selection(widgets, selected, resolution);
 
   DeferredDetailsUiState ui = deferred_details_ui_state(widgets, page);
-  if (!ui.buffer || !ui.loaded_nevra || !ui.cancellable || *ui.cancellable ||
-      *ui.loaded_nevra == widgets->results.details_query_nevra) {
+  if (!ui.buffer || !ui.loaded_nevra || !ui.cancellable || *ui.cancellable || *ui.loaded_nevra == *query_nevra) {
     return;
   }
 
@@ -603,7 +627,7 @@ load_selected_package_details_page(MainWindowUiState *widgets, DeferredDetailsPa
 
   DeferredDetailsTaskData *td = new DeferredDetailsTaskData;
   td->selected_nevra = widgets->results.selected_nevra;
-  td->details_query_nevra = widgets->results.details_query_nevra;
+  td->details_query_nevra = *query_nevra;
   td->details_context = details_context;
   td->generation = BaseManager::instance().current_generation();
   td->page = page;
@@ -644,16 +668,23 @@ package_details_load_selected_package_info(MainWindowUiState *widgets, const Pac
   package_details_cancel_active_load(widgets);
 
   std::string details_query_nevra = selected.row.nevra;
+  std::string changelog_query_nevra = selected.row.nevra;
   InstalledPackageResolution selected_resolution = dnf_backend_resolve_installed_package(selected.row);
   PackageDetailsContext details_context = package_details_context_for_selection(widgets, selected, selected_resolution);
   std::optional<PackageRow> upgrade_row_override =
       package_details_upgrade_override_for_selection(selected, selected_resolution);
+  if (const TransactionServiceUpgradeTarget *target = selected.upgrade_target()) {
+    if (!target->nevra.empty()) {
+      changelog_query_nevra = target->nevra;
+    }
+  }
   if (selected.upgrade_target() && selected_resolution.has_installed_row) {
     details_query_nevra = selected_resolution.installed_row.nevra;
   }
 
   widgets->results.selected_nevra = selected.row.nevra;
   widgets->results.details_query_nevra = details_query_nevra;
+  widgets->results.changelog_query_nevra = changelog_query_nevra;
   widgets->results.files_loaded_nevra.clear();
   widgets->results.deps_loaded_nevra.clear();
   widgets->results.changelog_loaded_nevra.clear();
