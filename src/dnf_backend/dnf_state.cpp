@@ -212,10 +212,14 @@ bool
 publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string> protected_names)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  const bool changed = g_installed_nevras != installed.nevras || g_self_protected_package_names != protected_names;
+  std::set<std::string> next_protected_names = g_self_protected_package_names;
+  if (!protected_names.empty()) {
+    next_protected_names.insert(protected_names.begin(), protected_names.end());
+  }
+  const bool changed = g_installed_nevras != installed.nevras || g_self_protected_package_names != next_protected_names;
   g_installed_nevras.swap(installed.nevras);
   g_installed_rows_by_name_arch.swap(installed.rows_by_name_arch);
-  g_self_protected_package_names.swap(protected_names);
+  g_self_protected_package_names.swap(next_protected_names);
   return changed;
 }
 
@@ -415,6 +419,22 @@ dnf_backend_testonly_replace_installed_snapshot_rows(const std::vector<PackageRo
     g_installed_nevras.insert(row.nevra);
     g_installed_rows_by_name_arch[row.name_arch_key()] = row;
   }
+}
+
+// -----------------------------------------------------------------------------
+// Publish an installed-package snapshot through the normal publication path for tests.
+// -----------------------------------------------------------------------------
+bool
+dnf_backend_testonly_publish_installed_snapshot_rows(const std::vector<PackageRow> &rows,
+                                                     const std::set<std::string> &protected_names)
+{
+  InstalledQueryResult installed;
+  for (const auto &row : rows) {
+    installed.nevras.insert(row.nevra);
+    installed.rows_by_name_arch[row.name_arch_key()] = row;
+  }
+
+  return publish_installed_snapshot(std::move(installed), protected_names);
 }
 #endif
 

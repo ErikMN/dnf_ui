@@ -248,6 +248,11 @@ The pending transaction request is checked again before it is sent to
 dnf5daemon. After dnf5daemon resolves the preview, DNF UI rejects any transaction
 that would downgrade, remove, or replace the running app package.
 
+The discovered package owner is treated as a process-lifetime safety boundary.
+If a later lookup cannot rediscover the package, for example after the running
+executable has been replaced by an upgrade, the established protected package
+name is kept instead of being cleared.
+
 The relevant functions are:
 
 - `dnf_backend_any_self_protected_package_label`

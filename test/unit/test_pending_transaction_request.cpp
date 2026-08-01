@@ -360,5 +360,50 @@ TEST_CASE("Pending transaction request validation rejects protected downgrade, r
 }
 
 // -----------------------------------------------------------------------------
+// Verify that failed self-protection rediscovery does not weaken an established protection set.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction request validation keeps self protection after empty rediscovery")
+{
+  reset_backend_globals();
+
+  PackageRow row;
+  row.nevra = "dnf-ui-1.0-1.x86_64";
+  row.name = "dnf-ui";
+  row.version = "1.0";
+  row.release = "1";
+  row.arch = "x86_64";
+
+  REQUIRE(dnf_backend_testonly_publish_installed_snapshot_rows({ row }, { "dnf-ui" }));
+  REQUIRE_FALSE(dnf_backend_testonly_publish_installed_snapshot_rows({ row }, {}));
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(row);
+  REQUIRE(resolution.exact_installed);
+  REQUIRE(resolution.self_protected);
+
+  TransactionRequest remove_request;
+  remove_request.remove.push_back("dnf-ui");
+  std::string remove_error;
+
+  REQUIRE_FALSE(pending_transaction_validate_request(remove_request, remove_error));
+  REQUIRE_FALSE(remove_error.empty());
+
+  TransactionRequest downgrade_request;
+  downgrade_request.downgrade.push_back(row.nevra);
+  std::string downgrade_error;
+
+  REQUIRE_FALSE(pending_transaction_validate_request(downgrade_request, downgrade_error));
+  REQUIRE_FALSE(downgrade_error.empty());
+
+  TransactionRequest reinstall_request;
+  reinstall_request.reinstall.push_back(row.nevra);
+  std::string reinstall_error;
+
+  REQUIRE_FALSE(pending_transaction_validate_request(reinstall_request, reinstall_error));
+  REQUIRE_FALSE(reinstall_error.empty());
+
+  reset_backend_globals();
+}
+
+// -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

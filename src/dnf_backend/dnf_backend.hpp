@@ -412,6 +412,11 @@ void dnf_backend_testonly_replace_installed_snapshot(const std::set<std::string>
 // name and architecture lookups.
 // -----------------------------------------------------------------------------
 void dnf_backend_testonly_replace_installed_snapshot_rows(const std::vector<PackageRow> &rows);
+// -----------------------------------------------------------------------------
+// Publish an installed snapshot with protected package names through the normal snapshot publication path.
+// -----------------------------------------------------------------------------
+bool dnf_backend_testonly_publish_installed_snapshot_rows(const std::vector<PackageRow> &rows,
+                                                          const std::set<std::string> &protected_names);
 #endif
 
 // -----------------------------------------------------------------------------
