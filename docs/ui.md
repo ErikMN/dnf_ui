@@ -260,7 +260,8 @@ In compact Search, List Packages, and List Upgradable views, Remove and
 Reinstall act on the currently installed NEVRA represented by the compact
 upgrade row. When Latest only is disabled, available rows represent exact
 repository versions, so Remove and Reinstall are available only on exact
-installed rows.
+installed rows. Reinstall is offered only when that exact installed NEVRA is
+still available from an enabled repository.
 
 Downgradeable rows are older repository versions of an installed package. The
 main action becomes `Downgrade`, and the transaction request uses the selected

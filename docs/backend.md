@@ -227,6 +227,9 @@ install-only packages such as kernels can be installed side by side.
 Package rows also carry DNF's install-only classification so the pending
 transaction model can allow several exact install actions for install-only
 packages without hardcoding kernel package names.
+Installed rows carry whether their exact NEVRA is still present in enabled
+repository metadata. The UI uses that value to decide whether Reinstall can be
+offered without running a repository query from GTK code.
 
 The generic Status column is local package metadata. It can say that a newer or
 older package exists in enabled repository metadata, but it is not a transaction

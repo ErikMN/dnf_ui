@@ -1224,6 +1224,108 @@ TEST_CASE("Installed row lookup resolves upgrade candidates by name and architec
 }
 
 // -----------------------------------------------------------------------------
+// Verify that repo annotation records exact repository availability.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed row annotation records exact available package")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  installed_row.nevra = "demo-1.0-1.x86_64";
+  installed_row.name = "demo";
+  installed_row.version = "1.0";
+  installed_row.release = "1";
+  installed_row.arch = "x86_64";
+
+  PackageRow available_row = installed_row;
+  available_row.is_newest_available = true;
+
+  dnf_backend_internal::annotate_installed_row_with_repo_candidate(
+      installed_row, { { installed_row.name_arch_key(), available_row } });
+
+  REQUIRE(installed_row.repo_candidate_relation == PackageRepoCandidateRelation::SAME);
+  REQUIRE(installed_row.repo_candidate_nevra == installed_row.nevra);
+  REQUIRE(installed_row.repo_candidate_exact_available);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that a newer candidate does not count as exact reinstall availability.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed row annotation rejects newer candidate as exact available package")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  installed_row.nevra = "demo-1.0-1.x86_64";
+  installed_row.name = "demo";
+  installed_row.version = "1.0";
+  installed_row.release = "1";
+  installed_row.arch = "x86_64";
+
+  PackageRow available_row = installed_row;
+  available_row.nevra = "demo-2.0-1.x86_64";
+  available_row.version = "2.0";
+  available_row.is_newest_available = true;
+
+  dnf_backend_internal::annotate_installed_row_with_repo_candidate(
+      installed_row, { { installed_row.name_arch_key(), available_row } });
+
+  REQUIRE(installed_row.repo_candidate_relation == PackageRepoCandidateRelation::NEWER);
+  REQUIRE(installed_row.repo_candidate_nevra == available_row.nevra);
+  REQUIRE_FALSE(installed_row.repo_candidate_exact_available);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that newest-candidate annotation keeps a previously known exact match.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed row annotation preserves exact availability with newer candidate")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  installed_row.nevra = "demo-1.0-1.x86_64";
+  installed_row.name = "demo";
+  installed_row.version = "1.0";
+  installed_row.release = "1";
+  installed_row.arch = "x86_64";
+  installed_row.repo_candidate_exact_available = true;
+
+  PackageRow available_row = installed_row;
+  available_row.nevra = "demo-2.0-1.x86_64";
+  available_row.version = "2.0";
+  available_row.is_newest_available = true;
+
+  dnf_backend_internal::annotate_installed_row_with_repo_candidate(
+      installed_row, { { installed_row.name_arch_key(), available_row } });
+
+  REQUIRE(installed_row.repo_candidate_relation == PackageRepoCandidateRelation::NEWER);
+  REQUIRE(installed_row.repo_candidate_nevra == available_row.nevra);
+  REQUIRE(installed_row.repo_candidate_exact_available);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that visible-candidate annotation keeps exact availability from a separate query.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed row annotation preserves exact availability without visible candidate")
+{
+  reset_backend_globals();
+
+  PackageRow installed_row;
+  installed_row.nevra = "demo-1.0-1.x86_64";
+  installed_row.name = "demo";
+  installed_row.version = "1.0";
+  installed_row.release = "1";
+  installed_row.arch = "x86_64";
+  installed_row.repo_candidate_exact_available = true;
+
+  dnf_backend_internal::annotate_installed_row_with_repo_candidate(installed_row, {});
+
+  REQUIRE(installed_row.repo_candidate_relation == PackageRepoCandidateRelation::NONE);
+  REQUIRE(installed_row.repo_candidate_nevra.empty());
+  REQUIRE(installed_row.repo_candidate_exact_available);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that failed repo annotation does not make installed rows unusable.
 // -----------------------------------------------------------------------------
 TEST_CASE("Annotation fallback keeps installed rows usable when repo lookup fails")

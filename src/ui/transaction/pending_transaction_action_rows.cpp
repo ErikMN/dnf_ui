@@ -122,6 +122,23 @@ remove_pending_upgrade_by_transaction_spec(std::vector<PendingAction> &actions, 
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the exact installed package represented by this row can be reinstalled.
+// -----------------------------------------------------------------------------
+bool
+resolved_row_can_try_reinstall(const PackageRow &selected, const InstalledPackageResolution &installed_resolution)
+{
+  if (!installed_resolution.has_installed_row) {
+    return false;
+  }
+
+  if (installed_resolution.exact_installed) {
+    return selected.repo_candidate_exact_available;
+  }
+
+  return installed_resolution.installed_row.repo_candidate_exact_available;
+}
+
+// -----------------------------------------------------------------------------
 // Return true when one queued install side action belongs to the resolved row.
 // -----------------------------------------------------------------------------
 bool
@@ -243,7 +260,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
     rows.install_is_downgrade = false;
     rows.has_install_row = true;
     rows.install_row = selected;
-    rows.can_try_reinstall = rows.has_installed_row;
+    rows.can_try_reinstall = false;
     return rows;
   }
 
@@ -251,8 +268,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
     rows.install_is_upgrade = false;
     rows.install_is_downgrade = false;
     rows.has_install_row = false;
-    rows.can_try_reinstall = rows.has_installed_row && rows.state != PackageInstallState::LOCAL_ONLY &&
-        rows.state != PackageInstallState::INSTALLED_NEWER_THAN_REPO;
+    rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
     return rows;
   }
 
@@ -264,7 +280,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
       rows.upgrade_spec = upgrade_target->upgrade_spec();
       rows.has_installed_row = installed_resolution.has_installed_row;
       rows.self_protected = rows.has_installed_row && installed_resolution.self_protected;
-      rows.can_try_reinstall = rows.has_installed_row;
+      rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
       return rows;
     }
 
@@ -280,14 +296,14 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
       rows.self_protected = rows.has_installed_row && installed_resolution.self_protected;
     }
     rows.upgrade_spec = upgrade_transaction_spec(rows.has_installed_row ? rows.installed_row : selected);
-    rows.can_try_reinstall = rows.has_installed_row;
+    rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
     return rows;
   }
 
   // Older available rows can be marked as a downgrade to that exact package ID.
   if (rows.install_is_downgrade) {
     rows.has_install_row = true;
-    rows.can_try_reinstall = rows.has_installed_row;
+    rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
     return rows;
   }
 
@@ -297,8 +313,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
   }
 
   // Reinstall needs an installed package that is still available from repositories.
-  rows.can_try_reinstall = rows.has_installed_row && rows.state != PackageInstallState::LOCAL_ONLY &&
-      rows.state != PackageInstallState::INSTALLED_NEWER_THAN_REPO;
+  rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
 
   return rows;
 }

@@ -134,6 +134,46 @@ resolve_installed_package_locked(const PackageRow &row)
   return resolution;
 }
 
+// -----------------------------------------------------------------------------
+// Keep repo-derived reinstall availability across a local rpmdb-only refresh
+// only when the refreshed row is the same exact installed package.
+// -----------------------------------------------------------------------------
+void
+preserve_local_refresh_reinstall_availability_locked(dnf_backend_internal::InstalledQueryResult &installed)
+{
+  for (auto &row : installed.rows) {
+    auto old_it = g_installed_rows_by_name_arch.find(row.name_arch_key());
+    if (old_it != g_installed_rows_by_name_arch.end() && old_it->second.nevra == row.nevra) {
+      row.repo_candidate_exact_available = old_it->second.repo_candidate_exact_available;
+    }
+  }
+
+  for (auto &[key, row] : installed.rows_by_name_arch) {
+    auto old_it = g_installed_rows_by_name_arch.find(key);
+    if (old_it != g_installed_rows_by_name_arch.end() && old_it->second.nevra == row.nevra) {
+      row.repo_candidate_exact_available = old_it->second.repo_candidate_exact_available;
+    }
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Publish installed-package state while g_installed_mutex is already held.
+// -----------------------------------------------------------------------------
+bool
+publish_installed_snapshot_locked(dnf_backend_internal::InstalledQueryResult installed,
+                                  std::set<std::string> protected_names)
+{
+  std::set<std::string> next_protected_names = g_self_protected_package_names;
+  if (!protected_names.empty()) {
+    next_protected_names.insert(protected_names.begin(), protected_names.end());
+  }
+  const bool changed = g_installed_nevras != installed.nevras || g_self_protected_package_names != next_protected_names;
+  g_installed_nevras.swap(installed.nevras);
+  g_installed_rows_by_name_arch.swap(installed.rows_by_name_arch);
+  g_self_protected_package_names.swap(next_protected_names);
+  return changed;
+}
+
 } // namespace
 
 namespace dnf_backend_internal {
@@ -212,15 +252,20 @@ bool
 publish_installed_snapshot(InstalledQueryResult installed, std::set<std::string> protected_names)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  std::set<std::string> next_protected_names = g_self_protected_package_names;
-  if (!protected_names.empty()) {
-    next_protected_names.insert(protected_names.begin(), protected_names.end());
-  }
-  const bool changed = g_installed_nevras != installed.nevras || g_self_protected_package_names != next_protected_names;
-  g_installed_nevras.swap(installed.nevras);
-  g_installed_rows_by_name_arch.swap(installed.rows_by_name_arch);
-  g_self_protected_package_names.swap(next_protected_names);
-  return changed;
+  return publish_installed_snapshot_locked(std::move(installed), std::move(protected_names));
+}
+
+// -----------------------------------------------------------------------------
+// Publish a local rpmdb-only installed scan.
+// A local refresh cannot prove repository availability, so keep the previous
+// exact reinstall value only when the same installed NEVRA is still present.
+// -----------------------------------------------------------------------------
+bool
+publish_local_installed_snapshot(InstalledQueryResult installed, std::set<std::string> protected_names)
+{
+  std::lock_guard<std::mutex> lock(g_installed_mutex);
+  preserve_local_refresh_reinstall_availability_locked(installed);
+  return publish_installed_snapshot_locked(std::move(installed), std::move(protected_names));
 }
 
 } // namespace dnf_backend_internal
@@ -273,7 +318,7 @@ dnf_backend_refresh_installed_nevras()
     protected_names = collect_self_protected_package_names(base);
   } // Base read lock released before acquiring g_installed_mutex
 
-  return publish_installed_snapshot(installed, protected_names);
+  return publish_local_installed_snapshot(installed, protected_names);
 }
 
 // -----------------------------------------------------------------------------

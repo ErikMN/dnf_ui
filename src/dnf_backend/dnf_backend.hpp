@@ -76,6 +76,8 @@ struct PackageRow {
   std::string repo_candidate_repo;
   // True when the installed row candidate is also the newest available repo row.
   bool repo_candidate_is_newest_available = false;
+  // True when the exact installed NEVRA represented by this row is available from an enabled repository.
+  bool repo_candidate_exact_available = false;
   // True only for the newest available repo row for this package name and architecture.
   bool is_newest_available = false;
   // True for packages matching DNF's installonly configuration.

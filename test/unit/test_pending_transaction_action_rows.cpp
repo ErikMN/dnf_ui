@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "test_utils.hpp"
+#include "dnf_backend/dnf_internal.hpp"
 #include "upgrade/daemon_upgrade_state.hpp"
 #include "ui/package_query/package_query_state.hpp"
 #include "ui/transaction/pending_transaction_action_rows.hpp"
@@ -27,6 +28,19 @@ make_test_package_row(const char *nevra, const char *name, const char *version, 
   row.release = release;
   row.arch = arch;
   return row;
+}
+
+// -----------------------------------------------------------------------------
+// Build one installed-query result for snapshot publication tests.
+// -----------------------------------------------------------------------------
+static dnf_backend_internal::InstalledQueryResult
+make_single_installed_query_result(const PackageRow &row)
+{
+  dnf_backend_internal::InstalledQueryResult installed;
+  installed.rows = { row };
+  installed.nevras = { row.nevra };
+  installed.rows_by_name_arch.emplace(row.name_arch_key(), row);
+  return installed;
 }
 
 // -----------------------------------------------------------------------------
@@ -488,7 +502,7 @@ TEST_CASE("Pending transaction action rows resolve upgrade from installed packag
   REQUIRE(rows.upgrade_spec == "demo.x86_64");
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE(rows.can_try_reinstall);
+  REQUIRE_FALSE(rows.can_try_reinstall);
   REQUIRE_FALSE(pending_transaction_selection_allows_install_action(installed, rows, false));
   REQUIRE(pending_transaction_selection_allows_install_button_action(installed, rows, true));
 
@@ -570,10 +584,85 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
   REQUIRE(rows.upgrade_spec == "demo.x86_64");
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE(rows.can_try_reinstall);
+  REQUIRE_FALSE(rows.can_try_reinstall);
   REQUIRE(pending_transaction_selection_allows_install_button_action(update, rows, false));
   REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(update, rows, false));
   REQUIRE(pending_transaction_selection_allows_installed_action(update, rows, true));
+}
+
+// -----------------------------------------------------------------------------
+// Verify that compact update rows inherit exact reinstall availability from the installed package.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows allow compact update reinstall when installed exact is available")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_exact_available = true;
+  PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, false);
+
+  REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == installed.nevra);
+  REQUIRE(rows.can_try_reinstall);
+  REQUIRE(pending_transaction_selection_allows_installed_action(update, rows, true));
+}
+
+// -----------------------------------------------------------------------------
+// Verify that local installed refresh keeps exact reinstall availability for the same installed package.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows keep reinstall after local installed refresh")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_exact_available = true;
+  REQUIRE(dnf_backend_internal::publish_installed_snapshot(make_single_installed_query_result(installed), {}));
+
+  PackageRow local_installed = installed;
+  local_installed.repo_candidate_exact_available = false;
+  REQUIRE_FALSE(
+      dnf_backend_internal::publish_local_installed_snapshot(make_single_installed_query_result(local_installed), {}));
+
+  PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, false);
+
+  REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == installed.nevra);
+  REQUIRE(rows.can_try_reinstall);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that local installed refresh does not copy exact availability to a new installed package.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows do not inherit reinstall availability after local installed replacement")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_exact_available = true;
+  REQUIRE(dnf_backend_internal::publish_installed_snapshot(make_single_installed_query_result(installed), {}));
+
+  PackageRow replacement = make_test_package_row("demo-1.1-1.x86_64", "demo", "1.1", "1", "x86_64");
+  REQUIRE(dnf_backend_internal::publish_local_installed_snapshot(make_single_installed_query_result(replacement), {}));
+
+  PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, false);
+
+  REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == replacement.nevra);
+  REQUIRE_FALSE(rows.can_try_reinstall);
 }
 
 // -----------------------------------------------------------------------------
@@ -1266,6 +1355,111 @@ TEST_CASE("Pending transaction action rows reject reinstall for local only insta
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE_FALSE(rows.can_try_reinstall);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that reinstall is offered when the exact installed NEVRA is available.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows allow reinstall for exact available installed package")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::SAME;
+  installed.repo_candidate_nevra = installed.nevra;
+  installed.repo_candidate_exact_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
+
+  REQUIRE(rows.state == PackageInstallState::INSTALLED);
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == installed.nevra);
+  REQUIRE(rows.can_try_reinstall);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that reinstall is not offered when only a newer repository candidate exists.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows reject reinstall without exact available package")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
+
+  REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == installed.nevra);
+  REQUIRE_FALSE(rows.can_try_reinstall);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that parallel installed versions use each exact NEVRA's repository availability.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows isolate reinstall availability between installed versions")
+{
+  reset_backend_globals();
+
+  PackageRow older = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  older.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  older.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  older.repo_candidate_is_newest_available = true;
+
+  PackageRow newer = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  newer.repo_candidate_relation = PackageRepoCandidateRelation::SAME;
+  newer.repo_candidate_nevra = newer.nevra;
+  newer.repo_candidate_exact_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ older, newer });
+
+  PendingTransactionActionRows older_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
+  PendingTransactionActionRows newer_rows = pending_transaction_action_rows_for_selection(newer, nullptr, 0, false);
+
+  REQUIRE(older_rows.state == PackageInstallState::INSTALLED);
+  REQUIRE(older_rows.has_installed_row);
+  REQUIRE(older_rows.installed_row.nevra == older.nevra);
+  REQUIRE_FALSE(older_rows.can_try_reinstall);
+
+  REQUIRE(newer_rows.state == PackageInstallState::INSTALLED);
+  REQUIRE(newer_rows.has_installed_row);
+  REQUIRE(newer_rows.installed_row.nevra == newer.nevra);
+  REQUIRE(newer_rows.can_try_reinstall);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that older parallel installed versions can be reinstalled when their exact NEVRA is available.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows allow reinstall for older exact available installed version")
+{
+  reset_backend_globals();
+
+  PackageRow older = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  older.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  older.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  older.repo_candidate_is_newest_available = true;
+  older.repo_candidate_exact_available = true;
+
+  PackageRow newer = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  newer.repo_candidate_relation = PackageRepoCandidateRelation::SAME;
+  newer.repo_candidate_nevra = newer.nevra;
+  newer.repo_candidate_exact_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ older, newer });
+
+  PendingTransactionActionRows older_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
+
+  REQUIRE(older_rows.state == PackageInstallState::INSTALLED);
+  REQUIRE(older_rows.has_installed_row);
+  REQUIRE(older_rows.installed_row.nevra == older.nevra);
+  REQUIRE(older_rows.can_try_reinstall);
 }
 
 // -----------------------------------------------------------------------------

@@ -401,6 +401,48 @@ collect_newest_available_rows_for_package_names(libdnf5::Base &base,
 }
 
 // -----------------------------------------------------------------------------
+// Collect exact available package IDs for package names present in the selected rows.
+// -----------------------------------------------------------------------------
+static std::set<std::string>
+collect_available_nevras_for_package_names(libdnf5::Base &base,
+                                           GCancellable *cancellable,
+                                           const std::vector<PackageRow> &package_rows)
+{
+  std::set<std::string> available_nevras;
+  std::vector<std::string> names = package_names_from_rows(package_rows);
+  if (names.empty()) {
+    return available_nevras;
+  }
+
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_available();
+  query.filter_name(names, libdnf5::sack::QueryCmp::EQ);
+
+  for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      available_nevras.clear();
+      return available_nevras;
+    }
+
+    available_nevras.insert(pkg.get_nevra());
+  }
+
+  return available_nevras;
+}
+
+// -----------------------------------------------------------------------------
+// Mark installed rows whose exact NEVRA is still available from repositories.
+// -----------------------------------------------------------------------------
+static void
+annotate_installed_rows_with_exact_available_nevras(std::vector<PackageRow> &installed_rows,
+                                                    const std::set<std::string> &available_nevras)
+{
+  for (auto &row : installed_rows) {
+    row.repo_candidate_exact_available = available_nevras.count(row.nevra) > 0;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Collect installed package rows and the corresponding exact NEVRA and name and architecture caches in one pass.
 // When a search term is provided, filter the installed list with the same search semantics used for repo-backed rows.
 // -----------------------------------------------------------------------------
@@ -458,6 +500,39 @@ refresh_installed_row_lookup(InstalledQueryResult &installed)
 }
 
 // -----------------------------------------------------------------------------
+// Mark exact reinstall availability and update the installed row lookup.
+// -----------------------------------------------------------------------------
+static void
+annotate_installed_result_with_exact_available_nevras(InstalledQueryResult &installed,
+                                                      const std::set<std::string> &available_nevras)
+{
+  annotate_installed_rows_with_exact_available_nevras(installed.rows, available_nevras);
+  refresh_installed_row_lookup(installed);
+}
+
+// -----------------------------------------------------------------------------
+// Add exact reinstall availability when repo metadata is available.
+// Installed queries must keep working from the local rpmdb when this fails.
+// -----------------------------------------------------------------------------
+static void
+annotate_installed_result_with_exact_available_nevras_best_effort(libdnf5::Base &base,
+                                                                  InstalledQueryResult &installed,
+                                                                  GCancellable *cancellable)
+{
+  try {
+    std::set<std::string> available_nevras =
+        collect_available_nevras_for_package_names(base, cancellable, installed.rows);
+    if (package_query_cancelled(cancellable)) {
+      return;
+    }
+
+    annotate_installed_result_with_exact_available_nevras(installed, available_nevras);
+  } catch (const std::exception &e) {
+    DNFUI_TRACE("Installed row exact availability annotation skipped: %s", e.what());
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Compare one installed row against the newest visible repo candidate for the same name and architecture tuple.
 // Store the resolved relation on the installed row.
 // -----------------------------------------------------------------------------
@@ -483,6 +558,9 @@ annotate_installed_row_with_repo_candidate(PackageRow &installed_row,
   installed_row.repo_candidate_release = it->second.release;
   installed_row.repo_candidate_repo = it->second.repo;
   installed_row.repo_candidate_is_newest_available = it->second.is_newest_available;
+  if (it->second.nevra == installed_row.nevra) {
+    installed_row.repo_candidate_exact_available = true;
+  }
   int cmp = libdnf5::rpm::evrcmp(it->second, installed_row);
   if (cmp > 0) {
     installed_row.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
@@ -578,11 +656,13 @@ visible_rows_from_available_view(AvailableViewRows available_rows, const Install
     if (visible_it != available_rows.row_index_by_nevra.end()) {
       PackageRow &visible_row = available_rows.rows[visible_it->second];
       annotate_installed_row_with_repo_candidate(visible_row, available_rows.newest_visible_by_name_arch);
+      visible_row.repo_candidate_exact_available = true;
       continue;
     }
 
     PackageRow installed_row = stored_installed_row;
     annotate_installed_row_with_repo_candidate(installed_row, available_rows.newest_visible_by_name_arch);
+    installed_row.repo_candidate_exact_available = available_rows.row_index_by_nevra.count(installed_row.nevra) > 0;
     const size_t row_index = available_rows.rows.size();
     available_rows.rows.push_back(installed_row);
     available_rows.row_index_by_nevra.emplace(available_rows.rows[row_index].nevra, row_index);
@@ -618,6 +698,13 @@ dnf_backend_search_package_rows_interruptible(const std::string &pattern,
         return {};
       }
 
+      std::set<std::string> available_nevras =
+          collect_available_nevras_for_package_names(base, cancellable, installed_snapshot.rows);
+      if (package_query_cancelled(cancellable)) {
+        return {};
+      }
+      annotate_installed_result_with_exact_available_nevras(installed_snapshot, available_nevras);
+
       protected_names = collect_self_protected_package_names(base);
       if (search_options.latest_only) {
         auto available_rows = collect_available_rows_by_name_arch(base, cancellable, search_options, &pattern);
@@ -632,6 +719,7 @@ dnf_backend_search_package_rows_interruptible(const std::string &pattern,
         if (package_query_cancelled(cancellable)) {
           return {};
         }
+        annotate_installed_result_with_exact_available_nevras(filtered_installed, available_nevras);
 
         rows = visible_rows_from_maps(std::move(available_rows), filtered_installed.rows_by_name_arch);
       } else {
@@ -644,6 +732,7 @@ dnf_backend_search_package_rows_interruptible(const std::string &pattern,
         if (package_query_cancelled(cancellable)) {
           return {};
         }
+        annotate_installed_result_with_exact_available_nevras(filtered_installed, available_nevras);
 
         rows = visible_rows_from_available_view(std::move(available_rows), filtered_installed);
       }
@@ -679,6 +768,8 @@ dnf_backend_get_installed_package_rows_interruptible(GCancellable *cancellable)
       if (package_query_cancelled(cancellable)) {
         return {};
       }
+
+      annotate_installed_result_with_exact_available_nevras_best_effort(base, installed, cancellable);
 
       // Installed listing is allowed to work from the local rpmdb alone.
       // Repo annotation adds upgrade and local-only status when repo metadata
@@ -725,6 +816,13 @@ dnf_backend_get_browse_package_rows_interruptible(const DnfBackendSearchOptions 
       if (package_query_cancelled(cancellable)) {
         return {};
       }
+
+      std::set<std::string> available_nevras =
+          collect_available_nevras_for_package_names(base, cancellable, installed.rows);
+      if (package_query_cancelled(cancellable)) {
+        return {};
+      }
+      annotate_installed_result_with_exact_available_nevras(installed, available_nevras);
 
       protected_names = collect_self_protected_package_names(base);
       if (search_options.latest_only) {
@@ -822,6 +920,10 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
       packages, nullptr, [&base, &packages](GCancellable *annotation_cancellable) {
         return collect_newest_available_rows_for_package_names(base, annotation_cancellable, packages);
       });
+  InstalledQueryResult installed;
+  installed.rows = packages;
+  annotate_installed_result_with_exact_available_nevras_best_effort(base, installed, nullptr);
+  packages = std::move(installed.rows);
 
   return packages;
 }
