@@ -72,9 +72,9 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
   // Resolve the package ID to queue before adding an install or upgrade action.
   PendingTransactionActionRows action_rows =
       pending_transaction_action_rows_for_selection(pkg, selected.upgrade_target(), selected.upgrade_generation());
-  const bool projects_upgrade_actions =
-      displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
-  if (!pending_transaction_selection_allows_install_action(pkg, action_rows, projects_upgrade_actions)) {
+  const bool allows_installed_upgrade_action =
+      displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
+  if (!pending_transaction_selection_allows_install_button_action(pkg, action_rows, allows_installed_upgrade_action)) {
     ui_helpers_set_status(
         widgets->query.status_label, _("No install, upgrade, or downgrade action is available."), "gray");
     return;

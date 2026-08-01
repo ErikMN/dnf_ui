@@ -72,6 +72,19 @@ displayed_package_query_projects_upgrade_actions(const DisplayedPackageQueryStat
 }
 
 // -----------------------------------------------------------------------------
+// Return true when an exact installed row may start the available upgrade action.
+// This does not decide whether pending upgrade status is projected onto that row.
+// -----------------------------------------------------------------------------
+inline bool
+displayed_package_query_allows_installed_upgrade_action(const DisplayedPackageQueryState &displayed)
+{
+  return displayed.kind == DisplayedPackageQueryKind::SEARCH ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_INSTALLED ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_UPGRADEABLE;
+}
+
+// -----------------------------------------------------------------------------
 // Return true when available repository rows are shown as exact package versions.
 // -----------------------------------------------------------------------------
 inline bool

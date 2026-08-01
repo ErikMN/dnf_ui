@@ -57,6 +57,13 @@ bool pending_transaction_selection_allows_install_action(const PackageRow &selec
                                                          const PendingTransactionActionRows &rows,
                                                          bool projects_upgrade_actions);
 // -----------------------------------------------------------------------------
+// Return true when the selected row may use its install, upgrade, or downgrade button action.
+// Exact installed rows may start an upgrade without displaying the pending target status.
+// -----------------------------------------------------------------------------
+bool pending_transaction_selection_allows_install_button_action(const PackageRow &selected,
+                                                                const PendingTransactionActionRows &rows,
+                                                                bool allows_installed_upgrade_action);
+// -----------------------------------------------------------------------------
 // Return true when the selected row may modify its installed package.
 // -----------------------------------------------------------------------------
 bool pending_transaction_selection_allows_installed_action(const PackageRow &selected,

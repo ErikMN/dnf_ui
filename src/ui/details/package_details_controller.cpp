@@ -320,10 +320,10 @@ update_selected_package_actions(MainWindowUiState *widgets,
   // Compact upgrade rows represent the installed package stream.
   // Exact-version rows expose installed actions only when that exact NEVRA is installed.
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
-  const bool projects_upgrade_actions =
-      displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
-  const bool allows_install_action =
-      pending_transaction_selection_allows_install_action(selected.row, action_rows, projects_upgrade_actions);
+  const bool allows_installed_upgrade_action =
+      displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
+  const bool allows_install_action = pending_transaction_selection_allows_install_button_action(
+      selected.row, action_rows, allows_installed_upgrade_action);
   const bool allows_installed_action =
       pending_transaction_selection_allows_installed_action(selected.row, action_rows, compact_view);
 

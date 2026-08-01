@@ -67,10 +67,10 @@ package_table_show_context_menu(GtkWidget *anchor,
       pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
 
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
-  const bool projects_upgrade_actions =
-      displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
+  const bool allows_installed_upgrade_action =
+      displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
   const bool allows_install_action =
-      pending_transaction_selection_allows_install_action(row.row, action_rows, projects_upgrade_actions);
+      pending_transaction_selection_allows_install_button_action(row.row, action_rows, allows_installed_upgrade_action);
   const bool allows_installed_action =
       pending_transaction_selection_allows_installed_action(row.row, action_rows, compact_view);
 

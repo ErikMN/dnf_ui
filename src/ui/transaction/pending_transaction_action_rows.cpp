@@ -218,6 +218,26 @@ pending_transaction_selection_allows_install_action(const PackageRow &selected,
 }
 
 // -----------------------------------------------------------------------------
+// Return true when the selected row may use its install, upgrade, or downgrade button action.
+// -----------------------------------------------------------------------------
+bool
+pending_transaction_selection_allows_install_button_action(const PackageRow &selected,
+                                                           const PendingTransactionActionRows &rows,
+                                                           bool allows_installed_upgrade_action)
+{
+  if (!rows.has_install_row) {
+    return false;
+  }
+
+  if (selected.nevra == rows.install_row.nevra) {
+    return true;
+  }
+
+  return allows_installed_upgrade_action && rows.install_is_upgrade && rows.has_installed_row &&
+      selected.nevra == rows.installed_row.nevra;
+}
+
+// -----------------------------------------------------------------------------
 // Return true when the selected row may modify its installed package.
 // -----------------------------------------------------------------------------
 bool

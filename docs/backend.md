@@ -185,6 +185,11 @@ normal upgrade action. Intermediate newer rows remain visible for inspection,
 but they cannot be marked as upgrades because dnf5daemon upgrades by package
 spec and may resolve a newer candidate than the selected row.
 
+In all-version views, an exact installed row with a newest available candidate
+can start or cancel the same upgrade action as the newest available row. Pending
+upgrade status still stays on the exact available target row, so the installed
+row does not look like a separate pending upgrade.
+
 The snapshot is updated only after a complete installed-package scan. Cancelled
 queries do not publish partial installed state.
 

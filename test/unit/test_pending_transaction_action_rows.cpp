@@ -60,18 +60,21 @@ TEST_CASE("Displayed package query state separates compact rows from upgrade pro
   displayed.latest_only = false;
   REQUIRE_FALSE(displayed_package_query_uses_compact_rows(displayed));
   REQUIRE(displayed_package_query_projects_upgrade_actions(displayed));
+  REQUIRE(displayed_package_query_allows_installed_upgrade_action(displayed));
   REQUIRE_FALSE(displayed_package_query_uses_exact_available_rows(displayed));
 
   displayed.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
   displayed.latest_only = false;
   REQUIRE_FALSE(displayed_package_query_uses_compact_rows(displayed));
   REQUIRE_FALSE(displayed_package_query_projects_upgrade_actions(displayed));
+  REQUIRE(displayed_package_query_allows_installed_upgrade_action(displayed));
   REQUIRE(displayed_package_query_uses_exact_available_rows(displayed));
 
   displayed.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
   displayed.latest_only = true;
   REQUIRE(displayed_package_query_uses_compact_rows(displayed));
   REQUIRE(displayed_package_query_projects_upgrade_actions(displayed));
+  REQUIRE(displayed_package_query_allows_installed_upgrade_action(displayed));
   REQUIRE_FALSE(displayed_package_query_uses_exact_available_rows(displayed));
 }
 
@@ -120,6 +123,16 @@ TEST_CASE("Pending transaction action rows resolve upgrade from installed packag
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE(rows.can_try_reinstall);
+  REQUIRE_FALSE(pending_transaction_selection_allows_install_action(installed, rows, false));
+  REQUIRE(pending_transaction_selection_allows_install_button_action(installed, rows, true));
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, rows));
+
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::UPGRADE);
+  REQUIRE(actions[0].nevra == installed.repo_candidate_nevra);
+  REQUIRE(actions[0].transaction_spec == "demo.x86_64");
 }
 
 // -----------------------------------------------------------------------------
@@ -144,6 +157,7 @@ TEST_CASE("Pending transaction action rows reject installed row with non-newest 
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE_FALSE(pending_transaction_activation_should_remove(installed, rows));
+  REQUIRE_FALSE(pending_transaction_selection_allows_install_button_action(installed, rows, true));
 }
 
 // -----------------------------------------------------------------------------
@@ -191,6 +205,7 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE(rows.can_try_reinstall);
+  REQUIRE(pending_transaction_selection_allows_install_button_action(update, rows, false));
   REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(update, rows, false));
   REQUIRE(pending_transaction_selection_allows_installed_action(update, rows, true));
 }
@@ -215,6 +230,7 @@ TEST_CASE("Pending transaction action rows reject intermediate update rows")
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
   REQUIRE_FALSE(pending_transaction_activation_should_remove(intermediate, rows));
+  REQUIRE_FALSE(pending_transaction_selection_allows_install_button_action(intermediate, rows, true));
 }
 
 // -----------------------------------------------------------------------------
