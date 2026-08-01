@@ -333,8 +333,15 @@ update_selected_package_actions(MainWindowUiState *widgets,
                                 const PackageTableRow &selected,
                                 const InstalledPackageResolution &resolution)
 {
-  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_resolved_selection(
-      selected.row, selected.upgrade_target(), selected.upgrade_generation(), resolution);
+  const bool exact_installonly_actions =
+      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
+  PendingTransactionActionRows action_rows =
+      pending_transaction_action_rows_for_resolved_selection_with_pending(selected.row,
+                                                                          selected.upgrade_target(),
+                                                                          selected.upgrade_generation(),
+                                                                          resolution,
+                                                                          exact_installonly_actions,
+                                                                          widgets->transaction.actions);
 
   // Compact upgrade rows represent the installed package stream.
   // Exact-version rows expose installed actions only when that exact NEVRA is installed.

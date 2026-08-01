@@ -8,6 +8,7 @@
 #include "upgrade/daemon_upgrade_state.hpp"
 #include "ui/package_query/package_query_state.hpp"
 #include "ui/transaction/pending_transaction_action_rows.hpp"
+#include "ui/transaction/pending_transaction_request.hpp"
 
 #include <optional>
 #include <set>
@@ -87,7 +88,7 @@ TEST_CASE("Pending transaction action rows resolve plain available package")
 
   PackageRow available = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(available, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(available, nullptr, 0, false);
 
   REQUIRE(rows.state == PackageInstallState::AVAILABLE);
   REQUIRE_FALSE(rows.install_is_upgrade);
@@ -97,6 +98,371 @@ TEST_CASE("Pending transaction action rows resolve plain available package")
   REQUIRE_FALSE(rows.can_try_reinstall);
   REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(available, rows, false));
   REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(available, rows, true));
+}
+
+// -----------------------------------------------------------------------------
+// Verify that normal package installs replace another version with the same name and architecture.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction normal install marking replaces same package identity")
+{
+  reset_backend_globals();
+
+  PackageRow older = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+
+  PendingTransactionActionRows older_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
+  PendingTransactionActionRows newer_rows = pending_transaction_action_rows_for_selection(newer, nullptr, 0, false);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, older_rows));
+  REQUIRE(pending_transaction_mark_install_side_action(actions, newer_rows));
+
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::INSTALL);
+  REQUIRE(actions[0].nevra == newer.nevra);
+  REQUIRE(actions[0].transaction_spec == newer.nevra);
+  REQUIRE(actions[0].package_key == newer.name_arch_key());
+  REQUIRE_FALSE(actions[0].installonly);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installonly package installs keep distinct exact versions.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction installonly marking keeps distinct versions")
+{
+  reset_backend_globals();
+
+  PackageRow older = make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  older.installonly = true;
+  newer.installonly = true;
+
+  PendingTransactionActionRows older_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
+  PendingTransactionActionRows newer_rows = pending_transaction_action_rows_for_selection(newer, nullptr, 0, false);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, older_rows));
+  REQUIRE(pending_transaction_mark_install_side_action(actions, newer_rows));
+
+  REQUIRE(actions.size() == 2);
+  REQUIRE(actions[0].type == PendingAction::INSTALL);
+  REQUIRE(actions[0].nevra == older.nevra);
+  REQUIRE(actions[0].package_key == older.name_arch_key());
+  REQUIRE(actions[0].installonly);
+  REQUIRE(actions[1].type == PendingAction::INSTALL);
+  REQUIRE(actions[1].nevra == newer.nevra);
+  REQUIRE(actions[1].package_key == newer.name_arch_key());
+  REQUIRE(actions[1].installonly);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that marking the same installonly version twice does not duplicate it.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction installonly marking replaces exact duplicate")
+{
+  reset_backend_globals();
+
+  PackageRow installonly =
+      make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  installonly.installonly = true;
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installonly, nullptr, 0, false);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, rows));
+  REQUIRE(pending_transaction_mark_install_side_action(actions, rows));
+
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::INSTALL);
+  REQUIRE(actions[0].nevra == installonly.nevra);
+  REQUIRE(actions[0].installonly);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that exact all-version installonly rows install even when another version is installed.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction all-version installonly row uses exact install")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  newer.installonly = true;
+  newer.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows compact_rows = pending_transaction_action_rows_for_selection(newer, nullptr, 0, false);
+  REQUIRE(compact_rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(compact_rows.install_is_upgrade);
+  REQUIRE_FALSE(compact_rows.install_is_downgrade);
+  REQUIRE(compact_rows.has_install_row);
+  REQUIRE(compact_rows.upgrade_spec == "installonly-demo.x86_64");
+
+  PendingTransactionActionRows exact_rows = pending_transaction_action_rows_for_selection(newer, nullptr, 0, true);
+  REQUIRE(exact_rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE_FALSE(exact_rows.install_is_upgrade);
+  REQUIRE_FALSE(exact_rows.install_is_downgrade);
+  REQUIRE(exact_rows.has_install_row);
+  REQUIRE(exact_rows.install_row.nevra == newer.nevra);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, exact_rows));
+
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::INSTALL);
+  REQUIRE(actions[0].nevra == newer.nevra);
+  REQUIRE(actions[0].transaction_spec == newer.nevra);
+  REQUIRE(actions[0].installonly);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an exact install action keeps install meaning after switching to a compact view.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction pending exact installonly action remains install in compact view")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  installed.installonly = true;
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = newer.nevra;
+  installed.repo_candidate_is_newest_available = true;
+  newer.installonly = true;
+  newer.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows exact_rows = pending_transaction_action_rows_for_selection(newer, nullptr, 0, true);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, exact_rows));
+  REQUIRE(actions[0].type == PendingAction::INSTALL);
+
+  PendingTransactionActionRows compact_rows =
+      pending_transaction_action_rows_for_selection_with_pending(installed, nullptr, 0, false, actions);
+
+  REQUIRE(compact_rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE_FALSE(compact_rows.install_is_upgrade);
+  REQUIRE_FALSE(compact_rows.install_is_downgrade);
+  REQUIRE(compact_rows.has_install_row);
+  REQUIRE(compact_rows.install_action_from_pending);
+  REQUIRE(compact_rows.install_row.nevra == newer.nevra);
+  REQUIRE(pending_transaction_selection_allows_install_button_action(installed, compact_rows, true));
+
+  actions.clear();
+  PendingTransactionActionRows normal_compact_rows =
+      pending_transaction_action_rows_for_selection_with_pending(installed, nullptr, 0, false, actions);
+  REQUIRE(normal_compact_rows.install_is_upgrade);
+  REQUIRE(normal_compact_rows.has_install_row);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that a pending compact upgrade keeps upgrade meaning in an exact view.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction pending installonly upgrade remains upgrade in all-version view")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  installed.installonly = true;
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = newer.nevra;
+  installed.repo_candidate_is_newest_available = true;
+  newer.installonly = true;
+  newer.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows compact_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, compact_rows));
+  REQUIRE(actions[0].type == PendingAction::UPGRADE);
+
+  PendingTransactionActionRows exact_rows =
+      pending_transaction_action_rows_for_selection_with_pending(newer, nullptr, 0, true, actions);
+
+  REQUIRE(exact_rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(exact_rows.install_is_upgrade);
+  REQUIRE_FALSE(exact_rows.install_is_downgrade);
+  REQUIRE(exact_rows.has_install_row);
+  REQUIRE(exact_rows.install_action_from_pending);
+  REQUIRE(exact_rows.install_row.nevra == newer.nevra);
+  REQUIRE(exact_rows.upgrade_spec == "installonly-demo.x86_64");
+  REQUIRE(pending_transaction_selection_allows_install_button_action(newer, exact_rows, true));
+
+  actions.clear();
+  PendingTransactionActionRows normal_exact_rows =
+      pending_transaction_action_rows_for_selection_with_pending(newer, nullptr, 0, true, actions);
+  REQUIRE_FALSE(normal_exact_rows.install_is_upgrade);
+  REQUIRE(normal_exact_rows.has_install_row);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that a pending installonly upgrade does not project onto exact installed rows.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction pending installonly upgrade stays off exact installed row")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  installed.installonly = true;
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = newer.nevra;
+  installed.repo_candidate_is_newest_available = true;
+  newer.installonly = true;
+  newer.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows compact_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, compact_rows));
+  REQUIRE(actions[0].type == PendingAction::UPGRADE);
+
+  PendingTransactionActionRows exact_installed_rows =
+      pending_transaction_action_rows_for_selection_with_pending(installed, nullptr, 0, true, actions);
+
+  REQUIRE(exact_installed_rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE_FALSE(exact_installed_rows.install_is_upgrade);
+  REQUIRE_FALSE(exact_installed_rows.install_is_downgrade);
+  REQUIRE_FALSE(exact_installed_rows.has_install_row);
+  REQUIRE_FALSE(exact_installed_rows.install_action_from_pending);
+  REQUIRE_FALSE(pending_transaction_selection_allows_install_button_action(installed, exact_installed_rows, true));
+}
+
+// -----------------------------------------------------------------------------
+// Verify that a pending exact package view preserves installonly install semantics.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction exact installonly action context uses exact install")
+{
+  reset_backend_globals();
+
+  DisplayedPackageQueryState displayed;
+  displayed.exact_installonly_action = true;
+  REQUIRE(displayed_package_query_uses_exact_installonly_actions(displayed));
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  PackageRow older = make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  older.installonly = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(
+      older, nullptr, 0, displayed_package_query_uses_exact_installonly_actions(displayed));
+
+  REQUIRE(rows.state == PackageInstallState::DOWNGRADEABLE);
+  REQUIRE_FALSE(rows.install_is_upgrade);
+  REQUIRE_FALSE(rows.install_is_downgrade);
+  REQUIRE(rows.has_install_row);
+  REQUIRE(rows.install_row.nevra == older.nevra);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installed installonly rows do not start stream upgrades in exact-version views.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction all-version installed installonly row does not start upgrade")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  installed.installonly = true;
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "installonly-demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows compact_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
+  REQUIRE(compact_rows.install_is_upgrade);
+  REQUIRE(compact_rows.has_install_row);
+
+  PendingTransactionActionRows exact_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0, true);
+  REQUIRE(exact_rows.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE_FALSE(exact_rows.install_is_upgrade);
+  REQUIRE_FALSE(exact_rows.install_is_downgrade);
+  REQUIRE_FALSE(exact_rows.has_install_row);
+  REQUIRE(exact_rows.has_installed_row);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that exact older installonly rows install instead of becoming downgrades.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction all-version older installonly row uses exact install")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  PackageRow older = make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  older.installonly = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows exact_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, true);
+  REQUIRE(exact_rows.state == PackageInstallState::DOWNGRADEABLE);
+  REQUIRE_FALSE(exact_rows.install_is_upgrade);
+  REQUIRE_FALSE(exact_rows.install_is_downgrade);
+  REQUIRE(exact_rows.has_install_row);
+  REQUIRE(exact_rows.install_row.nevra == older.nevra);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, exact_rows));
+
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::INSTALL);
+  REQUIRE(actions[0].nevra == older.nevra);
+  REQUIRE(actions[0].transaction_spec == older.nevra);
+  REQUIRE(actions[0].installonly);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that two exact installonly rows can be requested when another version is installed.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction all-version installonly actions build one install request")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  PackageRow older = make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow newer = make_test_package_row("installonly-demo-3.0-1.x86_64", "installonly-demo", "3.0", "1", "x86_64");
+  older.installonly = true;
+  newer.installonly = true;
+  newer.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows older_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, true);
+  PendingTransactionActionRows newer_rows = pending_transaction_action_rows_for_selection(newer, nullptr, 0, true);
+
+  std::vector<PendingAction> actions;
+  REQUIRE(pending_transaction_mark_install_side_action(actions, older_rows));
+  REQUIRE(pending_transaction_mark_install_side_action(actions, newer_rows));
+
+  TransactionRequest request;
+  std::string error;
+  REQUIRE(pending_transaction_build_request(actions, request, error));
+  REQUIRE(error.empty());
+  REQUIRE(request.install ==
+          std::vector<std::string> {
+              older.nevra,
+              newer.nevra,
+          });
 }
 
 // -----------------------------------------------------------------------------
@@ -113,7 +479,7 @@ TEST_CASE("Pending transaction action rows resolve upgrade from installed packag
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
 
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.install_is_upgrade);
@@ -149,7 +515,7 @@ TEST_CASE("Pending transaction action rows reject installed row with non-newest 
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
 
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.install_is_upgrade);
@@ -195,7 +561,7 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(update, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, false);
 
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.install_is_upgrade);
@@ -222,7 +588,7 @@ TEST_CASE("Pending transaction action rows reject intermediate update rows")
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(intermediate, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(intermediate, nullptr, 0, false);
 
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.install_is_upgrade);
@@ -244,7 +610,7 @@ TEST_CASE("Pending transaction activation removes exact installed row only")
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
 
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
@@ -264,7 +630,7 @@ TEST_CASE("Pending transaction action rows resolve downgrade from available row"
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
 
   REQUIRE(rows.state == PackageInstallState::DOWNGRADEABLE);
   REQUIRE_FALSE(rows.install_is_upgrade);
@@ -299,9 +665,9 @@ TEST_CASE("Pending transaction downgrade marking replaces same architecture targ
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows older_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
+  PendingTransactionActionRows older_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
   PendingTransactionActionRows newer_downgrade_rows =
-      pending_transaction_action_rows_for_selection(newer_downgrade, nullptr, 0);
+      pending_transaction_action_rows_for_selection(newer_downgrade, nullptr, 0, false);
 
   std::vector<PendingAction> actions;
   REQUIRE(pending_transaction_mark_install_side_action(actions, older_rows));
@@ -328,8 +694,9 @@ TEST_CASE("Pending transaction downgrade marking keeps different architecture ta
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed_x86_64, installed_i686 });
 
-  PendingTransactionActionRows x86_64_rows = pending_transaction_action_rows_for_selection(older_x86_64, nullptr, 0);
-  PendingTransactionActionRows i686_rows = pending_transaction_action_rows_for_selection(older_i686, nullptr, 0);
+  PendingTransactionActionRows x86_64_rows =
+      pending_transaction_action_rows_for_selection(older_x86_64, nullptr, 0, false);
+  PendingTransactionActionRows i686_rows = pending_transaction_action_rows_for_selection(older_i686, nullptr, 0, false);
 
   std::vector<PendingAction> actions;
   REQUIRE(pending_transaction_mark_install_side_action(actions, x86_64_rows));
@@ -356,7 +723,7 @@ TEST_CASE("Pending transaction action rows keep exact installed row")
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ older, newer });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
 
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == older.nevra);
@@ -385,7 +752,7 @@ TEST_CASE("Pending transaction action rows resolve daemon upgrade target")
   DaemonUpgradeSnapshot snapshot = state.snapshot();
 
   PendingTransactionActionRows rows =
-      pending_transaction_action_rows_for_selection(update, &target, snapshot.generation);
+      pending_transaction_action_rows_for_selection(update, &target, snapshot.generation, false);
 
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.install_is_upgrade);
@@ -416,7 +783,7 @@ TEST_CASE("Pending transaction action rows resolve daemon target without install
   DaemonUpgradeSnapshot snapshot = state.snapshot();
 
   PendingTransactionActionRows rows =
-      pending_transaction_action_rows_for_selection(update, &target, snapshot.generation);
+      pending_transaction_action_rows_for_selection(update, &target, snapshot.generation, false);
 
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.install_is_upgrade);
@@ -450,7 +817,7 @@ TEST_CASE("Pending transaction action rows reject stale daemon upgrade target")
   state.mark_stale();
 
   PendingTransactionActionRows rows =
-      pending_transaction_action_rows_for_selection(update, &target, snapshot.generation);
+      pending_transaction_action_rows_for_selection(update, &target, snapshot.generation, false);
 
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.install_is_upgrade);
@@ -513,7 +880,7 @@ TEST_CASE("Pending transaction install-side marking replaces package action")
     { PendingAction::REINSTALL, "demo-3.0-1.x86_64", "demo-3.0-1.x86_64", installed.name_arch_key() },
   };
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
   REQUIRE(pending_transaction_mark_install_side_action(actions, rows));
 
   REQUIRE(actions.size() == 2);
@@ -535,8 +902,9 @@ TEST_CASE("Pending transaction downgrade and remove replacement is order indepen
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows downgrade_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
-  PendingTransactionActionRows installed_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows downgrade_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
+  PendingTransactionActionRows installed_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
 
   std::vector<PendingAction> downgrade_then_remove;
   REQUIRE(pending_transaction_mark_install_side_action(downgrade_then_remove, downgrade_rows));
@@ -569,8 +937,9 @@ TEST_CASE("Pending transaction downgrade and reinstall replacement is order inde
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows downgrade_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0);
-  PendingTransactionActionRows installed_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows downgrade_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, false);
+  PendingTransactionActionRows installed_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
 
   std::vector<PendingAction> downgrade_then_reinstall;
   REQUIRE(pending_transaction_mark_install_side_action(downgrade_then_reinstall, downgrade_rows));
@@ -688,8 +1057,9 @@ TEST_CASE("Pending transaction bulk upgrade marking deduplicates package identit
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows installed_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
-  PendingTransactionActionRows update_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0);
+  PendingTransactionActionRows installed_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
+  PendingTransactionActionRows update_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, false);
 
   std::vector<PendingAction> actions;
   std::set<std::string> marked_package_keys;
@@ -728,8 +1098,9 @@ TEST_CASE("Pending transaction all-version bulk upgrade marking uses exact row")
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows installed_rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
-  PendingTransactionActionRows update_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0);
+  PendingTransactionActionRows installed_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
+  PendingTransactionActionRows update_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, false);
 
   std::vector<PendingAction> actions;
   std::set<std::string> marked_package_keys;
@@ -751,6 +1122,104 @@ TEST_CASE("Pending transaction all-version bulk upgrade marking uses exact row")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that all-version bulk marking does not process the installed row for a pending upgrade.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction all-version bulk marking keeps pending upgrade on exact row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
+
+  PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  std::vector<PendingAction> actions = {
+    { PendingAction::UPGRADE, update.nevra, "demo.x86_64", update.name_arch_key() },
+  };
+  std::set<std::string> marked_package_keys;
+  size_t marked_count = 0;
+
+  PendingTransactionActionRows installed_rows =
+      pending_transaction_action_rows_for_selection_with_pending(installed, nullptr, 0, false, actions);
+  PendingTransactionActionRows update_rows =
+      pending_transaction_action_rows_for_selection_with_pending(update, nullptr, 0, false, actions);
+
+  REQUIRE(installed_rows.install_is_upgrade);
+  REQUIRE_FALSE(installed_rows.install_action_from_pending);
+  REQUIRE(update_rows.install_is_upgrade);
+  REQUIRE_FALSE(update_rows.install_action_from_pending);
+
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, installed, installed_rows, false)) {
+    ++marked_count;
+  }
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, update, update_rows, false)) {
+    ++marked_count;
+  }
+
+  REQUIRE(marked_count == 1);
+  REQUIRE(marked_package_keys.size() == 1);
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::UPGRADE);
+  REQUIRE(actions[0].nevra == update.nevra);
+  REQUIRE(actions[0].transaction_spec == "demo.x86_64");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that all-version bulk marking installs the newest installonly update exactly.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction all-version bulk marking uses exact installonly update")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_test_package_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  installed.installonly = true;
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "installonly-demo-2.0-1.x86_64";
+  installed.repo_candidate_is_newest_available = true;
+
+  PackageRow older = make_test_package_row("installonly-demo-0.9-1.x86_64", "installonly-demo", "0.9", "1", "x86_64");
+  PackageRow update = make_test_package_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  older.installonly = true;
+  update.installonly = true;
+  update.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows installed_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, true);
+  PendingTransactionActionRows older_rows = pending_transaction_action_rows_for_selection(older, nullptr, 0, true);
+  PendingTransactionActionRows update_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, true);
+
+  std::vector<PendingAction> actions;
+  std::set<std::string> marked_package_keys;
+  size_t marked_count = 0;
+
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, installed, installed_rows, false)) {
+    ++marked_count;
+  }
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, older, older_rows, false)) {
+    ++marked_count;
+  }
+  if (pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, update, update_rows, false)) {
+    ++marked_count;
+  }
+
+  REQUIRE(marked_count == 1);
+  REQUIRE(marked_package_keys.size() == 1);
+  REQUIRE(actions.size() == 1);
+  REQUIRE(actions[0].type == PendingAction::INSTALL);
+  REQUIRE(actions[0].nevra == update.nevra);
+  REQUIRE(actions[0].transaction_spec == update.nevra);
+  REQUIRE(actions[0].installonly);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that List Installed bulk marking can use the installed row's upgrade target.
 // -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction list installed bulk upgrade marking uses installed row")
@@ -764,7 +1233,7 @@ TEST_CASE("Pending transaction list installed bulk upgrade marking uses installe
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
 
   std::vector<PendingAction> actions;
   std::set<std::string> marked_package_keys;
@@ -790,7 +1259,7 @@ TEST_CASE("Pending transaction action rows reject reinstall for local only insta
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
-  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0);
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
 
   REQUIRE(rows.state == PackageInstallState::LOCAL_ONLY);
   REQUIRE_FALSE(rows.has_install_row);

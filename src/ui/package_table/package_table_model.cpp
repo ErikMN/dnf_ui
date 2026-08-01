@@ -95,16 +95,20 @@ package_table_fill_item_status(MainWindowUiState *widgets,
     .row = item.row,
     .daemon_upgrade = item.daemon_upgrade,
   };
-  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_resolved_selection(
-      item.row, item.upgrade_target(), table_row.upgrade_generation(), resolution);
+  const bool exact_available_rows = package_table_uses_exact_available_rows(widgets);
+  const bool exact_installonly_actions =
+      widgets && displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
+  const std::vector<PendingAction> empty_actions;
+  const std::vector<PendingAction> &actions = widgets ? widgets->transaction.actions : empty_actions;
+  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_resolved_selection_with_pending(
+      item.row, item.upgrade_target(), table_row.upgrade_generation(), resolution, exact_installonly_actions, actions);
   PendingAction::Type action_type;
   if (package_table_pending_action_for_resolved_row(widgets, table_row, action_rows, action_type)) {
     item.status_text = package_table_pending_action_status_text(action_type, install_state);
     return;
   }
 
-  item.status_text = package_table_status_text_for_resolved_row(
-      table_row, action_rows, package_table_uses_exact_available_rows(widgets));
+  item.status_text = package_table_status_text_for_resolved_row(table_row, action_rows, exact_available_rows);
 }
 
 // -----------------------------------------------------------------------------

@@ -15,6 +15,7 @@
 #include <atomic>
 #include <map>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -184,6 +185,42 @@ package_matches_search(const libdnf5::rpm::Package &pkg,
 }
 
 // -----------------------------------------------------------------------------
+// Return exact package IDs matching DNF's installonly package configuration.
+// -----------------------------------------------------------------------------
+static std::set<std::string>
+collect_installonly_nevras(libdnf5::Base &base, GCancellable *cancellable)
+{
+  std::set<std::string> installonly_nevras;
+
+  libdnf5::rpm::PackageQuery query(base);
+  query.filter_installonly();
+
+  for (auto pkg : query) {
+    if (package_query_cancelled(cancellable)) {
+      installonly_nevras.clear();
+      return installonly_nevras;
+    }
+
+    installonly_nevras.insert(pkg.get_nevra());
+  }
+
+  return installonly_nevras;
+}
+
+// -----------------------------------------------------------------------------
+// Convert one libdnf package and attach installonly state from the current Base snapshot.
+// -----------------------------------------------------------------------------
+static PackageRow
+make_package_row_with_installonly(const libdnf5::rpm::Package &pkg,
+                                  PackageRepoCandidateRelation repo_candidate_relation,
+                                  const std::set<std::string> &installonly_nevras)
+{
+  PackageRow row = make_package_row(pkg, repo_candidate_relation);
+  row.installonly = installonly_nevras.count(row.nevra) > 0;
+  return row;
+}
+
+// -----------------------------------------------------------------------------
 // Collect the newest visible repo candidate for each name and architecture tuple.
 // When a search term is provided, apply the same name and description filtering
 // as the main search flow before deduplicating the results.
@@ -199,6 +236,10 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
   query.filter_latest_evr();
 
   const std::string pattern_lower = pattern ? utf8_casefold_copy(*pattern) : "";
+  const std::set<std::string> installonly_nevras = collect_installonly_nevras(base, cancellable);
+  if (package_query_cancelled(cancellable)) {
+    return {};
+  }
   std::map<std::string, PackageRow> rows_by_name_arch;
 
   for (auto pkg : query) {
@@ -217,7 +258,7 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
     // Repositories can contain more than one EVR, so keep only the newest row before installed rows are merged in.
     // The repo relation is UNKNOWN until compared against the installed set.
     // The merge or annotation helpers resolve it when installed rows are available.
-    PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
+    PackageRow row = make_package_row_with_installonly(pkg, PackageRepoCandidateRelation::UNKNOWN, installonly_nevras);
     row.is_newest_available = true;
     remember_newest_row(rows_by_name_arch, row);
   }
@@ -254,6 +295,10 @@ static std::map<std::string, PackageRow>
 collect_newest_available_rows_by_name_arch(libdnf5::Base &base, GCancellable *cancellable)
 {
   std::map<std::string, PackageRow> rows_by_name_arch;
+  const std::set<std::string> installonly_nevras = collect_installonly_nevras(base, cancellable);
+  if (package_query_cancelled(cancellable)) {
+    return {};
+  }
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
@@ -265,7 +310,7 @@ collect_newest_available_rows_by_name_arch(libdnf5::Base &base, GCancellable *ca
       return rows_by_name_arch;
     }
 
-    PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
+    PackageRow row = make_package_row_with_installonly(pkg, PackageRepoCandidateRelation::UNKNOWN, installonly_nevras);
     row.is_newest_available = true;
     remember_newest_row(rows_by_name_arch, row);
   }
@@ -291,6 +336,11 @@ collect_available_view_rows(libdnf5::Base &base,
   }
 
   const std::string pattern_lower = pattern ? utf8_casefold_copy(*pattern) : "";
+  const std::set<std::string> installonly_nevras = collect_installonly_nevras(base, cancellable);
+  if (package_query_cancelled(cancellable)) {
+    result = AvailableViewRows {};
+    return result;
+  }
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
@@ -305,7 +355,8 @@ collect_available_view_rows(libdnf5::Base &base,
       continue;
     }
 
-    add_available_view_row(result, make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN));
+    add_available_view_row(
+        result, make_package_row_with_installonly(pkg, PackageRepoCandidateRelation::UNKNOWN, installonly_nevras));
   }
 
   return result;
@@ -325,6 +376,10 @@ collect_newest_available_rows_for_package_names(libdnf5::Base &base,
   if (names.empty()) {
     return rows_by_name_arch;
   }
+  const std::set<std::string> installonly_nevras = collect_installonly_nevras(base, cancellable);
+  if (package_query_cancelled(cancellable)) {
+    return {};
+  }
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_available();
@@ -337,7 +392,7 @@ collect_newest_available_rows_for_package_names(libdnf5::Base &base,
       return rows_by_name_arch;
     }
 
-    PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
+    PackageRow row = make_package_row_with_installonly(pkg, PackageRepoCandidateRelation::UNKNOWN, installonly_nevras);
     row.is_newest_available = true;
     remember_newest_row(rows_by_name_arch, row);
   }
@@ -357,6 +412,10 @@ collect_installed_rows(libdnf5::Base &base,
 {
   InstalledQueryResult result;
   const std::string pattern_lower = pattern ? utf8_casefold_copy(*pattern) : "";
+  const std::set<std::string> installonly_nevras = collect_installonly_nevras(base, cancellable);
+  if (package_query_cancelled(cancellable)) {
+    return result;
+  }
 
   libdnf5::rpm::PackageQuery query(base);
   query.filter_installed();
@@ -373,7 +432,7 @@ collect_installed_rows(libdnf5::Base &base,
       continue;
     }
 
-    PackageRow row = make_package_row(pkg);
+    PackageRow row = make_package_row_with_installonly(pkg, PackageRepoCandidateRelation::UNKNOWN, installonly_nevras);
     // The exact NEVRA set answers "is this precise package installed".
     // The name and architecture map answers "which installed package matches
     // this available update candidate".
@@ -709,6 +768,10 @@ dnf_backend_get_available_package_metadata_by_nevras_interruptible(const std::ve
 
   try {
     auto [base, guard] = acquire_interruptible_base_read(cancellable);
+    const std::set<std::string> installonly_nevras = collect_installonly_nevras(base, cancellable);
+    if (package_query_cancelled(cancellable)) {
+      return {};
+    }
 
     libdnf5::rpm::PackageQuery query(base);
     query.filter_available();
@@ -718,7 +781,8 @@ dnf_backend_get_available_package_metadata_by_nevras_interruptible(const std::ve
         return {};
       }
 
-      PackageRow row = make_package_row(pkg, PackageRepoCandidateRelation::UNKNOWN);
+      PackageRow row =
+          make_package_row_with_installonly(pkg, PackageRepoCandidateRelation::UNKNOWN, installonly_nevras);
       if (requested_nevras.count(row.nevra) == 0 || returned_nevras.count(row.nevra) > 0) {
         continue;
       }
@@ -744,12 +808,14 @@ dnf_backend_get_installed_package_rows_by_nevra(const std::string &pkg_nevra)
   std::vector<PackageRow> packages;
 
   auto [base, guard] = BaseManager::instance().acquire_read();
+  const std::set<std::string> installonly_nevras = collect_installonly_nevras(base, nullptr);
   libdnf5::rpm::PackageQuery query(base);
   query.filter_nevra(pkg_nevra);
   query.filter_installed();
 
   for (auto pkg : query) {
-    packages.push_back(make_package_row(pkg));
+    packages.push_back(
+        make_package_row_with_installonly(pkg, PackageRepoCandidateRelation::UNKNOWN, installonly_nevras));
   }
 
   annotate_installed_rows_with_repo_candidates_best_effort(
@@ -770,13 +836,16 @@ dnf_backend_get_available_package_rows_by_nevra(const std::string &pkg_nevra)
   AvailableViewRows visible_rows;
 
   auto [base, guard] = BaseManager::instance().acquire_read();
+  const std::set<std::string> installonly_nevras = collect_installonly_nevras(base, nullptr);
   {
     libdnf5::rpm::PackageQuery query(base);
     query.filter_nevra(pkg_nevra);
     query.filter_available();
 
     for (auto pkg : query) {
-      add_available_view_row(visible_rows, make_package_row(pkg));
+      add_available_view_row(
+          visible_rows,
+          make_package_row_with_installonly(pkg, PackageRepoCandidateRelation::UNKNOWN, installonly_nevras));
     }
   }
 

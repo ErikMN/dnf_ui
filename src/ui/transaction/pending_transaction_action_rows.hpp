@@ -29,6 +29,8 @@ struct PendingTransactionActionRows {
   bool self_protected = false;
   // Fast UI check only. This does not prove that reinstall is available from repositories.
   bool can_try_reinstall = false;
+  // True when an already queued action should be removable from this row.
+  bool install_action_from_pending = false;
   std::string package_key;
   std::string upgrade_spec;
   PackageRow install_row;
@@ -41,12 +43,27 @@ struct PendingTransactionActionRows {
 PendingTransactionActionRows
 pending_transaction_action_rows_for_selection(const PackageRow &selected,
                                               const TransactionServiceUpgradeTarget *upgrade_target,
-                                              uint64_t upgrade_generation);
+                                              uint64_t upgrade_generation,
+                                              bool exact_installonly_actions);
 PendingTransactionActionRows
 pending_transaction_action_rows_for_resolved_selection(const PackageRow &selected,
                                                        const TransactionServiceUpgradeTarget *upgrade_target,
                                                        uint64_t upgrade_generation,
-                                                       const InstalledPackageResolution &installed_resolution);
+                                                       const InstalledPackageResolution &installed_resolution,
+                                                       bool exact_installonly_actions);
+PendingTransactionActionRows
+pending_transaction_action_rows_for_selection_with_pending(const PackageRow &selected,
+                                                           const TransactionServiceUpgradeTarget *upgrade_target,
+                                                           uint64_t upgrade_generation,
+                                                           bool exact_installonly_actions,
+                                                           const std::vector<PendingAction> &actions);
+PendingTransactionActionRows pending_transaction_action_rows_for_resolved_selection_with_pending(
+    const PackageRow &selected,
+    const TransactionServiceUpgradeTarget *upgrade_target,
+    uint64_t upgrade_generation,
+    const InstalledPackageResolution &installed_resolution,
+    bool exact_installonly_actions,
+    const std::vector<PendingAction> &actions);
 
 // -----------------------------------------------------------------------------
 // Return true when the selected row may use its install, upgrade, or downgrade action.

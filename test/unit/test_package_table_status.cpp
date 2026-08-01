@@ -33,8 +33,14 @@ require_stored_status_matches_pending_action(MainWindowUiState &widgets, Package
     .daemon_upgrade = item.daemon_upgrade,
   };
 
-  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
-      table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
+  const bool exact_installonly_actions =
+      displayed_package_query_uses_exact_installonly_actions(widgets.query_state.displayed_query);
+  PendingTransactionActionRows action_rows =
+      pending_transaction_action_rows_for_selection_with_pending(table_row.row,
+                                                                 table_row.upgrade_target(),
+                                                                 table_row.upgrade_generation(),
+                                                                 exact_installonly_actions,
+                                                                 widgets.transaction.actions);
   PendingAction::Type action_type;
   REQUIRE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
 
@@ -92,6 +98,108 @@ TEST_CASE("Package table pending install status is shared")
   };
 
   require_stored_status_matches_pending_action(widgets, item, "Pending Install");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an exact install action does not borrow upgrade wording from the row state.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table installonly update action shows pending install status")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_status_test_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow update = make_status_test_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  update.installonly = true;
+  update.is_newest_available = true;
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  MainWindowUiState widgets;
+  set_all_version_package_view(widgets);
+
+  PackageItem item;
+  item.row = update;
+
+  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(item.row, nullptr, 0, true);
+  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction.actions, action_rows));
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
+  REQUIRE(resolution.state == PackageInstallState::UPGRADEABLE);
+
+  package_table_fill_item_status(&widgets, item, resolution);
+  REQUIRE(item.status_text == "Pending Install");
+  REQUIRE(package_table_column_text(item, PackageColumnKind::STATUS) == "Pending Install");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that compact rows keep pending exact installonly install status.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table compact installonly row preserves pending exact install status")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_status_test_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow update = make_status_test_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  installed.installonly = true;
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = update.nevra;
+  installed.repo_candidate_is_newest_available = true;
+  update.installonly = true;
+  update.is_newest_available = true;
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  MainWindowUiState widgets;
+  set_all_version_package_view(widgets);
+
+  PendingTransactionActionRows exact_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, true);
+  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction.actions, exact_rows));
+
+  set_compact_package_view(widgets);
+  PackageItem item;
+  item.row = installed;
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
+  package_table_fill_item_status(&widgets, item, resolution);
+
+  REQUIRE(item.status_text == "Pending Install");
+  REQUIRE(package_table_column_text(item, PackageColumnKind::STATUS) == "Pending Install");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that exact rows keep pending compact installonly upgrade status.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table exact installonly row preserves pending upgrade status")
+{
+  reset_backend_globals();
+
+  PackageRow installed =
+      make_status_test_row("installonly-demo-1.0-1.x86_64", "installonly-demo", "1.0", "1", "x86_64");
+  PackageRow update = make_status_test_row("installonly-demo-2.0-1.x86_64", "installonly-demo", "2.0", "1", "x86_64");
+  installed.installonly = true;
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = update.nevra;
+  installed.repo_candidate_is_newest_available = true;
+  update.installonly = true;
+  update.is_newest_available = true;
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  MainWindowUiState widgets;
+  set_compact_package_view(widgets);
+
+  PendingTransactionActionRows compact_rows =
+      pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
+  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction.actions, compact_rows));
+
+  set_all_version_package_view(widgets);
+  PackageItem item;
+  item.row = update;
+
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
+  package_table_fill_item_status(&widgets, item, resolution);
+
+  REQUIRE(item.status_text == "Pending Upgrade");
+  REQUIRE(package_table_column_text(item, PackageColumnKind::STATUS) == "Pending Upgrade");
 }
 
 // -----------------------------------------------------------------------------
@@ -168,12 +276,21 @@ TEST_CASE("Package table all-version pending upgrade status uses exact row")
     .row = installed,
     .daemon_upgrade = {},
   };
-  PendingTransactionActionRows installed_action_rows = pending_transaction_action_rows_for_selection(
-      installed_table_row.row, installed_table_row.upgrade_target(), installed_table_row.upgrade_generation());
+  PendingTransactionActionRows installed_action_rows =
+      pending_transaction_action_rows_for_selection_with_pending(installed_table_row.row,
+                                                                 installed_table_row.upgrade_target(),
+                                                                 installed_table_row.upgrade_generation(),
+                                                                 false,
+                                                                 widgets.transaction.actions);
 
   PendingAction::Type action_type;
   REQUIRE_FALSE(
       package_table_pending_action_for_resolved_row(&widgets, installed_table_row, installed_action_rows, action_type));
+
+  PackageItem installed_item;
+  installed_item.row = installed;
+  package_table_fill_item_status(&widgets, installed_item, dnf_backend_resolve_installed_package(installed));
+  REQUIRE(installed_item.status_text == "Installed, update available");
 
   PackageItem update_item;
   update_item.row = update;
@@ -202,7 +319,7 @@ TEST_CASE("Package table pending upgrade does not match downgrade row")
     .daemon_upgrade = {},
   };
   PendingTransactionActionRows older_action_rows = pending_transaction_action_rows_for_selection(
-      older_table_row.row, older_table_row.upgrade_target(), older_table_row.upgrade_generation());
+      older_table_row.row, older_table_row.upgrade_target(), older_table_row.upgrade_generation(), false);
 
   REQUIRE(older_action_rows.install_is_downgrade);
 
@@ -368,7 +485,7 @@ TEST_CASE("Package table pending status keeps exact installed NEVRAs separate")
   };
 
   PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
-      table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
+      table_row.row, table_row.upgrade_target(), table_row.upgrade_generation(), false);
   PendingAction::Type action_type;
   REQUIRE_FALSE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
 }
@@ -398,7 +515,7 @@ TEST_CASE("Package table pending removal status does not leak to exact available
     };
 
     PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
-        table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
+        table_row.row, table_row.upgrade_target(), table_row.upgrade_generation(), false);
     PendingAction::Type action_type;
     REQUIRE_FALSE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
   }
@@ -429,7 +546,7 @@ TEST_CASE("Package table pending reinstall status does not leak to exact availab
     };
 
     PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(
-        table_row.row, table_row.upgrade_target(), table_row.upgrade_generation());
+        table_row.row, table_row.upgrade_target(), table_row.upgrade_generation(), false);
     PendingAction::Type action_type;
     REQUIRE_FALSE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
   }

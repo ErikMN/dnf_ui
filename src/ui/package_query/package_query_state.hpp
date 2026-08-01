@@ -32,6 +32,7 @@ struct DisplayedPackageQueryState {
   bool search_in_description = false;
   bool exact_match = false;
   bool latest_only = true;
+  bool exact_installonly_action = false;
 };
 
 // -----------------------------------------------------------------------------
@@ -96,6 +97,15 @@ displayed_package_query_uses_exact_available_rows(const DisplayedPackageQuerySta
   }
 
   return false;
+}
+
+// -----------------------------------------------------------------------------
+// Return true when exact available installonly rows should queue exact install actions.
+// -----------------------------------------------------------------------------
+inline bool
+displayed_package_query_uses_exact_installonly_actions(const DisplayedPackageQueryState &displayed)
+{
+  return displayed_package_query_uses_exact_available_rows(displayed) || displayed.exact_installonly_action;
 }
 
 // -----------------------------------------------------------------------------

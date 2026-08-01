@@ -46,7 +46,9 @@ upgrades are sent as explicit upgrade specs. Selected downgrades are sent as
 exact NEVRA specs so the daemon is asked for the version the user selected.
 
 Install, upgrade, and downgrade are install-side actions. Only one install-side
-action is kept for one package name and architecture at a time. Remove and
+action is kept for one package name and architecture at a time, except for
+exact install actions on install-only packages. DNF can install several exact
+versions of install-only packages such as kernels side by side. Remove and
 reinstall actions are tied to exact installed NEVRAs, so systems with parallel
 installed versions can mark those installed versions independently.
 

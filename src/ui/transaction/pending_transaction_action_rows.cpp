@@ -62,7 +62,9 @@ remove_pending_action_by_nevra(std::vector<PendingAction> &actions, const std::s
 // Remove stale pending install, upgrade, or downgrade actions for one package name and architecture.
 // -----------------------------------------------------------------------------
 void
-remove_pending_install_side_action_by_package_key(std::vector<PendingAction> &actions, const std::string &package_key)
+remove_pending_install_side_action_by_package_key(std::vector<PendingAction> &actions,
+                                                  const std::string &package_key,
+                                                  bool keep_other_installonly_installs)
 {
   if (package_key.empty()) {
     return;
@@ -70,6 +72,10 @@ remove_pending_install_side_action_by_package_key(std::vector<PendingAction> &ac
 
   for (size_t i = 0; i < actions.size();) {
     if (pending_action_is_install_side(actions[i].type) && actions[i].package_key == package_key) {
+      if (keep_other_installonly_installs && actions[i].type == PendingAction::INSTALL && actions[i].installonly) {
+        ++i;
+        continue;
+      }
       actions.erase(actions.begin() + i);
       continue;
     }
@@ -115,6 +121,96 @@ remove_pending_upgrade_by_transaction_spec(std::vector<PendingAction> &actions, 
   }
 }
 
+// -----------------------------------------------------------------------------
+// Return true when one queued install side action belongs to the resolved row.
+// -----------------------------------------------------------------------------
+bool
+pending_install_side_action_matches_rows(const PendingAction &action,
+                                         const PackageRow &selected,
+                                         const PendingTransactionActionRows &rows)
+{
+  if (!pending_action_is_install_side(action.type)) {
+    return false;
+  }
+
+  if (action.nevra == selected.nevra) {
+    return true;
+  }
+
+  if (rows.has_install_row && action.nevra == rows.install_row.nevra) {
+    return true;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Return the queued install side action that should control this row's action meaning.
+// -----------------------------------------------------------------------------
+const PendingAction *
+find_pending_install_side_action(const std::vector<PendingAction> &actions,
+                                 const PackageRow &selected,
+                                 const PendingTransactionActionRows &rows)
+{
+  for (const auto &action : actions) {
+    if (pending_install_side_action_matches_rows(action, selected, rows)) {
+      return &action;
+    }
+  }
+
+  return nullptr;
+}
+
+// -----------------------------------------------------------------------------
+// Return true when the resolved row already represents the queued action type.
+// -----------------------------------------------------------------------------
+bool
+resolved_install_side_action_matches_pending(const PendingTransactionActionRows &rows, const PendingAction &action)
+{
+  if (!rows.has_install_row) {
+    return false;
+  }
+
+  if (action.type == PendingAction::INSTALL) {
+    return !rows.install_is_upgrade && !rows.install_is_downgrade;
+  }
+
+  if (action.type == PendingAction::UPGRADE) {
+    return rows.install_is_upgrade;
+  }
+
+  if (action.type == PendingAction::DOWNGRADE) {
+    return rows.install_is_downgrade;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Preserve the meaning of a queued install side action when the user changes views.
+// -----------------------------------------------------------------------------
+void
+apply_pending_install_side_action(PendingTransactionActionRows &rows,
+                                  const PackageRow &selected,
+                                  const PendingAction &action)
+{
+  rows.package_key = action.package_key.empty() ? rows.package_key : action.package_key;
+  rows.has_install_row = true;
+  rows.install_action_from_pending = true;
+  rows.install_is_upgrade = action.type == PendingAction::UPGRADE;
+  rows.install_is_downgrade = action.type == PendingAction::DOWNGRADE;
+  rows.upgrade_spec = rows.install_is_upgrade ? action.transaction_spec : "";
+
+  if (selected.nevra == action.nevra) {
+    rows.install_row = selected;
+  } else {
+    rows.install_row.nevra = action.nevra;
+    rows.install_row.name = selected.name;
+    rows.install_row.arch = selected.arch;
+    rows.install_row.installonly = action.installonly;
+  }
+}
+
 } // namespace
 
 // -----------------------------------------------------------------------------
@@ -124,7 +220,8 @@ PendingTransactionActionRows
 pending_transaction_action_rows_for_resolved_selection(const PackageRow &selected,
                                                        const TransactionServiceUpgradeTarget *upgrade_target,
                                                        uint64_t upgrade_generation,
-                                                       const InstalledPackageResolution &installed_resolution)
+                                                       const InstalledPackageResolution &installed_resolution,
+                                                       bool exact_installonly_actions)
 {
   PendingTransactionActionRows rows;
   rows.state = upgrade_target ? PackageInstallState::UPGRADEABLE : installed_resolution.state;
@@ -139,6 +236,24 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
     rows.has_installed_row = true;
     rows.installed_row = installed_resolution.installed_row;
     rows.self_protected = installed_resolution.self_protected;
+  }
+
+  if (exact_installonly_actions && selected.installonly && !installed_resolution.exact_installed && !upgrade_target) {
+    rows.install_is_upgrade = false;
+    rows.install_is_downgrade = false;
+    rows.has_install_row = true;
+    rows.install_row = selected;
+    rows.can_try_reinstall = rows.has_installed_row;
+    return rows;
+  }
+
+  if (exact_installonly_actions && selected.installonly && installed_resolution.exact_installed && !upgrade_target) {
+    rows.install_is_upgrade = false;
+    rows.install_is_downgrade = false;
+    rows.has_install_row = false;
+    rows.can_try_reinstall = rows.has_installed_row && rows.state != PackageInstallState::LOCAL_ONLY &&
+        rows.state != PackageInstallState::INSTALLED_NEWER_THAN_REPO;
+    return rows;
   }
 
   // Upgrade actions need the available package ID, not always the visible row ID.
@@ -191,11 +306,44 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
 PendingTransactionActionRows
 pending_transaction_action_rows_for_selection(const PackageRow &selected,
                                               const TransactionServiceUpgradeTarget *upgrade_target,
-                                              uint64_t upgrade_generation)
+                                              uint64_t upgrade_generation,
+                                              bool exact_installonly_actions)
 {
   InstalledPackageResolution installed_resolution = dnf_backend_resolve_installed_package(selected);
   return pending_transaction_action_rows_for_resolved_selection(
-      selected, upgrade_target, upgrade_generation, installed_resolution);
+      selected, upgrade_target, upgrade_generation, installed_resolution, exact_installonly_actions);
+}
+
+PendingTransactionActionRows
+pending_transaction_action_rows_for_resolved_selection_with_pending(
+    const PackageRow &selected,
+    const TransactionServiceUpgradeTarget *upgrade_target,
+    uint64_t upgrade_generation,
+    const InstalledPackageResolution &installed_resolution,
+    bool exact_installonly_actions,
+    const std::vector<PendingAction> &actions)
+{
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_resolved_selection(
+      selected, upgrade_target, upgrade_generation, installed_resolution, exact_installonly_actions);
+
+  const PendingAction *pending_action = find_pending_install_side_action(actions, selected, rows);
+  if (pending_action && !resolved_install_side_action_matches_pending(rows, *pending_action)) {
+    apply_pending_install_side_action(rows, selected, *pending_action);
+  }
+
+  return rows;
+}
+
+PendingTransactionActionRows
+pending_transaction_action_rows_for_selection_with_pending(const PackageRow &selected,
+                                                           const TransactionServiceUpgradeTarget *upgrade_target,
+                                                           uint64_t upgrade_generation,
+                                                           bool exact_installonly_actions,
+                                                           const std::vector<PendingAction> &actions)
+{
+  InstalledPackageResolution installed_resolution = dnf_backend_resolve_installed_package(selected);
+  return pending_transaction_action_rows_for_resolved_selection_with_pending(
+      selected, upgrade_target, upgrade_generation, installed_resolution, exact_installonly_actions, actions);
 }
 
 // -----------------------------------------------------------------------------
@@ -208,6 +356,10 @@ pending_transaction_selection_allows_install_action(const PackageRow &selected,
 {
   if (!rows.has_install_row) {
     return false;
+  }
+
+  if (rows.install_action_from_pending) {
+    return true;
   }
 
   if (selected.nevra == rows.install_row.nevra) {
@@ -227,6 +379,10 @@ pending_transaction_selection_allows_install_button_action(const PackageRow &sel
 {
   if (!rows.has_install_row) {
     return false;
+  }
+
+  if (rows.install_action_from_pending) {
+    return true;
   }
 
   if (selected.nevra == rows.install_row.nevra) {
@@ -280,7 +436,10 @@ pending_transaction_mark_install_side_action(std::vector<PendingAction> &actions
     return false;
   }
 
-  remove_pending_install_side_action_by_package_key(actions, action_rows.package_key);
+  const bool keep_other_installonly_installs =
+      action_type == PendingAction::INSTALL && action_rows.install_row.installonly;
+
+  remove_pending_install_side_action_by_package_key(actions, action_rows.package_key, keep_other_installonly_installs);
   remove_pending_installed_side_action_by_package_key(actions, action_rows.package_key);
   if (action_type == PendingAction::UPGRADE) {
     remove_pending_upgrade_by_transaction_spec(actions, transaction_spec);
@@ -290,7 +449,11 @@ pending_transaction_mark_install_side_action(std::vector<PendingAction> &actions
     remove_pending_action_by_nevra(actions, action_rows.installed_row.nevra);
   }
 
-  actions.push_back({ action_type, action_rows.install_row.nevra, transaction_spec, action_rows.package_key });
+  actions.push_back({ action_type,
+                      action_rows.install_row.nevra,
+                      transaction_spec,
+                      action_rows.package_key,
+                      action_type == PendingAction::INSTALL && action_rows.install_row.installonly });
   return true;
 }
 
@@ -306,7 +469,7 @@ pending_transaction_mark_installed_side_action(std::vector<PendingAction> &actio
     return false;
   }
 
-  remove_pending_install_side_action_by_package_key(actions, action_rows.package_key);
+  remove_pending_install_side_action_by_package_key(actions, action_rows.package_key, false);
   remove_pending_action_by_nevra(actions, action_rows.installed_row.nevra);
 
   actions.push_back(
@@ -345,7 +508,7 @@ pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> &acti
                                                 bool projects_upgrade_actions)
 {
   PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(row, upgrade_target, upgrade_generation);
+      pending_transaction_action_rows_for_selection(row, upgrade_target, upgrade_generation, false);
   if (!action_rows.install_is_upgrade ||
       !pending_transaction_selection_allows_install_action(row, action_rows, projects_upgrade_actions)) {
     return false;
@@ -368,7 +531,11 @@ pending_transaction_mark_unique_upgrade_action(std::vector<PendingAction> &actio
                                                const PendingTransactionActionRows &action_rows,
                                                bool projects_upgrade_actions)
 {
-  if (!action_rows.install_is_upgrade || action_rows.package_key.empty()) {
+  const bool exact_installonly_update = action_rows.state == PackageInstallState::UPGRADEABLE &&
+      action_rows.has_install_row && action_rows.install_row.installonly && selected.is_newest_available &&
+      selected.nevra == action_rows.install_row.nevra;
+
+  if ((!action_rows.install_is_upgrade && !exact_installonly_update) || action_rows.package_key.empty()) {
     return false;
   }
 

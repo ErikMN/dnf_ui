@@ -48,7 +48,8 @@ void package_query_reload_current_view(MainWindowUiState *widgets);
 // -----------------------------------------------------------------------------
 // Show one package row by exact package ID on a background task.
 // -----------------------------------------------------------------------------
-void package_query_show_exact_package(MainWindowUiState *widgets, const std::string &nevra);
+void
+package_query_show_exact_package(MainWindowUiState *widgets, const std::string &nevra, bool exact_installonly_action);
 
 // -----------------------------------------------------------------------------
 // EOF

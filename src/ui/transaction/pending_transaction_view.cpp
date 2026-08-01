@@ -11,11 +11,14 @@
 #include "ui/package_query/package_query_controller.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
+#include "ui/transaction/pending_transaction_state.hpp"
 
 // Button payload used to jump from one pending action back to its package row.
 struct PendingJumpButtonData {
   MainWindowUiState *widgets;
   std::string nevra;
+  PendingAction::Type action_type;
+  bool installonly;
 };
 
 // -----------------------------------------------------------------------------
@@ -92,7 +95,7 @@ pending_transaction_refresh_pending_tab(MainWindowUiState *widgets)
     gtk_widget_set_halign(label, GTK_ALIGN_FILL);
     gtk_button_set_child(GTK_BUTTON(button), label);
 
-    PendingJumpButtonData *data = new PendingJumpButtonData { widgets, a.nevra };
+    PendingJumpButtonData *data = new PendingJumpButtonData { widgets, a.nevra, a.type, a.installonly };
     g_signal_connect_data(
         button,
         "clicked",
@@ -103,7 +106,8 @@ pending_transaction_refresh_pending_tab(MainWindowUiState *widgets)
           }
 
           if (data->widgets) {
-            package_query_show_exact_package(data->widgets, data->nevra);
+            const bool exact_installonly_action = data->action_type == PendingAction::INSTALL && data->installonly;
+            package_query_show_exact_package(data->widgets, data->nevra, exact_installonly_action);
           }
         }),
         data,

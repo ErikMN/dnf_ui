@@ -264,8 +264,13 @@ Downgradeable rows are older repository versions of an installed package. The
 main action becomes `Downgrade`, and the transaction request uses the selected
 exact NEVRA. Install, upgrade, and downgrade actions are unique by package name
 and architecture, so marking another install-side target for the same package
-replaces the previous one. Remove and reinstall actions remain tied to exact
-installed NEVRAs, so parallel installed versions can be handled independently.
+replaces the previous one. Exact install actions for install-only packages can
+coexist because DNF supports installing several such versions side by side.
+Remove and reinstall actions remain tied to exact installed NEVRAs, so parallel
+installed versions can be handled independently.
+Opening a pending exact installonly action from the Pending Actions tab preserves
+that exact install meaning instead of reclassifying the row as an upgrade or
+downgrade.
 
 Mark Listed Upgrades marks only valid upgrade candidates from the current table.
 It does not mark downgradeable rows or intermediate newer rows.

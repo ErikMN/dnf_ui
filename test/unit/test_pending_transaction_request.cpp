@@ -214,6 +214,62 @@ TEST_CASE("Pending transaction request builder rejects package identity conflict
 }
 
 // -----------------------------------------------------------------------------
+// Verify that request building accepts multiple exact installonly installs.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction request builder accepts multiple installonly installs")
+{
+  std::vector<PendingAction> actions = {
+    { PendingAction::INSTALL,
+      "installonly-demo-1.0-1.x86_64",
+      "installonly-demo-1.0-1.x86_64",
+      "installonly-demo\nx86_64",
+      true },
+    { PendingAction::INSTALL,
+      "installonly-demo-2.0-1.x86_64",
+      "installonly-demo-2.0-1.x86_64",
+      "installonly-demo\nx86_64",
+      true },
+  };
+
+  TransactionRequest request;
+  std::string error;
+
+  REQUIRE(pending_transaction_build_request(actions, request, error));
+  REQUIRE(error.empty());
+  REQUIRE(request.install ==
+          std::vector<std::string> {
+              "installonly-demo-1.0-1.x86_64",
+              "installonly-demo-2.0-1.x86_64",
+          });
+}
+
+// -----------------------------------------------------------------------------
+// Verify that installonly installs still conflict with non-install actions for the same package identity.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction request builder rejects mixed installonly identity conflicts")
+{
+  std::vector<PendingAction> actions = {
+    { PendingAction::INSTALL,
+      "installonly-demo-2.0-1.x86_64",
+      "installonly-demo-2.0-1.x86_64",
+      "installonly-demo\nx86_64",
+      true },
+    { PendingAction::REMOVE,
+      "installonly-demo-1.0-1.x86_64",
+      "installonly-demo-1.0-1.x86_64",
+      "installonly-demo\nx86_64" },
+  };
+
+  TransactionRequest request;
+  std::string error;
+
+  REQUIRE_FALSE(pending_transaction_build_request(actions, request, error));
+  REQUIRE_FALSE(error.empty());
+  REQUIRE(request.install.empty());
+  REQUIRE(request.remove.empty());
+}
+
+// -----------------------------------------------------------------------------
 // Verify that request building keeps different architecture downgrade identities separate.
 // -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction request builder accepts different architecture downgrades")

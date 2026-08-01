@@ -78,6 +78,8 @@ struct PackageRow {
   bool repo_candidate_is_newest_available = false;
   // True only for the newest available repo row for this package name and architecture.
   bool is_newest_available = false;
+  // True for packages matching DNF's installonly configuration.
+  bool installonly = false;
 
   // libdnf EVR comparison adapter.
   const std::string &get_epoch() const

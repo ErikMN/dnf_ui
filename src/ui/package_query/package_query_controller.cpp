@@ -313,7 +313,7 @@ package_query_reload_current_view(MainWindowUiState *widgets)
 // Show one exact package from a pending action without doing backend work on the GTK thread.
 // -----------------------------------------------------------------------------
 void
-package_query_show_exact_package(MainWindowUiState *widgets, const std::string &nevra)
+package_query_show_exact_package(MainWindowUiState *widgets, const std::string &nevra, bool exact_installonly_action)
 {
   if (!widgets || nevra.empty()) {
     return;
@@ -325,6 +325,7 @@ package_query_show_exact_package(MainWindowUiState *widgets, const std::string &
   }
 
   widgets->query_state.displayed_query = DisplayedPackageQueryState();
+  widgets->query_state.displayed_query.exact_installonly_action = exact_installonly_action;
   widgets->query_state.reload_selected_nevra = nevra;
   widgets->results.selected_nevra = nevra;
 

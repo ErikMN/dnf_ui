@@ -121,7 +121,12 @@ pending_action_matches_row(const MainWindowUiState *widgets,
   }
 
   if (action.type == PendingAction::INSTALL || action.type == PendingAction::DOWNGRADE) {
-    return action.nevra == row.row.nevra;
+    if (action.nevra == row.row.nevra) {
+      return true;
+    }
+
+    return action_rows.install_action_from_pending && action_rows.has_install_row &&
+        action.nevra == action_rows.install_row.nevra;
   }
 
   if (action.type != PendingAction::UPGRADE) {
@@ -181,8 +186,9 @@ package_table_pending_action_status_text(PendingAction::Type action_type, Packag
 {
   switch (action_type) {
   case PendingAction::INSTALL:
+    return _("Pending Install");
   case PendingAction::UPGRADE:
-    return install_state == PackageInstallState::UPGRADEABLE ? _("Pending Upgrade") : _("Pending Install");
+    return _("Pending Upgrade");
   case PendingAction::DOWNGRADE:
     return _("Pending Downgrade");
   case PendingAction::REINSTALL:
@@ -218,12 +224,13 @@ package_table_pending_action_css_class_for_type(PendingAction::Type action_type)
 // Return the icon name for a pending action.
 // -----------------------------------------------------------------------------
 static const char *
-pending_icon_name(PendingAction::Type action_type, PackageInstallState install_state)
+pending_icon_name(PendingAction::Type action_type, PackageInstallState)
 {
   switch (action_type) {
   case PendingAction::INSTALL:
+    return "list-add-symbolic";
   case PendingAction::UPGRADE:
-    return install_state == PackageInstallState::UPGRADEABLE ? "view-refresh-symbolic" : "list-add-symbolic";
+    return "view-refresh-symbolic";
   case PendingAction::DOWNGRADE:
     return "view-refresh-symbolic";
   case PendingAction::REINSTALL:

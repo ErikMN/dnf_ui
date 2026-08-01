@@ -224,6 +224,9 @@ When several EVRs of the same package name and architecture are installed,
 upgrade availability is based on the newest installed EVR. Older installed rows
 remain installed rows even when a newer repository candidate exists, because
 install-only packages such as kernels can be installed side by side.
+Package rows also carry DNF's install-only classification so the pending
+transaction model can allow several exact install actions for install-only
+packages without hardcoding kernel package names.
 
 The generic Status column is local package metadata. It can say that a newer or
 older package exists in enabled repository metadata, but it is not a transaction

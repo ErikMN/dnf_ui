@@ -22,6 +22,8 @@ struct PendingAction {
   std::string transaction_spec;
   // Package name and architecture used to replace conflicting pending actions.
   std::string package_key = {};
+  // True when DNF allows multiple exact installs for this package stream.
+  bool installonly = false;
 };
 
 // -----------------------------------------------------------------------------

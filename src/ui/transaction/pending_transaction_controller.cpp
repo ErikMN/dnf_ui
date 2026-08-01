@@ -70,8 +70,14 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
   PackageRow pkg = selected.row;
 
   // Resolve the package ID to queue before adding an install or upgrade action.
+  const bool exact_installonly_actions =
+      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
   PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(pkg, selected.upgrade_target(), selected.upgrade_generation());
+      pending_transaction_action_rows_for_selection_with_pending(pkg,
+                                                                 selected.upgrade_target(),
+                                                                 selected.upgrade_generation(),
+                                                                 exact_installonly_actions,
+                                                                 widgets->transaction.actions);
   const bool allows_installed_upgrade_action =
       displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
   if (!pending_transaction_selection_allows_install_button_action(pkg, action_rows, allows_installed_upgrade_action)) {
@@ -151,8 +157,14 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
   }
   PackageRow pkg = selected.row;
 
+  const bool exact_installonly_actions =
+      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
   PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(pkg, selected.upgrade_target(), selected.upgrade_generation());
+      pending_transaction_action_rows_for_selection_with_pending(pkg,
+                                                                 selected.upgrade_target(),
+                                                                 selected.upgrade_generation(),
+                                                                 exact_installonly_actions,
+                                                                 widgets->transaction.actions);
 
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
 
@@ -214,8 +226,14 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
   }
   PackageRow pkg = selected.row;
 
+  const bool exact_installonly_actions =
+      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
   PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(pkg, selected.upgrade_target(), selected.upgrade_generation());
+      pending_transaction_action_rows_for_selection_with_pending(pkg,
+                                                                 selected.upgrade_target(),
+                                                                 selected.upgrade_generation(),
+                                                                 exact_installonly_actions,
+                                                                 widgets->transaction.actions);
 
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
 
@@ -281,11 +299,17 @@ pending_transaction_on_mark_listed_upgrades_button_clicked(GtkButton *, gpointer
   std::vector<PackageTableRow> rows = package_table_get_displayed_packages(widgets);
   const bool projects_upgrade_actions =
       displayed_package_query_projects_upgrade_actions(widgets->query_state.displayed_query);
+  const bool exact_installonly_actions =
+      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
   std::set<std::string> marked_package_keys;
   size_t marked_count = 0;
   for (const auto &row : rows) {
     PendingTransactionActionRows action_rows =
-        pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
+        pending_transaction_action_rows_for_selection_with_pending(row.row,
+                                                                   row.upgrade_target(),
+                                                                   row.upgrade_generation(),
+                                                                   exact_installonly_actions,
+                                                                   widgets->transaction.actions);
     if (pending_transaction_mark_unique_upgrade_action(
             widgets->transaction.actions, marked_package_keys, row.row, action_rows, projects_upgrade_actions)) {
       ++marked_count;

@@ -67,6 +67,7 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
   reinstall.reserve(actions.size());
 
   std::set<std::string> install_side_keys;
+  std::set<std::string> installonly_install_keys;
   std::set<std::string> installed_side_keys;
 
   for (const auto &action : actions) {
@@ -101,7 +102,13 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
     }
 
     if (pending_action_is_install_side(action.type)) {
-      if (installed_side_keys.count(action.package_key) > 0 || !install_side_keys.insert(action.package_key).second) {
+      const bool installonly_install =
+          action.type == PendingAction::INSTALL && action.installonly && action.nevra == action.transaction_spec;
+      if (installed_side_keys.count(action.package_key) > 0 ||
+          (installonly_install && install_side_keys.count(action.package_key) > 0) ||
+          (!installonly_install &&
+           (installonly_install_keys.count(action.package_key) > 0 ||
+            !install_side_keys.insert(action.package_key).second))) {
         install.clear();
         upgrade.clear();
         downgrade.clear();
@@ -110,8 +117,11 @@ build_pending_transaction_specs(const std::vector<PendingAction> &actions,
         error_out = _("Pending package actions contain conflicting package identities.");
         return false;
       }
+      if (installonly_install) {
+        installonly_install_keys.insert(action.package_key);
+      }
     } else if (pending_action_is_installed_side(action.type)) {
-      if (install_side_keys.count(action.package_key) > 0) {
+      if (install_side_keys.count(action.package_key) > 0 || installonly_install_keys.count(action.package_key) > 0) {
         install.clear();
         upgrade.clear();
         downgrade.clear();

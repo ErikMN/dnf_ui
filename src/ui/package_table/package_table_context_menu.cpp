@@ -63,8 +63,10 @@ package_table_show_context_menu(GtkWidget *anchor,
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   gtk_popover_set_child(GTK_POPOVER(popover), box);
 
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(row.row, row.upgrade_target(), row.upgrade_generation());
+  const bool exact_installonly_actions =
+      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
+  PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection_with_pending(
+      row.row, row.upgrade_target(), row.upgrade_generation(), exact_installonly_actions, widgets->transaction.actions);
 
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
   const bool allows_installed_upgrade_action =
