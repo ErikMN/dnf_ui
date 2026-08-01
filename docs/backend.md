@@ -44,9 +44,19 @@ The access is serialized because read-only `PackageQuery` work can still touch
 shared libdnf5 `Base` internals. Package transaction preview and apply work
 goes through dnf5daemon instead of a local libdnf transaction path.
 
-Installed-package snapshot refresh uses `BaseManager::acquire_system_only_read`.
-That creates a short-lived Base for the local rpm database and does not replace
-the shared cached Base used by later package queries.
+Installed-package snapshot refresh uses
+`BaseManager::acquire_system_only_read_after_dropping_cached_base`. While
+holding the BaseManager lock, it drops the shared cached Base and constructs a
+short-lived system-only Base for the local rpm database scan. This prevents
+another worker from recreating the shared Base between cache invalidation and
+the installed-package scan.
+
+The temporary system-only Base is destroyed before the manager lock is released.
+The shared Base remains empty after the scan and is rebuilt on demand by the
+next normal package query. This cache invalidation does not increment the Base
+generation because repository metadata was not refreshed. The separate
+`acquire_system_only_read` path remains for temporary local rpm database reads
+that must not invalidate the shared Base.
 
 The Base has a generation counter. When the Base is rebuilt, the generation is
 incremented. UI tasks use that value to reject outdated results after refreshes
