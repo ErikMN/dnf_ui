@@ -156,7 +156,9 @@ The table columns can be shown or hidden from `View -> Columns`, and the same
 menu can restore the default column set. The setting is stored in `dnfui.conf`
 as `package_table_hidden_columns`, using stable column ids so new default-visible
 columns can be added without hiding them for existing users. Older
-`package_table_columns` settings are migrated when they are read.
+`package_table_columns` settings are migrated when they are read. Saving
+preferences is best-effort. The app keeps running if the config file cannot be
+created or updated.
 
 `File -> Export Package List...` or Ctrl+E writes the currently visible package
 table rows to a CSV file. It exports the table model that is already shown to

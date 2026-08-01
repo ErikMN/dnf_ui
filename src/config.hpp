@@ -18,7 +18,7 @@ int config_load_paned_position();
 // -----------------------------------------------------------------------------
 // Save the full configuration key value map.
 // -----------------------------------------------------------------------------
-void config_save_map(const std::map<std::string, std::string> &config);
+bool config_save_map(const std::map<std::string, std::string> &config);
 // -----------------------------------------------------------------------------
 // Save the current main paned divider position.
 // -----------------------------------------------------------------------------

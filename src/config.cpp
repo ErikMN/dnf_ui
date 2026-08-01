@@ -99,23 +99,51 @@ config_load_map()
 // -----------------------------------------------------------------------------
 // Save config values to disk.
 // -----------------------------------------------------------------------------
-void
+bool
 config_save_map(const std::map<std::string, std::string> &config)
 {
   std::filesystem::path path = config_file_path();
   if (path.empty()) {
-    return;
+    return false;
   }
 
-  std::filesystem::create_directories(path.parent_path());
-  std::ofstream file(path);
+  std::error_code error;
+  std::filesystem::create_directories(path.parent_path(), error);
+  if (error) {
+    return false;
+  }
+
+  std::filesystem::path tmp_path = path;
+  tmp_path += ".tmp";
+
+  std::ofstream file(tmp_path, std::ios::trunc);
   if (!file.good()) {
-    return;
+    std::filesystem::remove(tmp_path, error);
+    return false;
   }
 
   for (auto &[k, v] : config) {
     file << k << "=" << v << "\n";
+    if (!file.good()) {
+      file.close();
+      std::filesystem::remove(tmp_path, error);
+      return false;
+    }
   }
+
+  file.close();
+  if (!file.good()) {
+    std::filesystem::remove(tmp_path, error);
+    return false;
+  }
+
+  std::filesystem::rename(tmp_path, path, error);
+  if (error) {
+    std::filesystem::remove(tmp_path, error);
+    return false;
+  }
+
+  return true;
 }
 
 // -----------------------------------------------------------------------------

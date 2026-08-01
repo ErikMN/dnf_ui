@@ -53,7 +53,13 @@ test_config_file()
 void
 reset_test_config_file()
 {
-  std::filesystem::remove(test_config_file());
+  std::error_code error;
+  if (!std::filesystem::is_directory(test_config_dir(), error)) {
+    std::filesystem::remove(test_config_dir(), error);
+    std::filesystem::create_directories(test_config_dir(), error);
+  }
+  std::filesystem::remove_all(test_config_file(), error);
+  std::filesystem::remove_all(test_config_file().string() + ".tmp", error);
 }
 
 // -----------------------------------------------------------------------------
@@ -87,10 +93,49 @@ TEST_CASE("Config map save and load roundtrip")
     { "window_height", "900" },
   };
 
-  config_save_map(saved);
+  REQUIRE(config_save_map(saved));
   std::map<std::string, std::string> loaded = config_load_map();
 
   REQUIRE(loaded == saved);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that save failure does not throw when the config directory path is blocked by a file.
+// -----------------------------------------------------------------------------
+TEST_CASE("Config save returns false when config parent is a file")
+{
+  reset_test_config_file();
+
+  std::error_code error;
+  std::filesystem::remove_all(test_config_dir(), error);
+
+  std::ofstream blocker(test_config_dir());
+  REQUIRE(blocker.good());
+  blocker << "not a directory\n";
+  blocker.close();
+
+  REQUIRE_FALSE(config_save_map({ { "window_width", "1280" } }));
+
+  std::filesystem::remove(test_config_dir(), error);
+  std::filesystem::create_directories(test_config_dir(), error);
+  REQUIRE_FALSE(error);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that save failure leaves the previous config file intact.
+// -----------------------------------------------------------------------------
+TEST_CASE("Config save keeps previous file when temporary write fails")
+{
+  reset_test_config_file();
+
+  REQUIRE(config_save_map({ { "window_width", "1280" } }));
+  REQUIRE(std::filesystem::create_directory(test_config_file().string() + ".tmp"));
+
+  REQUIRE_FALSE(config_save_map({ { "window_width", "1600" } }));
+
+  std::map<std::string, std::string> loaded = config_load_map();
+  REQUIRE(loaded.size() == 1);
+  REQUIRE(loaded["window_width"] == "1280");
 }
 
 // -----------------------------------------------------------------------------
@@ -99,7 +144,9 @@ TEST_CASE("Config map save and load roundtrip")
 TEST_CASE("Config loader ignores comments and malformed lines")
 {
   reset_test_config_file();
-  std::filesystem::create_directories(test_config_dir());
+  const bool config_dir_ready =
+      std::filesystem::create_directories(test_config_dir()) || std::filesystem::is_directory(test_config_dir());
+  REQUIRE(config_dir_ready);
 
   std::ofstream file(test_config_file());
   REQUIRE(file.good());
@@ -132,7 +179,7 @@ TEST_CASE("Config paned position uses default when missing")
 TEST_CASE("Config paned position ignores invalid saved values")
 {
   reset_test_config_file();
-  config_save_map({ { "paned_position", "123abc" } });
+  REQUIRE(config_save_map({ { "paned_position", "123abc" } }));
 
   REQUIRE(config_load_paned_position() == 300);
 }
@@ -143,7 +190,7 @@ TEST_CASE("Config paned position ignores invalid saved values")
 TEST_CASE("Config paned position restores valid saved value")
 {
   reset_test_config_file();
-  config_save_map({ { "paned_position", "640" } });
+  REQUIRE(config_save_map({ { "paned_position", "640" } }));
 
   REQUIRE(config_load_paned_position() == 640);
 }
@@ -169,7 +216,7 @@ TEST_CASE("Package table columns use default visibility when missing")
 TEST_CASE("Package table columns restore saved hidden ids")
 {
   reset_test_config_file();
-  config_save_map({ { "package_table_hidden_columns", "summary" } });
+  REQUIRE(config_save_map({ { "package_table_hidden_columns", "summary" } }));
 
   std::set<std::string> visible = package_table_load_visible_column_ids();
 
@@ -184,7 +231,7 @@ TEST_CASE("Package table columns restore saved hidden ids")
 TEST_CASE("Package table columns ignore unknown hidden ids")
 {
   reset_test_config_file();
-  config_save_map({ { "package_table_hidden_columns", "summary,unknown-column" } });
+  REQUIRE(config_save_map({ { "package_table_hidden_columns", "summary,unknown-column" } }));
 
   std::set<std::string> visible = package_table_load_visible_column_ids();
 
@@ -242,7 +289,7 @@ TEST_CASE("Package table columns reject unknown visibility changes")
 TEST_CASE("Package table columns migrate old visible settings")
 {
   reset_test_config_file();
-  config_save_map({ { "package_table_columns", "package,version,unknown-column" } });
+  REQUIRE(config_save_map({ { "package_table_columns", "package,version,unknown-column" } }));
 
   std::set<std::string> visible = package_table_load_visible_column_ids();
   std::map<std::string, std::string> config = config_load_map();
