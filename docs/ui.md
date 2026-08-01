@@ -162,7 +162,8 @@ created or updated.
 
 `File -> Export Package List...` or Ctrl+E writes the currently visible package
 table rows to a CSV file. It exports the table model that is already shown to
-the user instead of running another backend query.
+the user instead of running another backend query. CSV fields that could be
+read as spreadsheet formulas are prefixed before normal CSV escaping.
 
 [src/ui/package_table/package_table_columns.cpp](../src/ui/package_table/package_table_columns.cpp) owns the
 package table column definitions, stable column ids, saved visibility settings,
@@ -178,7 +179,8 @@ epoch and version. Release columns sort by stored RPM release text.
 [src/ui/package_table/package_table_export.cpp](../src/ui/package_table/package_table_export.cpp) exports the
 current table rows to CSV.
 [src/ui/package_table/package_table_export_csv.cpp](../src/ui/package_table/package_table_export_csv.cpp) formats the
-CSV text and is tested without opening a GTK file dialog.
+CSV text, including spreadsheet formula protection, and is tested without
+opening a GTK file dialog.
 
 [src/ui/package_table/package_table_status.cpp](../src/ui/package_table/package_table_status.cpp) keeps the
 status text and CSS classes separate from table construction.

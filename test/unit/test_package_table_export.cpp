@@ -24,5 +24,26 @@ TEST_CASE("Package table CSV export escapes quoted fields")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that fields beginning with spreadsheet formula markers are protected.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table CSV export protects spreadsheet formula fields")
+{
+  std::string csv =
+      package_table_export_csv_text({ "Summary" }, { { "=SUM(1,1)" }, { "+cmd" }, { "-cmd" }, { "@formula" } });
+
+  REQUIRE(csv == "Summary\n\"'=SUM(1,1)\"\n'+cmd\n'-cmd\n'@formula\n");
+}
+
+// -----------------------------------------------------------------------------
+// Verify that leading whitespace does not bypass formula protection.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table CSV export protects formula fields after whitespace")
+{
+  std::string csv = package_table_export_csv_text({ "Summary" }, { { "  =SUM(1,1)" } });
+
+  REQUIRE(csv == "Summary\n\"'  =SUM(1,1)\"\n");
+}
+
+// -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

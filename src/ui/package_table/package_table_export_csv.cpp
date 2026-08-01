@@ -7,13 +7,44 @@
 namespace {
 
 // -----------------------------------------------------------------------------
+// Return true when one character can start a spreadsheet formula.
+// -----------------------------------------------------------------------------
+bool
+csv_formula_marker(char c)
+{
+  return c == '=' || c == '+' || c == '-' || c == '@';
+}
+
+// -----------------------------------------------------------------------------
+// Prefix fields that spreadsheet applications may interpret as formulas.
+// -----------------------------------------------------------------------------
+std::string
+csv_protect_formula(const std::string &text)
+{
+  for (char c : text) {
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      continue;
+    }
+
+    if (csv_formula_marker(c)) {
+      return "'" + text;
+    }
+
+    break;
+  }
+
+  return text;
+}
+
+// -----------------------------------------------------------------------------
 // Return text escaped for one CSV field.
 // -----------------------------------------------------------------------------
 std::string
 csv_escape(const std::string &text)
 {
+  std::string safe_text = csv_protect_formula(text);
   bool quote = false;
-  for (char c : text) {
+  for (char c : safe_text) {
     if (c == ',' || c == '"' || c == '\n' || c == '\r') {
       quote = true;
       break;
@@ -21,11 +52,11 @@ csv_escape(const std::string &text)
   }
 
   if (!quote) {
-    return text;
+    return safe_text;
   }
 
   std::string escaped = "\"";
-  for (char c : text) {
+  for (char c : safe_text) {
     if (c == '"') {
       escaped += "\"\"";
     } else {
