@@ -128,6 +128,10 @@ pending_action_matches_row(const MainWindowUiState *widgets,
     return false;
   }
 
+  if (!action_rows.install_is_upgrade) {
+    return false;
+  }
+
   if (action.nevra == row.row.nevra) {
     return true;
   }

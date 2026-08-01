@@ -181,6 +181,37 @@ TEST_CASE("Package table all-version pending upgrade status uses exact row")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that a pending upgrade does not leak onto an older available row.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table pending upgrade does not match downgrade row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_status_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  PackageRow older = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  MainWindowUiState widgets;
+  set_all_version_package_view(widgets);
+  widgets.transaction.actions = {
+    { PendingAction::UPGRADE, installed.nevra, "demo.x86_64", installed.name_arch_key() },
+  };
+
+  PackageTableRow older_table_row {
+    .row = older,
+    .daemon_upgrade = {},
+  };
+  PendingTransactionActionRows older_action_rows = pending_transaction_action_rows_for_selection(
+      older_table_row.row, older_table_row.upgrade_target(), older_table_row.upgrade_generation());
+
+  REQUIRE(older_action_rows.install_is_downgrade);
+
+  PendingAction::Type action_type;
+  REQUIRE_FALSE(
+      package_table_pending_action_for_resolved_row(&widgets, older_table_row, older_action_rows, action_type));
+}
+
+// -----------------------------------------------------------------------------
 // Verify that all-version update rows have distinct non-pending Status labels.
 // -----------------------------------------------------------------------------
 TEST_CASE("Package table all-version upgrade status separates installed and available rows")

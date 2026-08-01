@@ -530,6 +530,7 @@ TEST_CASE("Package info installed context keeps exact installed version")
 
   REQUIRE(info.find("Package ID: " + older_row.nevra) != std::string::npos);
   REQUIRE(info.find("Package ID: " + newer_row.nevra) == std::string::npos);
+  REQUIRE(info.find("Upgradable Version: ") == std::string::npos);
 }
 
 // -----------------------------------------------------------------------------
@@ -959,6 +960,80 @@ TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
 
   row.repo_candidate_relation = PackageRepoCandidateRelation::OLDER;
   REQUIRE(dnf_backend_resolve_installed_package(row).state == PackageInstallState::INSTALLED_NEWER_THAN_REPO);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that an older installed EVR is not treated as upgradeable when the
+// candidate version is already installed.
+// -----------------------------------------------------------------------------
+TEST_CASE("Older parallel installed rows do not expose already-installed updates")
+{
+  reset_backend_globals();
+
+  PackageRow older_row;
+  older_row.nevra = "demo-1.0-1.x86_64";
+  older_row.name = "demo";
+  older_row.version = "1.0";
+  older_row.release = "1";
+  older_row.arch = "x86_64";
+  older_row.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  older_row.repo_candidate_nevra = "demo-2.0-1.x86_64";
+  older_row.repo_candidate_version = "2.0";
+  older_row.repo_candidate_release = "1";
+  older_row.repo_candidate_is_newest_available = true;
+
+  PackageRow newest_row = older_row;
+  newest_row.nevra = "demo-2.0-1.x86_64";
+  newest_row.version = "2.0";
+  newest_row.repo_candidate_relation = PackageRepoCandidateRelation::SAME;
+  newest_row.repo_candidate_nevra.clear();
+  newest_row.repo_candidate_version.clear();
+  newest_row.repo_candidate_release.clear();
+  newest_row.repo_candidate_is_newest_available = false;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ older_row, newest_row });
+
+  InstalledPackageResolution older_resolution = dnf_backend_resolve_installed_package(older_row);
+  InstalledPackageResolution newest_resolution = dnf_backend_resolve_installed_package(newest_row);
+
+  REQUIRE(older_resolution.exact_installed);
+  REQUIRE(older_resolution.has_installed_row);
+  REQUIRE(older_resolution.installed_row.nevra == newest_row.nevra);
+  REQUIRE(older_resolution.state == PackageInstallState::INSTALLED);
+  REQUIRE(newest_resolution.state == PackageInstallState::INSTALLED);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that only the newest installed EVR exposes a newer repository candidate.
+// -----------------------------------------------------------------------------
+TEST_CASE("Only newest parallel installed row exposes repository update")
+{
+  reset_backend_globals();
+
+  PackageRow older_row;
+  older_row.nevra = "demo-1.0-1.x86_64";
+  older_row.name = "demo";
+  older_row.version = "1.0";
+  older_row.release = "1";
+  older_row.arch = "x86_64";
+  older_row.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  older_row.repo_candidate_nevra = "demo-3.0-1.x86_64";
+  older_row.repo_candidate_version = "3.0";
+  older_row.repo_candidate_release = "1";
+  older_row.repo_candidate_is_newest_available = true;
+
+  PackageRow newest_row = older_row;
+  newest_row.nevra = "demo-2.0-1.x86_64";
+  newest_row.version = "2.0";
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ older_row, newest_row });
+
+  InstalledPackageResolution older_resolution = dnf_backend_resolve_installed_package(older_row);
+  InstalledPackageResolution newest_resolution = dnf_backend_resolve_installed_package(newest_row);
+
+  REQUIRE(older_resolution.state == PackageInstallState::INSTALLED);
+  REQUIRE(newest_resolution.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(newest_resolution.installed_row.nevra == newest_row.nevra);
 }
 
 // -----------------------------------------------------------------------------

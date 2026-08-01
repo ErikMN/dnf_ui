@@ -97,7 +97,10 @@ dnf_backend_get_package_info(const std::string &pkg_nevra,
   std::string installed_summary, installed_description;
 
   PackageRow upgrade_row;
+  PackageRow upgrade_baseline_row;
   bool have_upgrade = false;
+  bool have_upgrade_baseline = false;
+  bool selected_installed_is_newest = true;
   unsigned long long upgrade_download_size = 0;
 
   auto [base, guard] = BaseManager::instance().acquire_read();
@@ -132,6 +135,23 @@ dnf_backend_get_package_info(const std::string &pkg_nevra,
       installed_summary = selected_summary;
       installed_description = selected_description;
       have_installed_counterpart = true;
+
+      libdnf5::rpm::PackageQuery installed_by_name(base);
+      installed_by_name.filter_name(pkg.get_name(), libdnf5::sack::QueryCmp::EQ);
+      installed_by_name.filter_installed();
+      for (auto installed_pkg : installed_by_name) {
+        if (installed_pkg.get_arch() != pkg.get_arch()) {
+          continue;
+        }
+        PackageRow row = make_package_row(installed_pkg);
+        if (!have_upgrade_baseline || libdnf5::rpm::evrcmp(row, upgrade_baseline_row) > 0) {
+          upgrade_baseline_row = row;
+          have_upgrade_baseline = true;
+        }
+      }
+      if (have_upgrade_baseline && libdnf5::rpm::evrcmp(selected_row, upgrade_baseline_row) < 0) {
+        selected_installed_is_newest = false;
+      }
     } else {
       // Find the installed package with the same name and architecture.
       // This gives available update rows the same installed context as Latest only mode.
@@ -149,28 +169,31 @@ dnf_backend_get_package_info(const std::string &pkg_nevra,
           installed_summary = installed_pkg.get_summary();
           installed_description = installed_pkg.get_description();
           have_installed_counterpart = true;
+          upgrade_baseline_row = row;
+          have_upgrade_baseline = true;
         }
       }
     }
   }
 
-  if (have_installed_counterpart && upgrade_row_override) {
+  if (have_upgrade_baseline && selected_installed_is_newest && upgrade_row_override &&
+      libdnf5::rpm::evrcmp(*upgrade_row_override, upgrade_baseline_row) > 0) {
     upgrade_row = *upgrade_row_override;
     have_upgrade = true;
-  } else if (have_installed_counterpart) {
+  } else if (have_upgrade_baseline && selected_installed_is_newest) {
     // Find the newest available package with the same name and architecture.
     // It is an upgrade only when its EVR is newer than the installed package.
     libdnf5::rpm::PackageQuery available_by_name(base);
-    available_by_name.filter_name(installed_row.name, libdnf5::sack::QueryCmp::EQ);
+    available_by_name.filter_name(upgrade_baseline_row.name, libdnf5::sack::QueryCmp::EQ);
     available_by_name.filter_available();
     available_by_name.filter_latest_evr();
 
     for (auto available_pkg : available_by_name) {
-      if (available_pkg.get_arch() != installed_row.arch) {
+      if (available_pkg.get_arch() != upgrade_baseline_row.arch) {
         continue;
       }
       PackageRow row = make_package_row(available_pkg);
-      if (libdnf5::rpm::evrcmp(row, installed_row) <= 0) {
+      if (libdnf5::rpm::evrcmp(row, upgrade_baseline_row) <= 0) {
         continue;
       }
       if (!have_upgrade || libdnf5::rpm::evrcmp(row, upgrade_row) > 0) {

@@ -89,6 +89,11 @@ resolve_installed_package_locked(const PackageRow &row)
   }
 
   if (resolution.exact_installed) {
+    if (resolution.has_installed_row && libdnf5::rpm::evrcmp(row, resolution.installed_row) < 0) {
+      resolution.state = PackageInstallState::INSTALLED;
+      return resolution;
+    }
+
     switch (row.repo_candidate_relation) {
     case PackageRepoCandidateRelation::UNKNOWN:
       // Annotation was not run or failed. The package is known-installed, but the repo relation is unknown.
