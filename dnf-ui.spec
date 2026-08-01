@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.5.1
+Version:        0.5.2
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,13 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Sat Aug 01 2026 ErikMN <dnfui@proton.me> - 0.5.2-1
+- Fix installed-row update information and upgrade actions in all-version views
+- Keep installed-state refresh synchronized with the shared package Base
+- Translate remaining package detail and transaction validation messages
+- Show upgrade-target changelogs consistently and sort changelog entries newest first
+- Avoid repeated config writes while dragging the package details divider
+
 * Fri Jul 31 2026 ErikMN <dnfui@proton.me> - 0.5.1-1
 - Fix package details and table values in all-version views
 - Keep remove and reinstall actions on exact installed package rows
