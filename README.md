@@ -78,6 +78,8 @@ globally newest available version can be marked for upgrade, older available
 versions can be marked for downgrade, and intermediate newer versions remain
 visible for inspection. Locally installed RPMs that are not present in enabled
 repositories are listed as `Installed (local only)`.
+For install-only packages such as kernels, available exact versions are marked
+for installation so several versions can coexist.
 
 ## Why?
 

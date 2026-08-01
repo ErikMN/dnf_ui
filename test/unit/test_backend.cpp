@@ -84,6 +84,39 @@ find_parallel_installed_versions(PackageRow &older_out, PackageRow &newer_out)
   return false;
 }
 
+std::set<std::string>
+collect_real_installonly_nevras(bool installed)
+{
+  std::set<std::string> nevras;
+
+  auto read = BaseManager::instance().acquire_read();
+  libdnf5::rpm::PackageQuery query(read.base);
+  query.filter_installonly();
+  if (installed) {
+    query.filter_installed();
+  } else {
+    query.filter_available();
+  }
+
+  for (const auto &pkg : query) {
+    nevras.insert(pkg.get_nevra());
+  }
+
+  return nevras;
+}
+
+const PackageRow *
+find_backend_test_row_by_nevras(const std::vector<PackageRow> &rows, const std::set<std::string> &nevras)
+{
+  for (const auto &row : rows) {
+    if (nevras.count(row.nevra) > 0) {
+      return &row;
+    }
+  }
+
+  return nullptr;
+}
+
 PackageRow
 make_backend_test_row(const std::string &nevra,
                       const std::string &name,
@@ -611,6 +644,66 @@ TEST_CASE("Browse results keep one latest row per package name and architecture 
       REQUIRE(row.is_newest_available);
     }
   }
+}
+
+// -----------------------------------------------------------------------------
+// Verify that real available installonly packages keep the backend installonly flag.
+// -----------------------------------------------------------------------------
+TEST_CASE("Backend marks real available installonly packages")
+{
+  reset_backend_globals();
+
+  std::set<std::string> installonly_nevras = collect_real_installonly_nevras(false);
+  if (installonly_nevras.empty()) {
+    SKIP("Current repository metadata does not contain available installonly packages.");
+  }
+
+  auto compact_rows = dnf_backend_get_browse_package_rows_interruptible(backend_search_options(false, false), nullptr);
+  const PackageRow *compact_row = find_backend_test_row_by_nevras(compact_rows, installonly_nevras);
+  if (!compact_row) {
+    SKIP("Current repository metadata does not expose an installonly package in the compact browse result.");
+  }
+  REQUIRE(compact_row->installonly);
+
+  auto all_rows =
+      dnf_backend_get_browse_package_rows_interruptible(backend_search_options(false, false, false), nullptr);
+  const PackageRow *all_row = find_backend_test_row_by_nevra(all_rows, compact_row->nevra);
+  REQUIRE(all_row != nullptr);
+  REQUIRE(all_row->installonly);
+
+  auto exact_rows = dnf_backend_get_available_package_rows_by_nevra(compact_row->nevra);
+  const PackageRow *exact_row = find_backend_test_row_by_nevra(exact_rows, compact_row->nevra);
+  REQUIRE(exact_row != nullptr);
+  REQUIRE(exact_row->installonly);
+
+  auto metadata_rows =
+      dnf_backend_get_available_package_metadata_by_nevras_interruptible({ compact_row->nevra }, nullptr);
+  const PackageRow *metadata_row = find_backend_test_row_by_nevra(metadata_rows, compact_row->nevra);
+  REQUIRE(metadata_row != nullptr);
+  REQUIRE(metadata_row->installonly);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that real installed installonly packages keep the backend installonly flag.
+// -----------------------------------------------------------------------------
+TEST_CASE("Backend marks real installed installonly packages")
+{
+  reset_backend_globals();
+
+  std::set<std::string> installonly_nevras = collect_real_installonly_nevras(true);
+  if (installonly_nevras.empty()) {
+    SKIP("Current rpmdb does not contain installed installonly packages.");
+  }
+
+  auto installed_rows = dnf_backend_get_installed_package_rows_interruptible(nullptr);
+  const PackageRow *installed_row = find_backend_test_row_by_nevras(installed_rows, installonly_nevras);
+  REQUIRE(installed_row != nullptr);
+  REQUIRE(installed_row->installonly);
+
+  auto exact_rows = dnf_backend_get_installed_package_rows_by_nevra(installed_row->nevra);
+  const PackageRow *exact_row = find_backend_test_row_by_nevra(exact_rows, installed_row->nevra);
+  REQUIRE(exact_row != nullptr);
+  REQUIRE(exact_row->installonly);
 }
 
 // -----------------------------------------------------------------------------

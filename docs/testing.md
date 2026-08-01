@@ -311,3 +311,14 @@ display, or pending action identity:
     architecture.
 11. Verify that List Installed, List Upgradable, Upgrade All, and Mark Listed
     Upgrades do not depend on the Latest only checkbox.
+12. For an install-only package such as a kernel, verify that two distinct exact
+    versions can be marked for installation together.
+13. Verify that marking the same exact install-only NEVRA twice does not add a
+    duplicate pending action.
+14. Verify that switching Latest only on or off does not convert a pending exact
+    install-only install into an upgrade or downgrade.
+15. Verify that Unmark removes a pending exact install-only action instead of
+    converting it to another action.
+16. Verify that normal package upgrade behavior is unchanged.
+17. Verify that the transaction preview contains both selected exact
+    install-only NEVRAs when two versions are selected.
