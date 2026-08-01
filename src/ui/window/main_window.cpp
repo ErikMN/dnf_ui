@@ -472,12 +472,6 @@ connect_signals(const AppWidgets *ui, MainWindowUiState *widgets)
 
   // Intercept window close when pending or running transaction work needs attention.
   g_signal_connect(ui->window, "close-request", G_CALLBACK(on_main_window_close_request), widgets);
-
-  // Live-update: save pane position whenever the user moves the divider
-  g_signal_connect(ui->inner_paned,
-                   "notify::position",
-                   G_CALLBACK(+[](GtkPaned *paned, GParamSpec *, gpointer) { config_save_paned_position(paned); }),
-                   NULL);
 }
 
 // -----------------------------------------------------------------------------
