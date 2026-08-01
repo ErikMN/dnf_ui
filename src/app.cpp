@@ -63,13 +63,6 @@ struct StartupWarmupData {
   GCancellable *startup_cancellable = nullptr;
 };
 
-struct AppBackendBaseDropGuard {
-  ~AppBackendBaseDropGuard()
-  {
-    BaseManager::instance().drop_cached_base();
-  }
-};
-
 // -----------------------------------------------------------------------------
 // Return the text used in trace logs for one repository state.
 // -----------------------------------------------------------------------------
@@ -173,9 +166,12 @@ start_installed_refresh_task(void)
 static void
 on_installed_refresh_task(GTask *task, gpointer, gpointer, GCancellable *)
 {
-  AppBackendBaseDropGuard base_drop_guard;
-
   try {
+    // Drop the shared Base before scanning installed packages.
+    // A query waiting on the Base lock must not acquire an older Base after
+    // this refresh publishes newer installed state.
+    BaseManager::instance().drop_cached_base();
+
     const bool changed = dnf_backend_refresh_installed_nevras();
     if (changed) {
       DaemonUpgradeState::instance().mark_stale();
