@@ -6,6 +6,8 @@
 // -----------------------------------------------------------------------------
 #pragma once
 
+#include "i18n.hpp"
+
 #include <cstddef>
 #include <set>
 #include <string>
@@ -47,14 +49,14 @@ struct TransactionRequest {
     error_out.clear();
 
     if (empty()) {
-      error_out = "Transaction request is empty.";
+      error_out = _("Transaction request is empty.");
       return false;
     }
 
     // Upgrade all is a separate request type and must not include selected packages.
     if (upgrade_all &&
         (!install.empty() || !upgrade.empty() || !downgrade.empty() || !remove.empty() || !reinstall.empty())) {
-      error_out = "Upgrade all cannot be combined with other package actions.";
+      error_out = _("Upgrade all cannot be combined with other package actions.");
       return false;
     }
 
@@ -63,15 +65,15 @@ struct TransactionRequest {
       std::set<std::string> seen;
       for (const auto &spec : specs) {
         if (spec.empty()) {
-          error_out = std::string("Transaction request contains an empty ") + kind + " package spec.";
+          error_out = dnfui_i18n_format(_("Transaction request contains an empty %s package spec."), kind);
           return false;
         }
         if (spec.size() > kTransactionRequestMaxSpecLength) {
-          error_out = std::string("Transaction request contains a package spec that is too long.");
+          error_out = _("Transaction request contains a package spec that is too long.");
           return false;
         }
         if (!seen.insert(spec).second) {
-          error_out = std::string("Transaction request contains a duplicate ") + kind + " package spec.";
+          error_out = dnfui_i18n_format(_("Transaction request contains a duplicate %s package spec."), kind);
           return false;
         }
       }
@@ -79,9 +81,9 @@ struct TransactionRequest {
     };
 
     // Check each action list before comparing the lists with each other.
-    if (!validate_specs(install, "install") || !validate_specs(upgrade, "upgrade") ||
-        !validate_specs(downgrade, "downgrade") || !validate_specs(remove, "remove") ||
-        !validate_specs(reinstall, "reinstall")) {
+    if (!validate_specs(install, _("install")) || !validate_specs(upgrade, _("upgrade")) ||
+        !validate_specs(downgrade, _("downgrade")) || !validate_specs(remove, _("remove")) ||
+        !validate_specs(reinstall, _("reinstall"))) {
       return false;
     }
 
@@ -101,7 +103,7 @@ struct TransactionRequest {
         has_conflict(install, reinstall) || has_conflict(upgrade, downgrade) || has_conflict(upgrade, remove) ||
         has_conflict(upgrade, reinstall) || has_conflict(downgrade, remove) || has_conflict(downgrade, reinstall) ||
         has_conflict(remove, reinstall)) {
-      error_out = "Transaction request contains conflicting package actions.";
+      error_out = _("Transaction request contains conflicting package actions.");
       return false;
     }
 

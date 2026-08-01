@@ -252,6 +252,9 @@ msgstr "Uppackning av paket misslyckades: "
 msgid "repository metadata"
 msgstr "förrådsmetadata"
 
+msgid "(no summary)"
+msgstr "(ingen sammanfattning)"
+
 msgid "Dependency"
 msgstr "Beroende"
 
@@ -272,6 +275,10 @@ msgstr "Externt"
 
 msgid "Unknown"
 msgstr "Okänt"
+
+#, c-format
+msgid "No details found for %s"
+msgstr "Inga detaljer hittades för %s"
 
 msgid "Name"
 msgstr "Namn"
@@ -317,6 +324,54 @@ msgstr "Beskrivning"
 
 msgid "File list available only for installed packages."
 msgstr "Fillista är endast tillgänglig för installerade paket."
+
+msgid "No files recorded for this installed package."
+msgstr "Inga filer är registrerade för detta installerade paket."
+
+#, c-format
+msgid "--- %zu more file not shown ---"
+msgid_plural "--- %zu more files not shown ---"
+msgstr[0] "--- %zu fil till visas inte ---"
+msgstr[1] "--- %zu filer till visas inte ---"
+
+msgid "--- Use the package manager CLI for complete list ---"
+msgstr "--- Använd pakethanterarens kommandorad för fullständig lista ---"
+
+msgid "No dependency information found for this package."
+msgstr "Ingen beroendeinformation hittades för detta paket."
+
+msgid "(none)"
+msgstr "(inga)"
+
+msgid "Requires"
+msgstr "Kräver"
+
+msgid "Required By"
+msgstr "Krävs av"
+
+msgid "(installed packages only)"
+msgstr "(endast installerade paket)"
+
+msgid "Provides"
+msgstr "Tillhandahåller"
+
+msgid "Conflicts"
+msgstr "Konflikter"
+
+msgid "Obsoletes"
+msgstr "Ersätter"
+
+msgid "No changelog entries found."
+msgstr "Inga ändringsloggposter hittades."
+
+msgid "Date"
+msgstr "Datum"
+
+msgid "Author"
+msgstr "Författare"
+
+msgid "No changelog available."
+msgstr "Ingen ändringslogg tillgänglig."
 
 msgid "History load was cancelled."
 msgstr "Historikinläsningen avbröts."
@@ -876,6 +931,41 @@ msgstr "Rensa väntande paketåtgärder innan alla paket uppgraderas."
 
 msgid "No pending changes."
 msgstr "Inga väntande ändringar."
+
+msgid "Transaction request is empty."
+msgstr "Transaktionsbegäran är tom."
+
+msgid "Upgrade all cannot be combined with other package actions."
+msgstr "Uppgradera alla kan inte kombineras med andra paketåtgärder."
+
+#, c-format
+msgid "Transaction request contains an empty %s package spec."
+msgstr "Transaktionsbegäran innehåller en tom paketspecifikation för %s."
+
+msgid "Transaction request contains a package spec that is too long."
+msgstr "Transaktionsbegäran innehåller en paketspecifikation som är för lång."
+
+#, c-format
+msgid "Transaction request contains a duplicate %s package spec."
+msgstr "Transaktionsbegäran innehåller en dubblett av paketspecifikationen för %s."
+
+msgid "install"
+msgstr "installation"
+
+msgid "upgrade"
+msgstr "uppgradering"
+
+msgid "downgrade"
+msgstr "nedgradering"
+
+msgid "remove"
+msgstr "borttagning"
+
+msgid "reinstall"
+msgstr "ominstallation"
+
+msgid "Transaction request contains conflicting package actions."
+msgstr "Transaktionsbegäran innehåller paketåtgärder som står i konflikt."
 
 #, c-format
 msgid ""

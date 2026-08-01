@@ -31,7 +31,7 @@ static std::string
 format_package_size(unsigned long long size_bytes)
 {
   char *formatted = g_format_size(size_bytes);
-  std::string text = formatted ? formatted : "Unknown";
+  std::string text = formatted ? formatted : _("Unknown");
   g_free(formatted);
   return text;
 }
@@ -104,7 +104,7 @@ dnf_backend_get_package_info(const std::string &pkg_nevra,
   query.filter_nevra(pkg_nevra);
 
   if (query.empty()) {
-    return "No details found for " + pkg_nevra;
+    return dnfui_i18n_format(_("No details found for %s"), pkg_nevra.c_str());
   }
 
   const bool use_installed_context = context == PackageDetailsContext::INSTALLED_CONTEXT;
@@ -328,11 +328,14 @@ dnf_backend_get_installed_package_files(const std::string &pkg_nevra,
 
   std::string result = files.str();
   if (result.empty()) {
-    result = "No files recorded for this installed package.";
+    result = _("No files recorded for this installed package.");
   } else if (should_truncate && file_count > max_files_for_display) {
     const size_t hidden_count = file_count - displayed_count;
-    files << "\n--- " << hidden_count << " more file" << (hidden_count == 1 ? "" : "s") << " not shown ---\n"
-          << "--- Use the package manager CLI for complete list ---\n";
+    files << "\n"
+          << dnfui_i18n_format_count(
+                 hidden_count, "--- %zu more file not shown ---", "--- %zu more files not shown ---")
+          << "\n"
+          << _("--- Use the package manager CLI for complete list ---") << "\n";
     result = files.str();
   }
 
@@ -367,7 +370,7 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra, PackageDetailsContext
   query.filter_nevra(pkg_nevra);
 
   if (query.empty()) {
-    return "No dependency information found for this package.";
+    return _("No dependency information found for this package.");
   }
 
   std::string dependency_nevra;
@@ -421,7 +424,7 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra, PackageDetailsContext
   }
 
   if (dependency_query.empty()) {
-    return "No dependency information found for this package.";
+    return _("No dependency information found for this package.");
   }
 
   dependency_query.filter_latest_evr();
@@ -433,7 +436,7 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra, PackageDetailsContext
   auto list_field = [&](const char *title, const auto &items) {
     out << title << ":\n";
     if (items.empty()) {
-      out << "  (none)\n\n";
+      out << "  " << _("(none)") << "\n\n";
       return;
     }
     for (const auto &i : items) {
@@ -442,21 +445,21 @@ dnf_backend_get_package_deps(const std::string &pkg_nevra, PackageDetailsContext
     out << "\n";
   };
 
-  list_field("Requires", pkg.get_requires());
-  out << "Required By:\n";
+  list_field(_("Requires"), pkg.get_requires());
+  out << _("Required By") << ":\n";
   if (!pkg.is_installed()) {
-    out << "  (installed packages only)\n\n";
+    out << "  " << _("(installed packages only)") << "\n\n";
   } else if (required_by_nevras.empty()) {
-    out << "  (none)\n\n";
+    out << "  " << _("(none)") << "\n\n";
   } else {
     for (const auto &nevra : required_by_nevras) {
       out << "  " << nevra << "\n";
     }
     out << "\n";
   }
-  list_field("Provides", pkg.get_provides());
-  list_field("Conflicts", pkg.get_conflicts());
-  list_field("Obsoletes", pkg.get_obsoletes());
+  list_field(_("Provides"), pkg.get_provides());
+  list_field(_("Conflicts"), pkg.get_conflicts());
+  list_field(_("Obsoletes"), pkg.get_obsoletes());
 
   return out.str();
 }
@@ -471,7 +474,7 @@ format_changelog_entries(libdnf5::rpm::Package pkg)
 
   auto entries = pkg.get_changelogs();
   if (entries.empty()) {
-    return "No changelog entries found.";
+    return _("No changelog entries found.");
   }
 
   for (const auto &entry : entries) {
@@ -479,8 +482,8 @@ format_changelog_entries(libdnf5::rpm::Package pkg)
     std::tm tm_buf {};
     localtime_r(&ts, &tm_buf);
 
-    out << "Date: " << std::put_time(&tm_buf, "%Y-%m-%d") << "\n"
-        << "Author: " << entry.get_author() << "\n"
+    out << _("Date") << ": " << std::put_time(&tm_buf, "%Y-%m-%d") << "\n"
+        << _("Author") << ": " << entry.get_author() << "\n"
         << entry.get_text() << "\n\n";
   }
 
@@ -501,7 +504,7 @@ dnf_backend_get_package_changelog(const std::string &pkg_nevra)
 
     query.filter_nevra(pkg_nevra);
     if (query.empty()) {
-      return "No changelog available.";
+      return _("No changelog available.");
     }
 
     // If the selected NEVRA is already installed, use it directly.
@@ -521,7 +524,7 @@ dnf_backend_get_package_changelog(const std::string &pkg_nevra)
   available_changelog.filter_nevra(pkg_nevra);
 
   if (available_changelog.empty()) {
-    return "No changelog available.";
+    return _("No changelog available.");
   }
 
   available_changelog.filter_latest_evr();

@@ -13,6 +13,7 @@ src/dnf_backend/dnf_query.cpp
 src/dnf_backend/dnf_state.cpp
 src/i18n.cpp
 src/main.cpp
+src/transaction_request.hpp
 src/ui/common/ui_helpers.cpp
 src/ui/common/widgets.cpp
 src/ui/details/package_details_controller.cpp

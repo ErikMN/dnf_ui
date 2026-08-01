@@ -69,7 +69,7 @@ make_package_row(const libdnf5::rpm::Package &pkg, PackageRepoCandidateRelation 
   row.repo_candidate_relation = repo_candidate_relation;
 
   if (row.summary.empty()) {
-    row.summary = "(no summary)";
+    row.summary = _("(no summary)");
   }
 
   return row;
