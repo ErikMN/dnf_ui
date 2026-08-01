@@ -127,6 +127,42 @@ TEST_CASE("Package table all-version update row displays selected version")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that an exact installed row in all-version mode shows its update columns.
+// -----------------------------------------------------------------------------
+TEST_CASE("Package table all-version installed row displays update candidate")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_table_test_row("demo-1.2.3-4.fc44.x86_64", "demo", "1.2.3", "4.fc44", "x86_64");
+  installed.repo = "@System";
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::NEWER;
+  installed.repo_candidate_nevra = "demo-1.2.4-1.fc44.x86_64";
+  installed.repo_candidate_version = "1.2.4";
+  installed.repo_candidate_release = "1.fc44";
+  installed.repo_candidate_repo = "updates";
+  installed.repo_candidate_is_newest_available = true;
+
+  PackageRow update = make_table_test_row("demo-1.2.4-1.fc44.x86_64", "demo", "1.2.4", "1.fc44", "x86_64");
+  update.repo = "updates";
+  update.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PackageItem installed_item = make_table_test_item(installed, false);
+  PackageItem update_item = make_table_test_item(update, false);
+
+  REQUIRE(package_table_column_text(installed_item, PackageColumnKind::VERSION) == installed.version);
+  REQUIRE(package_table_column_text(installed_item, PackageColumnKind::RELEASE) == installed.release);
+  REQUIRE(package_table_column_text(installed_item, PackageColumnKind::UPDATE_VERSION) == update.version);
+  REQUIRE(package_table_column_text(installed_item, PackageColumnKind::UPDATE_RELEASE) == update.release);
+
+  REQUIRE(package_table_column_text(update_item, PackageColumnKind::VERSION) == update.version);
+  REQUIRE(package_table_column_text(update_item, PackageColumnKind::RELEASE) == update.release);
+  REQUIRE(package_table_column_text(update_item, PackageColumnKind::UPDATE_VERSION).empty());
+  REQUIRE(package_table_column_text(update_item, PackageColumnKind::UPDATE_RELEASE).empty());
+}
+
+// -----------------------------------------------------------------------------
 // Verify that a non upgradable row leaves the Update column empty.
 // -----------------------------------------------------------------------------
 TEST_CASE("Package table Update column is empty for normal rows")

@@ -668,6 +668,50 @@ TEST_CASE("All-version merge hides duplicate available repository copies")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that an installed NEVRA also present in a repository keeps one visible
+// row and still receives update candidate data.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version merge annotates installed rows also present in repositories")
+{
+  PackageRow installed_row = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "@System");
+  PackageRow current_repo_row = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "fedora");
+  PackageRow update_row = make_backend_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64", "updates");
+
+  dnf_backend_internal::AvailableViewRows available;
+  available.newest_available_by_name_arch.emplace(update_row.name_arch_key(), update_row);
+  dnf_backend_internal::add_available_view_row(available, current_repo_row);
+  dnf_backend_internal::add_available_view_row(available, update_row);
+
+  dnf_backend_internal::InstalledQueryResult installed;
+  installed.rows = { installed_row };
+  installed.nevras = { installed_row.nevra };
+  installed.rows_by_name_arch.emplace(installed_row.name_arch_key(), installed_row);
+
+  auto rows = dnf_backend_internal::visible_rows_from_available_view(std::move(available), installed);
+
+  const PackageRow *current_result = find_backend_test_row_by_nevra(rows, current_repo_row.nevra);
+  const PackageRow *update_result = find_backend_test_row_by_nevra(rows, update_row.nevra);
+
+  REQUIRE(rows.size() == 2);
+  REQUIRE(current_result != nullptr);
+  REQUIRE(update_result != nullptr);
+  REQUIRE(current_result->repo_candidate_relation == PackageRepoCandidateRelation::NEWER);
+  REQUIRE(current_result->repo_candidate_nevra == update_row.nevra);
+  REQUIRE(current_result->repo_candidate_version == update_row.version);
+  REQUIRE(current_result->repo_candidate_release == update_row.release);
+  REQUIRE(current_result->repo_candidate_repo == update_row.repo);
+  REQUIRE(update_result->is_newest_available);
+
+  reset_backend_globals();
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed_row });
+  InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(*current_result);
+
+  REQUIRE(resolution.exact_installed);
+  REQUIRE(resolution.state == PackageInstallState::UPGRADEABLE);
+  REQUIRE(resolution.installed_row.nevra == installed_row.nevra);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that an installed row is compared against the newest visible candidate.
 // -----------------------------------------------------------------------------
 TEST_CASE("All-version merge ignores hidden newest candidates for installed row annotation")

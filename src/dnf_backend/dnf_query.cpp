@@ -231,7 +231,7 @@ collect_available_rows_by_name_arch(libdnf5::Base &base,
 void
 add_available_view_row(AvailableViewRows &rows, PackageRow row)
 {
-  if (rows.visible_nevras.count(row.nevra) > 0) {
+  if (rows.row_index_by_nevra.count(row.nevra) > 0) {
     return;
   }
 
@@ -239,9 +239,10 @@ add_available_view_row(AvailableViewRows &rows, PackageRow row)
   row.is_newest_available =
       newest_it != rows.newest_available_by_name_arch.end() && newest_it->second.nevra == row.nevra;
 
-  rows.visible_nevras.insert(row.nevra);
   remember_newest_row(rows.newest_visible_by_name_arch, row);
+  const size_t row_index = rows.rows.size();
   rows.rows.push_back(row);
+  rows.row_index_by_nevra.emplace(rows.rows[row_index].nevra, row_index);
 }
 
 // -----------------------------------------------------------------------------
@@ -513,19 +514,22 @@ visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
 std::vector<PackageRow>
 visible_rows_from_available_view(AvailableViewRows available_rows, const InstalledQueryResult &installed)
 {
-  std::vector<PackageRow> rows = std::move(available_rows.rows);
-
   for (const auto &stored_installed_row : installed.rows) {
-    if (available_rows.visible_nevras.count(stored_installed_row.nevra) > 0) {
+    auto visible_it = available_rows.row_index_by_nevra.find(stored_installed_row.nevra);
+    if (visible_it != available_rows.row_index_by_nevra.end()) {
+      PackageRow &visible_row = available_rows.rows[visible_it->second];
+      annotate_installed_row_with_repo_candidate(visible_row, available_rows.newest_visible_by_name_arch);
       continue;
     }
 
     PackageRow installed_row = stored_installed_row;
     annotate_installed_row_with_repo_candidate(installed_row, available_rows.newest_visible_by_name_arch);
-    rows.push_back(installed_row);
+    const size_t row_index = available_rows.rows.size();
+    available_rows.rows.push_back(installed_row);
+    available_rows.row_index_by_nevra.emplace(available_rows.rows[row_index].nevra, row_index);
   }
 
-  return rows;
+  return std::move(available_rows.rows);
 }
 
 } // namespace dnf_backend_internal

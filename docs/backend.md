@@ -139,6 +139,10 @@ the visible result keeps one row per exact available NEVRA and adds missing
 exact installed NEVRAs. Duplicate repository copies of the same exact NEVRA are
 hidden.
 
+When an exact installed NEVRA is also present in an enabled repository, the
+all-version view keeps one row for that NEVRA and annotates it with installed
+state and its newest visible repository candidate.
+
 Normal search is substring based. If the search term contains `*` or `?`, normal search treats it as a wildcard pattern. Exact search remains literal.
 
 The GTK controller captures the description, exact-match, and Latest only
