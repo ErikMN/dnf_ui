@@ -24,6 +24,19 @@ struct ExportDialogData {
 };
 
 // -----------------------------------------------------------------------------
+// Update export status only while the main window widgets are still alive.
+// -----------------------------------------------------------------------------
+void
+set_export_status(MainWindowUiState *widgets, const char *message, const char *color_class)
+{
+  if (!widgets || widgets->window_state.destroyed || !widgets->query.status_label) {
+    return;
+  }
+
+  ui_helpers_set_status(widgets->query.status_label, message, color_class);
+}
+
+// -----------------------------------------------------------------------------
 // Return visible columns in table order.
 // -----------------------------------------------------------------------------
 std::vector<const PackageTableColumnDefinition *>
@@ -117,13 +130,19 @@ on_export_dialog_response(GObject *source, GAsyncResult *result, gpointer user_d
 
   if (data && widgets) {
     GError *error = nullptr;
+    std::string status_message;
+    const char *status_color = nullptr;
     GFile *file = gtk_file_dialog_save_finish(GTK_FILE_DIALOG(source), result, &error);
     if (!file) {
       if (error && !g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
-        ui_helpers_set_status(widgets->query.status_label, error->message, "red");
+        status_message = error->message;
+        status_color = "red";
       }
       if (error) {
         g_error_free(error);
+      }
+      if (status_color) {
+        set_export_status(widgets, status_message.c_str(), status_color);
       }
       delete data;
       return;
@@ -132,10 +151,11 @@ on_export_dialog_response(GObject *source, GAsyncResult *result, gpointer user_d
     gboolean saved = g_file_replace_contents(
         file, data->csv.c_str(), data->csv.size(), nullptr, FALSE, G_FILE_CREATE_NONE, nullptr, nullptr, &error);
     if (saved) {
-      ui_helpers_set_status(widgets->query.status_label, _("Package list exported."), "green");
+      status_message = _("Package list exported.");
+      status_color = "green";
     } else {
-      ui_helpers_set_status(
-          widgets->query.status_label, error ? error->message : _("Could not export package list."), "red");
+      status_message = error ? error->message : _("Could not export package list.");
+      status_color = "red";
     }
 
     if (error) {
@@ -144,6 +164,7 @@ on_export_dialog_response(GObject *source, GAsyncResult *result, gpointer user_d
     if (file) {
       g_object_unref(file);
     }
+    set_export_status(widgets, status_message.c_str(), status_color);
   }
 
   delete data;
