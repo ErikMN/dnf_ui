@@ -11,6 +11,7 @@
 #include "debug_trace.hpp"
 #include "i18n.hpp"
 
+#include <algorithm>
 #include <ctime>
 #include <iomanip>
 #include <set>
@@ -476,6 +477,10 @@ format_changelog_entries(libdnf5::rpm::Package pkg)
   if (entries.empty()) {
     return _("No changelog entries found.");
   }
+
+  std::sort(entries.begin(), entries.end(), [](const auto &left, const auto &right) {
+    return left.get_timestamp() > right.get_timestamp();
+  });
 
   for (const auto &entry : entries) {
     std::time_t ts = static_cast<std::time_t>(entry.get_timestamp());
