@@ -64,13 +64,9 @@ jobs:
                 rpm-build
 
               if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-                spec_version="$(rpmspec -q --qf "%{VERSION}\n" dnf-ui.spec | head -n1)"
-                if [ "${spec_version}" != "${GITHUB_REF_NAME}" ]; then
-                  echo "Spec version does not match release tag"
-                  echo "Spec version: ${spec_version}"
-                  echo "Release tag: ${GITHUB_REF_NAME}"
-                  exit 1
-                fi
+                utils/validate_release_version.sh "${GITHUB_REF_NAME}"
+              else
+                utils/validate_release_version.sh
               fi
 
               git config --global --add safe.directory /workspace

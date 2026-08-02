@@ -244,7 +244,6 @@ Or open the build URL printed by COPR.
 If a native development install exists, remove it first so the RPM package is tested cleanly:
 
 ```bash
-sudo make uninstall
 sudo dnf remove dnf-ui
 ```
 
@@ -295,7 +294,13 @@ Users who already enabled the COPR do not need to enable it again for future ver
 
 ## 10. Releasing a new app version
 
-For a normal new version, update `dnf-ui.spec`.
+For a normal new version, update both `meson.build` and `dnf-ui.spec`.
+
+Example:
+
+```meson
+version: '<new-version>',
+```
 
 Example:
 
@@ -339,7 +344,7 @@ The GitHub release RPM workflow runs for tags that look like:
 <new-version>
 ```
 
-The spec version should match the tag version.
+The Meson project version, spec version, and tag version must all match.
 
 ## 11. Packaging rebuild without changing app version
 
@@ -421,12 +426,6 @@ make distclean
 ```
 
 Remove a local development install before testing the RPM package:
-
-```bash
-sudo make uninstall
-```
-
-Remove the installed RPM package:
 
 ```bash
 sudo dnf remove dnf-ui
