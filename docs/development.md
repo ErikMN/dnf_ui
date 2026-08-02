@@ -16,6 +16,12 @@ Install them with:
 Meson handles the real build and install logic.
 The `Makefile` is a thin task runner for the common developer commands.
 
+To use the project Git hooks in this checkout:
+
+```sh
+make setup-hooks
+```
+
 Build and run:
 
 ```sh

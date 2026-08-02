@@ -112,6 +112,7 @@ help:
 	@printf '%-36s %s\n' 'run-memcheck-tests' 'Run the shared automated Memcheck test command.'
 	@printf '%-36s %s\n' 'memcheck-app' 'Run the desktop app under Valgrind Memcheck.'
 	@printf '%-36s %s\n' 'valgrind' 'Alias for running the desktop app under Valgrind Memcheck.'
+	@printf '%-36s %s\n' 'setup-hooks' 'Configure this checkout to use the project Git hooks.'
 	@printf '%-36s %s\n' 'cppcheck' 'Run cppcheck on the source tree.'
 	@printf '%-36s %s\n' 'indent' 'Run clang format in Docker.'
 	@printf '%-36s %s\n' 'clean' 'Remove generated build output and symlinks.'
@@ -307,6 +308,11 @@ memcheck-app: dnfui
 # Backward compatible alias for running the desktop app under Valgrind:
 .PHONY: valgrind
 valgrind: memcheck-app
+
+# Configure this checkout to use the project Git hooks:
+.PHONY: setup-hooks
+setup-hooks:
+	@./utils/setuprepo.sh
 
 # FIXME: Run cppcheck on the source tree:
 .PHONY: cppcheck
