@@ -88,15 +88,6 @@ bool pending_transaction_selection_allows_installed_action(const PackageRow &sel
                                                            bool compact_view);
 
 // -----------------------------------------------------------------------------
-// Add or replace one pending upgrade action from a package row with an optional daemon target.
-// Returns false when the row is not an upgrade candidate.
-// -----------------------------------------------------------------------------
-bool pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> &actions,
-                                                     const PackageRow &row,
-                                                     const TransactionServiceUpgradeTarget *upgrade_target,
-                                                     uint64_t upgrade_generation,
-                                                     bool projects_upgrade_actions);
-// -----------------------------------------------------------------------------
 // Add or replace one pending upgrade unless this package identity was already handled.
 // Returns false when the row is not a valid upgrade candidate or the package identity was already marked.
 // -----------------------------------------------------------------------------

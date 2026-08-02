@@ -515,30 +515,6 @@ pending_transaction_mark_reinstall_action(std::vector<PendingAction> &actions,
 }
 
 // -----------------------------------------------------------------------------
-// Add or replace one pending upgrade action from a package table row.
-// -----------------------------------------------------------------------------
-bool
-pending_transaction_mark_upgrade_action_for_row(std::vector<PendingAction> &actions,
-                                                const PackageRow &row,
-                                                const TransactionServiceUpgradeTarget *upgrade_target,
-                                                uint64_t upgrade_generation,
-                                                bool projects_upgrade_actions)
-{
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection(row, upgrade_target, upgrade_generation, false);
-  if (!action_rows.install_is_upgrade ||
-      !pending_transaction_selection_allows_install_action(row, action_rows, projects_upgrade_actions)) {
-    return false;
-  }
-
-  if (!pending_transaction_mark_install_side_action(actions, action_rows)) {
-    return false;
-  }
-
-  return true;
-}
-
-// -----------------------------------------------------------------------------
 // Add or replace one pending upgrade unless this package identity was already handled.
 // -----------------------------------------------------------------------------
 bool

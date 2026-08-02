@@ -913,7 +913,7 @@ TEST_CASE("Pending transaction action rows reject stale daemon upgrade target")
   REQUIRE_FALSE(rows.has_install_row);
 
   std::vector<PendingAction> actions;
-  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, update, &target, snapshot.generation, false));
+  REQUIRE_FALSE(pending_transaction_mark_install_side_action(actions, rows));
   REQUIRE(actions.empty());
 }
 
@@ -939,9 +939,11 @@ TEST_CASE("Pending transaction upgrade marking uses daemon target")
   REQUIRE(state.publish_success(refresh_id.value(), { target }, error) == DaemonUpgradePublishResult::PUBLISHED);
   DaemonUpgradeSnapshot snapshot = state.snapshot();
 
+  PendingTransactionActionRows rows =
+      pending_transaction_action_rows_for_selection(update_metadata, &target, snapshot.generation, false);
+
   std::vector<PendingAction> actions;
-  REQUIRE(
-      pending_transaction_mark_upgrade_action_for_row(actions, update_metadata, &target, snapshot.generation, false));
+  REQUIRE(pending_transaction_mark_install_side_action(actions, rows));
 
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
@@ -1066,11 +1068,23 @@ TEST_CASE("Pending transaction bulk upgrade marking ignores non upgrade rows")
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
   std::vector<PendingAction> actions;
+  std::set<std::string> marked_package_keys;
 
-  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, update, nullptr, 0, false));
-  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, intermediate, nullptr, 0, false));
-  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, downgrade, nullptr, 0, false));
-  REQUIRE_FALSE(pending_transaction_mark_upgrade_action_for_row(actions, available, nullptr, 0, false));
+  PendingTransactionActionRows update_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, false);
+  PendingTransactionActionRows intermediate_rows =
+      pending_transaction_action_rows_for_selection(intermediate, nullptr, 0, false);
+  PendingTransactionActionRows downgrade_rows =
+      pending_transaction_action_rows_for_selection(downgrade, nullptr, 0, false);
+  PendingTransactionActionRows available_rows =
+      pending_transaction_action_rows_for_selection(available, nullptr, 0, false);
+
+  REQUIRE(pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, update, update_rows, false));
+  REQUIRE_FALSE(pending_transaction_mark_unique_upgrade_action(
+      actions, marked_package_keys, intermediate, intermediate_rows, false));
+  REQUIRE_FALSE(
+      pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, downgrade, downgrade_rows, false));
+  REQUIRE_FALSE(
+      pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, available, available_rows, false));
 
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
@@ -1094,8 +1108,11 @@ TEST_CASE("Pending transaction bulk upgrade marking replaces existing package ac
   std::vector<PendingAction> actions = {
     { PendingAction::REMOVE, installed.nevra, installed.nevra, installed.name_arch_key() },
   };
+  std::set<std::string> marked_package_keys;
 
-  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, update, nullptr, 0, false));
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, false);
+
+  REQUIRE(pending_transaction_mark_unique_upgrade_action(actions, marked_package_keys, update, rows, false));
 
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
@@ -1121,7 +1138,9 @@ TEST_CASE("Pending transaction upgrade marking replaces stale upgrade candidate"
     { PendingAction::UPGRADE, old_update.nevra, "demo.x86_64" },
   };
 
-  REQUIRE(pending_transaction_mark_upgrade_action_for_row(actions, new_update, nullptr, 0, false));
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(new_update, nullptr, 0, false);
+
+  REQUIRE(pending_transaction_mark_install_side_action(actions, rows));
 
   REQUIRE(actions.size() == 1);
   REQUIRE(actions[0].type == PendingAction::UPGRADE);
