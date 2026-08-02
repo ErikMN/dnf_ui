@@ -249,7 +249,10 @@ The backend finds the current executable path and asks libdnf5 which installed
 package owns it. The UI disables package changes for that exact installed row.
 The pending transaction request is checked again before it is sent to
 dnf5daemon. After dnf5daemon resolves the preview, DNF UI rejects any transaction
-that would downgrade, remove, or replace the running app package.
+that would downgrade, reinstall, remove, or replace the running app package.
+Normal upgrades are allowed even when the old package appears in the replaced
+section, because the check compares the complete preview before deciding whether
+the package would be left installed.
 
 The discovered package owner is treated as a process-lifetime safety boundary.
 If a later lookup cannot rediscover the package, for example after the running
@@ -258,7 +261,7 @@ name is kept instead of being cleared.
 
 The relevant functions are:
 
-- `dnf_backend_any_self_protected_package_label`
+- `dnf_backend_is_self_protected_package_name`
 - `dnf_backend_is_self_protected_transaction_spec`
 - `pending_transaction_validate_request`
 

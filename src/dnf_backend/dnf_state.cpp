@@ -356,29 +356,23 @@ dnf_backend_get_install_state_sort_rank(PackageInstallState state)
 }
 
 // -----------------------------------------------------------------------------
-// Check resolved daemon preview package labels against the current installed snapshot.
+// Check one package name against the current installed snapshot.
 // The caller refreshes that snapshot before this check when fresh rpmdb state matters.
 // -----------------------------------------------------------------------------
 bool
-dnf_backend_any_self_protected_package_label(const std::vector<std::string> &labels)
+dnf_backend_is_self_protected_package_name(const std::string &name)
 {
+  if (name.empty()) {
+    return false;
+  }
+
   std::set<std::string> protected_names;
   {
     std::lock_guard<std::mutex> lock(g_installed_mutex);
     protected_names = g_self_protected_package_names;
   }
 
-  if (protected_names.empty()) {
-    return false;
-  }
-
-  for (const auto &label : labels) {
-    if (package_spec_matches_protected_name(label, protected_names)) {
-      return true;
-    }
-  }
-
-  return false;
+  return protected_names.count(name) > 0;
 }
 
 // -----------------------------------------------------------------------------

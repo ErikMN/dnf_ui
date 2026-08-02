@@ -109,9 +109,9 @@ Why this matters:
 - Selected downgrades are different. DNF UI sends the exact selected older NEVRA
   to the daemon's `downgrade` method because the user chose a specific package
   version from the table.
-- If the resolved preview would downgrade, remove, or replace DNF UI itself,
-  the preview is rejected before the user can apply it. Normal upgrades are
-  allowed.
+- If the resolved preview would downgrade, reinstall, remove, or replace DNF UI
+  itself, the preview is rejected before the user can apply it. Normal upgrades
+  are allowed even when the old package appears in the replaced section.
 - Do not document this as bit-for-bit equivalence with every possible `dnf`
   command-line configuration, plugin, or option. The maintained guarantee is
   that DNF UI sends the upgrade request through the app's configured backend and
@@ -300,10 +300,12 @@ Assumptions:
 - Signal subscriptions invoke callbacks in the subscribing thread's
   thread-default main context.
 - A dnf5daemon session is tied to the D-Bus connection that created it.
-- DNF UI rejects previews that would downgrade, remove, or replace the running
-  app package. Normal package upgrades are allowed.
-- DNF UI rejects previews that would remove or replace `dnf5daemon-server`,
-  because later package changes depend on that daemon.
+- DNF UI rejects previews that would downgrade, reinstall, remove, or replace
+  the running app package. Normal package upgrades are allowed even when the old
+  package appears in the replaced section.
+- DNF UI rejects previews that would remove `dnf5daemon-server` or replace it
+  without a same-name successor, because later package changes depend on that
+  daemon.
 - The app keeps one shared system bus connection so the session used for preview
   is still valid when the user later applies.
 - A resolved preview is not a system-wide DNF lock. If another package tool

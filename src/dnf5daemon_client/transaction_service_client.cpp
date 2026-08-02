@@ -12,7 +12,33 @@
 #include "transaction_request.hpp"
 #include "transaction_service_client_internal.hpp"
 
+#include <algorithm>
+
 namespace {
+
+std::string
+preview_package_key(const TransactionPreviewPackageIdentity &pkg)
+{
+  return pkg.name + "\n" + pkg.arch;
+}
+
+bool
+preview_section_contains_package_key(const std::vector<TransactionPreviewPackageIdentity> &packages,
+                                     const TransactionPreviewPackageIdentity &pkg)
+{
+  const std::string key = preview_package_key(pkg);
+  return std::any_of(packages.begin(), packages.end(), [&](const TransactionPreviewPackageIdentity &candidate) {
+    return preview_package_key(candidate) == key;
+  });
+}
+
+bool
+preview_section_contains_self_protected_package(const std::vector<TransactionPreviewPackageIdentity> &packages)
+{
+  return std::any_of(packages.begin(), packages.end(), [](const TransactionPreviewPackageIdentity &pkg) {
+    return dnf_backend_is_self_protected_package_name(pkg.name);
+  });
+}
 
 // -----------------------------------------------------------------------------
 // Free data owned by one queued release task.
@@ -38,24 +64,30 @@ release_request_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
 }
 
 // -----------------------------------------------------------------------------
-// Return true if a resolved daemon preview would downgrade, remove, or replace the running DNF UI package.
-// Normal upgrades are allowed; destructive actions are rejected after dnf5daemon
-// has resolved dependency, obsolete, and replacement actions.
+// Return true if a resolved daemon preview would leave the running DNF UI package changed in an unsafe way.
+// Normal upgrades include the old package as replaced, so replacement is checked against the complete preview.
 // -----------------------------------------------------------------------------
 bool
 transaction_preview_changes_self_protected_package(const TransactionPreview &preview)
 {
-  std::vector<std::string> labels;
-  labels.reserve(preview.downgrade.size() + preview.remove.size() + preview.replaced.size());
-  labels.insert(labels.end(), preview.downgrade.begin(), preview.downgrade.end());
-  labels.insert(labels.end(), preview.remove.begin(), preview.remove.end());
-  labels.insert(labels.end(), preview.replaced.begin(), preview.replaced.end());
+  if (preview_section_contains_self_protected_package(preview.downgrade_packages) ||
+      preview_section_contains_self_protected_package(preview.reinstall_packages) ||
+      preview_section_contains_self_protected_package(preview.remove_packages)) {
+    return true;
+  }
 
-  return dnf_backend_any_self_protected_package_label(labels);
+  for (const auto &pkg : preview.replaced_packages) {
+    if (dnf_backend_is_self_protected_package_name(pkg.name) &&
+        !preview_section_contains_package_key(preview.upgrade_packages, pkg)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // -----------------------------------------------------------------------------
-// Reject daemon previews that would downgrade, remove, or replace DNF UI itself.
+// Reject daemon previews that would downgrade, reinstall, remove, or replace DNF UI itself.
 // -----------------------------------------------------------------------------
 bool
 verify_preview_keeps_running_app_package(const TransactionPreview &preview,
@@ -129,7 +161,8 @@ transaction_service_client_testonly_verify_preview_keeps_running_app_package(con
 {
   return verify_preview_keeps_running_app_package(preview,
                                                   error_out,
-                                                  "This transaction would downgrade, remove, or replace DNF UI itself.",
+                                                  "This transaction would downgrade, reinstall, remove, or "
+                                                  "replace DNF UI itself.",
                                                   "Could not verify whether this transaction would modify DNF UI.");
 }
 #endif
@@ -179,11 +212,11 @@ transaction_service_client_preview_request(const TransactionRequest &request,
     return false;
   }
 
-  if (!verify_preview_keeps_running_app_package(
-          preview_out,
-          error_out,
-          _("This transaction would downgrade, remove, or replace DNF UI itself."),
-          _("Could not verify whether this transaction would modify DNF UI."))) {
+  if (!verify_preview_keeps_running_app_package(preview_out,
+                                                error_out,
+                                                _("This transaction would downgrade, reinstall, remove, or "
+                                                  "replace DNF UI itself."),
+                                                _("Could not verify whether this transaction would modify DNF UI."))) {
     std::string release_error;
     transaction_service_client_release_transaction_request(connection, transaction_path_out, release_error);
     transaction_path_out.clear();
@@ -239,7 +272,8 @@ transaction_service_client_preview_upgrade_all_request(TransactionPreview &previ
 
   if (!verify_preview_keeps_running_app_package(preview_out,
                                                 error_out,
-                                                _("Upgrade All would downgrade, remove, or replace DNF UI itself."),
+                                                _("Upgrade All would downgrade, reinstall, remove, or "
+                                                  "replace DNF UI itself."),
                                                 _("Could not verify whether Upgrade All would modify DNF UI."))) {
     release_preview_session();
     g_object_unref(connection);

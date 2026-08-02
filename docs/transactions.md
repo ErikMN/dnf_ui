@@ -137,9 +137,12 @@ human-readable warning text without treating the transaction as failed.
 If dnf5daemon returns an unsupported transaction item or action, preview fails
 instead of hiding part of the transaction from the user.
 
-After preview, DNF UI rejects transactions that would downgrade, remove, or
-replace the running app package. It also rejects transactions that would remove
-or replace the daemon needed for package changes. Normal upgrades are allowed.
+After preview, DNF UI rejects transactions that would downgrade, reinstall,
+remove, or replace the running app package. A normal upgrade may list the old
+package as replaced, so replacement is checked against the complete preview
+before it is treated as unsafe. DNF UI also rejects transactions that would
+remove dnf5daemon-server or replace it without a same-name successor in the
+preview. Normal upgrades are allowed.
 
 The preview is still authoritative. A pending downgrade records an exact NEVRA
 chosen from the table, but the user must still review the resolved daemon

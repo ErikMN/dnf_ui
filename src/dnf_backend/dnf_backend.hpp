@@ -143,6 +143,11 @@ struct InstalledPackageResolution {
   PackageRow installed_row;
 };
 
+struct TransactionPreviewPackageIdentity {
+  std::string name;
+  std::string arch;
+};
+
 // Resolved transaction preview used by the confirmation dialog before apply.
 // The model must fully describe every resolved transaction action.
 // Callers must never receive a partial preview when the backend cannot represent the whole
@@ -156,6 +161,13 @@ struct TransactionPreview {
   std::vector<std::string> reinstall;
   std::vector<std::string> remove;
   std::vector<std::string> replaced;
+  // Raw daemon package identities used for safety checks.
+  std::vector<TransactionPreviewPackageIdentity> install_packages;
+  std::vector<TransactionPreviewPackageIdentity> upgrade_packages;
+  std::vector<TransactionPreviewPackageIdentity> downgrade_packages;
+  std::vector<TransactionPreviewPackageIdentity> reinstall_packages;
+  std::vector<TransactionPreviewPackageIdentity> remove_packages;
+  std::vector<TransactionPreviewPackageIdentity> replaced_packages;
   long long disk_space_delta = 0;
 
   // -----------------------------------------------------------------------------
@@ -163,8 +175,12 @@ struct TransactionPreview {
   // -----------------------------------------------------------------------------
   bool empty() const
   {
-    return install.empty() && upgrade.empty() && downgrade.empty() && reinstall.empty() && remove.empty() &&
-        replaced.empty();
+    const bool labels_empty = install.empty() && upgrade.empty() && downgrade.empty() && reinstall.empty() &&
+        remove.empty() && replaced.empty();
+    const bool identities_empty = install_packages.empty() && upgrade_packages.empty() && downgrade_packages.empty() &&
+        reinstall_packages.empty() && remove_packages.empty() && replaced_packages.empty();
+
+    return labels_empty && identities_empty;
   }
 };
 
@@ -320,10 +336,10 @@ int dnf_backend_compare_epoch_version_text(const std::string &left_epoch,
 int dnf_backend_compare_rpm_version_text(const std::string &left, const std::string &right);
 
 // -----------------------------------------------------------------------------
-// Return true when resolved daemon package labels name the running GUI package.
+// Return true when a package name belongs to the running GUI package.
 // Uses the current installed snapshot. Callers refresh that snapshot when needed.
 // -----------------------------------------------------------------------------
-bool dnf_backend_any_self_protected_package_label(const std::vector<std::string> &labels);
+bool dnf_backend_is_self_protected_package_name(const std::string &name);
 
 // -----------------------------------------------------------------------------
 // Return true when one transaction spec targets the running GUI package

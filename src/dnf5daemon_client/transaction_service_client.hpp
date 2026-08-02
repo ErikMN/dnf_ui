@@ -115,6 +115,11 @@ bool transaction_service_client_testonly_build_preview_from_item(const std::stri
                                                                  TransactionPreview &preview,
                                                                  std::string &error_out);
 // -----------------------------------------------------------------------------
+// Check the completed-preview daemon-server protection rule used by daemon previews.
+// -----------------------------------------------------------------------------
+bool transaction_service_client_testonly_verify_preview_keeps_required_daemon_server(const TransactionPreview &preview,
+                                                                                     std::string &error_out);
+// -----------------------------------------------------------------------------
 // Feed one daemon upgrade target object through the package-list parser for tests.
 // -----------------------------------------------------------------------------
 bool transaction_service_client_testonly_build_upgrade_target_from_fields(const std::string &name,

@@ -40,6 +40,52 @@ constexpr const char *kDnfDaemonGoalInterface = "org.rpm.dnf.v0.Goal";
 // -----------------------------------------------------------------------------
 constexpr const char *kRequiredDaemonServerPackage = "dnf5daemon-server";
 
+std::string
+preview_package_key(const TransactionPreviewPackageIdentity &pkg)
+{
+  return pkg.name + "\n" + pkg.arch;
+}
+
+bool
+preview_section_contains_package_key(const std::vector<TransactionPreviewPackageIdentity> &packages,
+                                     const TransactionPreviewPackageIdentity &pkg)
+{
+  const std::string key = preview_package_key(pkg);
+  return std::any_of(packages.begin(), packages.end(), [&](const TransactionPreviewPackageIdentity &candidate) {
+    return preview_package_key(candidate) == key;
+  });
+}
+
+bool
+preview_has_incoming_required_daemon_package(const TransactionPreview &preview,
+                                             const TransactionPreviewPackageIdentity &pkg)
+{
+  return preview_section_contains_package_key(preview.install_packages, pkg) ||
+      preview_section_contains_package_key(preview.upgrade_packages, pkg) ||
+      preview_section_contains_package_key(preview.downgrade_packages, pkg) ||
+      preview_section_contains_package_key(preview.reinstall_packages, pkg);
+}
+
+bool
+preview_keeps_required_daemon_server_package(const TransactionPreview &preview, std::string &error_out)
+{
+  for (const auto &pkg : preview.remove_packages) {
+    if (pkg.name == kRequiredDaemonServerPackage) {
+      error_out = _("This transaction would remove dnf5daemon-server, which DNF UI needs to apply package changes.");
+      return false;
+    }
+  }
+
+  for (const auto &pkg : preview.replaced_packages) {
+    if (pkg.name == kRequiredDaemonServerPackage && !preview_has_incoming_required_daemon_package(preview, pkg)) {
+      error_out = _("This transaction would replace dnf5daemon-server, which DNF UI needs to apply package changes.");
+      return false;
+    }
+  }
+
+  return true;
+}
+
 #ifdef DNFUI_DEBUG_TRACE
 static long long
 elapsed_ms_since(gint64 started_at_us)
@@ -307,9 +353,13 @@ daemon_apply_error_message(GError *error)
 // A daemon package item must contain enough fields to identify one package.
 // -----------------------------------------------------------------------------
 bool
-package_label_from_daemon_object(GVariant *object, std::string &label_out, std::string &error_out)
+package_label_from_daemon_object(GVariant *object,
+                                 std::string &label_out,
+                                 TransactionPreviewPackageIdentity &identity_out,
+                                 std::string &error_out)
 {
   label_out.clear();
+  identity_out = {};
 
   const std::string name = map_lookup_string(object, "name");
   const std::string epoch = map_lookup_string(object, "epoch");
@@ -321,6 +371,9 @@ package_label_from_daemon_object(GVariant *object, std::string &label_out, std::
     error_out = _("dnf5daemon returned an incomplete package item.");
     return false;
   }
+
+  identity_out.name = name;
+  identity_out.arch = arch;
 
   std::ostringstream label;
   label << name << "-";
@@ -392,18 +445,11 @@ append_daemon_preview_item(TransactionPreview &preview,
     return false;
   }
 
-  const std::string name = map_lookup_string(object, "name");
   const std::string lower_action = ascii_lower(action);
 
-  // NOTE: Without dnf5daemon-server, DNF UI cannot apply future package changes.
-  if ((lower_action == "remove" || lower_action == "replaced") && name == kRequiredDaemonServerPackage) {
-    error_out = _("This transaction would remove or replace dnf5daemon-server, "
-                  "which DNF UI needs to apply package changes.");
-    return false;
-  }
-
   std::string label;
-  if (!package_label_from_daemon_object(object, label, error_out)) {
+  TransactionPreviewPackageIdentity identity;
+  if (!package_label_from_daemon_object(object, label, identity, error_out)) {
     return false;
   }
 
@@ -411,30 +457,36 @@ append_daemon_preview_item(TransactionPreview &preview,
 
   if (lower_action == "install") {
     preview.install.push_back(label);
+    preview.install_packages.push_back(identity);
     preview.disk_space_delta += install_size;
     return true;
   }
   if (lower_action == "upgrade") {
     preview.upgrade.push_back(label);
+    preview.upgrade_packages.push_back(identity);
     preview.disk_space_delta += install_size;
     return true;
   }
   if (lower_action == "downgrade") {
     preview.downgrade.push_back(label);
+    preview.downgrade_packages.push_back(identity);
     preview.disk_space_delta += install_size;
     return true;
   }
   if (lower_action == "reinstall") {
     preview.reinstall.push_back(label);
+    preview.reinstall_packages.push_back(identity);
     return true;
   }
   if (lower_action == "remove") {
     preview.remove.push_back(label);
+    preview.remove_packages.push_back(identity);
     preview.disk_space_delta -= install_size;
     return true;
   }
   if (lower_action == "replaced") {
     preview.replaced.push_back(label);
+    preview.replaced_packages.push_back(identity);
     preview.disk_space_delta -= install_size;
     return true;
   }
@@ -764,6 +816,13 @@ transaction_service_client_testonly_build_preview_from_item(const std::string &o
 
   preview = std::move(built_preview);
   return true;
+}
+
+bool
+transaction_service_client_testonly_verify_preview_keeps_required_daemon_server(const TransactionPreview &preview,
+                                                                                std::string &error_out)
+{
+  return preview_keeps_required_daemon_server_package(preview, error_out);
 }
 
 // -----------------------------------------------------------------------------
@@ -1268,6 +1327,13 @@ transaction_service_client_get_transaction_preview(GDBusConnection *connection,
       g_variant_unref(state.reply);
       return false;
     }
+  }
+
+  if (!preview_keeps_required_daemon_server_package(built_preview, error_out)) {
+    DNFUI_TRACE("dnf5daemon preview item rejected path=%s error=%s", transaction_path.c_str(), error_out.c_str());
+    g_variant_unref(items);
+    g_variant_unref(state.reply);
+    return false;
   }
 
   preview_out = std::move(built_preview);
