@@ -113,6 +113,7 @@ help:
 	@printf '%-36s %s\n' 'memcheck-app' 'Run the desktop app under Valgrind Memcheck.'
 	@printf '%-36s %s\n' 'valgrind' 'Alias for running the desktop app under Valgrind Memcheck.'
 	@printf '%-36s %s\n' 'setup-hooks' 'Configure this checkout to use the project Git hooks.'
+	@printf '%-36s %s\n' 'dnf5-source' 'Fetch upstream DNF5 source for local API reference.'
 	@printf '%-36s %s\n' 'cppcheck' 'Run cppcheck on the source tree.'
 	@printf '%-36s %s\n' 'indent' 'Run clang format in Docker.'
 	@printf '%-36s %s\n' 'clean' 'Remove generated build output and symlinks.'
@@ -313,6 +314,11 @@ valgrind: memcheck-app
 .PHONY: setup-hooks
 setup-hooks:
 	@./utils/setuprepo.sh
+
+# Fetch upstream DNF5 source for local API reference:
+.PHONY: dnf5-source
+dnf5-source:
+	@./utils/fetch_dnf5_source.sh
 
 # FIXME: Run cppcheck on the source tree:
 .PHONY: cppcheck

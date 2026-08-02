@@ -317,7 +317,7 @@ preview model.
 ## Internal helpers
 
 [src/dnf_backend/dnf_internal.hpp](../src/dnf_backend/dnf_internal.hpp) is shared
-only by backend implementation files.
+by backend implementation files and backend tests.
 
 It is not a public UI contract. New UI code should include
 `dnf_backend.hpp` instead.

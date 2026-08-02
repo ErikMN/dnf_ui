@@ -22,6 +22,14 @@ To use the project Git hooks in this checkout:
 make setup-hooks
 ```
 
+To fetch upstream DNF5 source for local API reference:
+
+```sh
+make dnf5-source
+```
+
+The checkout is written to `external/dnf5`, which is ignored by Git.
+
 Build and run:
 
 ```sh
