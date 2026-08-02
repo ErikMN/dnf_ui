@@ -1380,6 +1380,33 @@ TEST_CASE("Pending transaction action rows allow reinstall for exact available i
 }
 
 // -----------------------------------------------------------------------------
+// Verify that compact package rows can reinstall when the visible row is the repository copy.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction action rows allow reinstall from exact repository row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_relation = PackageRepoCandidateRelation::SAME;
+  installed.repo_candidate_nevra = installed.nevra;
+  installed.repo_candidate_exact_available = true;
+
+  PackageRow repo_row = installed;
+  repo_row.repo = "updates";
+  repo_row.repo_candidate_exact_available = false;
+  repo_row.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  PendingTransactionActionRows rows = pending_transaction_action_rows_for_selection(repo_row, nullptr, 0, false);
+
+  REQUIRE(rows.state == PackageInstallState::INSTALLED);
+  REQUIRE(rows.has_installed_row);
+  REQUIRE(rows.installed_row.nevra == installed.nevra);
+  REQUIRE(rows.can_try_reinstall);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that reinstall is not offered when only a newer repository candidate exists.
 // -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction action rows reject reinstall without exact available package")

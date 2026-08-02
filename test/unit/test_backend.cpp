@@ -902,6 +902,36 @@ TEST_CASE("All-version merge keeps distinct installed package versions")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that all-version merge keeps exact reinstall availability found before visible rows are merged.
+// -----------------------------------------------------------------------------
+TEST_CASE("All-version merge keeps exact reinstall availability for hidden installed versions")
+{
+  PackageRow older_installed = make_backend_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64", "@System");
+  older_installed.repo_candidate_exact_available = true;
+
+  PackageRow newer_installed = make_backend_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64", "@System");
+  newer_installed.repo_candidate_exact_available = true;
+
+  PackageRow visible_update = make_backend_test_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64", "updates");
+  visible_update.is_newest_available = true;
+
+  dnf_backend_internal::AvailableViewRows available;
+  available.newest_available_by_name_arch.emplace(visible_update.name_arch_key(), visible_update);
+  dnf_backend_internal::add_available_view_row(available, visible_update);
+
+  dnf_backend_internal::InstalledQueryResult installed;
+  installed.rows = { older_installed, newer_installed };
+  installed.nevras = { older_installed.nevra, newer_installed.nevra };
+  installed.rows_by_name_arch.emplace(newer_installed.name_arch_key(), newer_installed);
+
+  auto rows = dnf_backend_internal::visible_rows_from_available_view(std::move(available), installed);
+  const PackageRow *older_result = find_backend_test_row_by_nevra(rows, older_installed.nevra);
+
+  REQUIRE(older_result != nullptr);
+  REQUIRE(older_result->repo_candidate_exact_available);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that cancelling all-version browse returns no rows and does not publish a partial installed snapshot.
 // -----------------------------------------------------------------------------
 TEST_CASE("Cancelled all-version browse returns no results")

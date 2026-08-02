@@ -404,30 +404,31 @@ collect_newest_available_rows_for_package_names(libdnf5::Base &base,
 // Collect exact available package IDs for package names present in the selected rows.
 // -----------------------------------------------------------------------------
 static std::set<std::string>
-collect_available_nevras_for_package_names(libdnf5::Base &base,
-                                           GCancellable *cancellable,
-                                           const std::vector<PackageRow> &package_rows)
+collect_repo_nevras_for_package_names(libdnf5::Base &base,
+                                      GCancellable *cancellable,
+                                      const std::vector<PackageRow> &package_rows)
 {
-  std::set<std::string> available_nevras;
+  std::set<std::string> repo_nevras;
   std::vector<std::string> names = package_names_from_rows(package_rows);
   if (names.empty()) {
-    return available_nevras;
+    return repo_nevras;
   }
 
   libdnf5::rpm::PackageQuery query(base);
-  query.filter_available();
   query.filter_name(names, libdnf5::sack::QueryCmp::EQ);
+  // Reinstall needs a repository copy of the installed NEVRA. libdnf's available filter removes installed packages.
+  query.filter_repo_id("@System", libdnf5::sack::QueryCmp::NEQ);
 
   for (auto pkg : query) {
     if (package_query_cancelled(cancellable)) {
-      available_nevras.clear();
-      return available_nevras;
+      repo_nevras.clear();
+      return repo_nevras;
     }
 
-    available_nevras.insert(pkg.get_nevra());
+    repo_nevras.insert(pkg.get_nevra());
   }
 
-  return available_nevras;
+  return repo_nevras;
 }
 
 // -----------------------------------------------------------------------------
@@ -520,8 +521,7 @@ annotate_installed_result_with_exact_available_nevras_best_effort(libdnf5::Base 
                                                                   GCancellable *cancellable)
 {
   try {
-    std::set<std::string> available_nevras =
-        collect_available_nevras_for_package_names(base, cancellable, installed.rows);
+    std::set<std::string> available_nevras = collect_repo_nevras_for_package_names(base, cancellable, installed.rows);
     if (package_query_cancelled(cancellable)) {
       return;
     }
@@ -662,7 +662,6 @@ visible_rows_from_available_view(AvailableViewRows available_rows, const Install
 
     PackageRow installed_row = stored_installed_row;
     annotate_installed_row_with_repo_candidate(installed_row, available_rows.newest_visible_by_name_arch);
-    installed_row.repo_candidate_exact_available = available_rows.row_index_by_nevra.count(installed_row.nevra) > 0;
     const size_t row_index = available_rows.rows.size();
     available_rows.rows.push_back(installed_row);
     available_rows.row_index_by_nevra.emplace(available_rows.rows[row_index].nevra, row_index);
@@ -699,7 +698,7 @@ dnf_backend_search_package_rows_interruptible(const std::string &pattern,
       }
 
       std::set<std::string> available_nevras =
-          collect_available_nevras_for_package_names(base, cancellable, installed_snapshot.rows);
+          collect_repo_nevras_for_package_names(base, cancellable, installed_snapshot.rows);
       if (package_query_cancelled(cancellable)) {
         return {};
       }
@@ -817,8 +816,7 @@ dnf_backend_get_browse_package_rows_interruptible(const DnfBackendSearchOptions 
         return {};
       }
 
-      std::set<std::string> available_nevras =
-          collect_available_nevras_for_package_names(base, cancellable, installed.rows);
+      std::set<std::string> available_nevras = collect_repo_nevras_for_package_names(base, cancellable, installed.rows);
       if (package_query_cancelled(cancellable)) {
         return {};
       }

@@ -132,7 +132,9 @@ resolved_row_can_try_reinstall(const PackageRow &selected, const InstalledPackag
   }
 
   if (installed_resolution.exact_installed) {
-    return selected.repo_candidate_exact_available;
+    return selected.repo_candidate_exact_available ||
+        (selected.nevra == installed_resolution.installed_row.nevra &&
+         installed_resolution.installed_row.repo_candidate_exact_available);
   }
 
   return installed_resolution.installed_row.repo_candidate_exact_available;
