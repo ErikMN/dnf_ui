@@ -82,7 +82,7 @@ package_table_show_context_menu(GtkWidget *anchor,
   // that would modify the package currently owning this executable.
   bool install_blocked =
       pending_transaction_install_action_blocked_by_self_protection(action_rows, action_rows.self_protected);
-  bool can_reinstall = allows_installed_action && action_rows.can_try_reinstall && !action_rows.self_protected;
+  bool can_reinstall = allows_installed_action && action_rows.exact_reinstall_available && !action_rows.self_protected;
 
   PendingAction::Type pending_install_type;
   bool has_pending_install = allows_install_action &&

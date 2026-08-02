@@ -109,7 +109,7 @@ TEST_CASE("Pending transaction action rows resolve plain available package")
   REQUIRE(rows.has_install_row);
   REQUIRE(rows.install_row.nevra == available.nevra);
   REQUIRE_FALSE(rows.has_installed_row);
-  REQUIRE_FALSE(rows.can_try_reinstall);
+  REQUIRE_FALSE(rows.exact_reinstall_available);
   REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(available, rows, false));
   REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(available, rows, true));
 }
@@ -502,7 +502,7 @@ TEST_CASE("Pending transaction action rows resolve upgrade from installed packag
   REQUIRE(rows.upgrade_spec == "demo.x86_64");
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE_FALSE(rows.can_try_reinstall);
+  REQUIRE_FALSE(rows.exact_reinstall_available);
   REQUIRE_FALSE(pending_transaction_selection_allows_install_action(installed, rows, false));
   REQUIRE(pending_transaction_selection_allows_install_button_action(installed, rows, true));
 
@@ -584,7 +584,7 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
   REQUIRE(rows.upgrade_spec == "demo.x86_64");
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE_FALSE(rows.can_try_reinstall);
+  REQUIRE_FALSE(rows.exact_reinstall_available);
   REQUIRE(pending_transaction_selection_allows_install_button_action(update, rows, false));
   REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(update, rows, false));
   REQUIRE(pending_transaction_selection_allows_installed_action(update, rows, true));
@@ -609,7 +609,7 @@ TEST_CASE("Pending transaction action rows allow compact update reinstall when i
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE(rows.can_try_reinstall);
+  REQUIRE(rows.exact_reinstall_available);
   REQUIRE(pending_transaction_selection_allows_installed_action(update, rows, true));
 }
 
@@ -637,7 +637,7 @@ TEST_CASE("Pending transaction action rows keep reinstall after local installed 
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE(rows.can_try_reinstall);
+  REQUIRE(rows.exact_reinstall_available);
 }
 
 // -----------------------------------------------------------------------------
@@ -662,7 +662,7 @@ TEST_CASE("Pending transaction action rows do not inherit reinstall availability
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == replacement.nevra);
-  REQUIRE_FALSE(rows.can_try_reinstall);
+  REQUIRE_FALSE(rows.exact_reinstall_available);
 }
 
 // -----------------------------------------------------------------------------
@@ -1373,7 +1373,7 @@ TEST_CASE("Pending transaction action rows reject reinstall for local only insta
   REQUIRE_FALSE(rows.has_install_row);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE_FALSE(rows.can_try_reinstall);
+  REQUIRE_FALSE(rows.exact_reinstall_available);
 }
 
 // -----------------------------------------------------------------------------
@@ -1395,7 +1395,7 @@ TEST_CASE("Pending transaction action rows allow reinstall for exact available i
   REQUIRE(rows.state == PackageInstallState::INSTALLED);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE(rows.can_try_reinstall);
+  REQUIRE(rows.exact_reinstall_available);
 }
 
 // -----------------------------------------------------------------------------
@@ -1422,7 +1422,7 @@ TEST_CASE("Pending transaction action rows allow reinstall from exact repository
   REQUIRE(rows.state == PackageInstallState::INSTALLED);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE(rows.can_try_reinstall);
+  REQUIRE(rows.exact_reinstall_available);
 }
 
 // -----------------------------------------------------------------------------
@@ -1444,7 +1444,7 @@ TEST_CASE("Pending transaction action rows reject reinstall without exact availa
   REQUIRE(rows.state == PackageInstallState::UPGRADEABLE);
   REQUIRE(rows.has_installed_row);
   REQUIRE(rows.installed_row.nevra == installed.nevra);
-  REQUIRE_FALSE(rows.can_try_reinstall);
+  REQUIRE_FALSE(rows.exact_reinstall_available);
 }
 
 // -----------------------------------------------------------------------------
@@ -1472,12 +1472,12 @@ TEST_CASE("Pending transaction action rows isolate reinstall availability betwee
   REQUIRE(older_rows.state == PackageInstallState::INSTALLED);
   REQUIRE(older_rows.has_installed_row);
   REQUIRE(older_rows.installed_row.nevra == older.nevra);
-  REQUIRE_FALSE(older_rows.can_try_reinstall);
+  REQUIRE_FALSE(older_rows.exact_reinstall_available);
 
   REQUIRE(newer_rows.state == PackageInstallState::INSTALLED);
   REQUIRE(newer_rows.has_installed_row);
   REQUIRE(newer_rows.installed_row.nevra == newer.nevra);
-  REQUIRE(newer_rows.can_try_reinstall);
+  REQUIRE(newer_rows.exact_reinstall_available);
 }
 
 // -----------------------------------------------------------------------------
@@ -1505,7 +1505,7 @@ TEST_CASE("Pending transaction action rows allow reinstall for older exact avail
   REQUIRE(older_rows.state == PackageInstallState::INSTALLED);
   REQUIRE(older_rows.has_installed_row);
   REQUIRE(older_rows.installed_row.nevra == older.nevra);
-  REQUIRE(older_rows.can_try_reinstall);
+  REQUIRE(older_rows.exact_reinstall_available);
 }
 
 // -----------------------------------------------------------------------------

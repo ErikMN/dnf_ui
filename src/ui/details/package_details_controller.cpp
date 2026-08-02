@@ -362,7 +362,8 @@ update_selected_package_actions(MainWindowUiState *widgets,
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button),
                            allows_installed_action && !action_rows.self_protected);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
-                           allows_installed_action && action_rows.can_try_reinstall && !action_rows.self_protected);
+                           allows_installed_action && action_rows.exact_reinstall_available &&
+                               !action_rows.self_protected);
 
   const std::string install_nevra = allows_install_action ? action_rows.install_row.nevra : "";
   const std::string installed_action_nevra = allows_installed_action ? action_rows.installed_row.nevra : "";

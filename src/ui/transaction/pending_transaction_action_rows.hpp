@@ -27,8 +27,8 @@ struct PendingTransactionActionRows {
   bool has_installed_row = false;
   // True when the installed package that would be modified owns the running app.
   bool self_protected = false;
-  // Fast UI check only. This does not prove that reinstall is available from repositories.
-  bool can_try_reinstall = false;
+  // True when the exact installed package can be reinstalled from an enabled repository.
+  bool exact_reinstall_available = false;
   // True when an already queued action should be removable from this row.
   bool install_action_from_pending = false;
   std::string package_key;

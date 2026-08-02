@@ -248,7 +248,7 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  if (!action_rows.can_try_reinstall) {
+  if (!action_rows.exact_reinstall_available) {
     ui_helpers_set_status(
         widgets->query.status_label, _("Package cannot be reinstalled from current repositories."), "gray");
     return;

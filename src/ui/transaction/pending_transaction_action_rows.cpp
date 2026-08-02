@@ -125,7 +125,8 @@ remove_pending_upgrade_by_transaction_spec(std::vector<PendingAction> &actions, 
 // Return true when the exact installed package represented by this row can be reinstalled.
 // -----------------------------------------------------------------------------
 bool
-resolved_row_can_try_reinstall(const PackageRow &selected, const InstalledPackageResolution &installed_resolution)
+resolved_row_exact_reinstall_available(const PackageRow &selected,
+                                       const InstalledPackageResolution &installed_resolution)
 {
   if (!installed_resolution.has_installed_row) {
     return false;
@@ -262,7 +263,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
     rows.install_is_downgrade = false;
     rows.has_install_row = true;
     rows.install_row = selected;
-    rows.can_try_reinstall = false;
+    rows.exact_reinstall_available = false;
     return rows;
   }
 
@@ -270,7 +271,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
     rows.install_is_upgrade = false;
     rows.install_is_downgrade = false;
     rows.has_install_row = false;
-    rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
+    rows.exact_reinstall_available = resolved_row_exact_reinstall_available(selected, installed_resolution);
     return rows;
   }
 
@@ -282,7 +283,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
       rows.upgrade_spec = upgrade_target->upgrade_spec();
       rows.has_installed_row = installed_resolution.has_installed_row;
       rows.self_protected = rows.has_installed_row && installed_resolution.self_protected;
-      rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
+      rows.exact_reinstall_available = resolved_row_exact_reinstall_available(selected, installed_resolution);
       return rows;
     }
 
@@ -298,14 +299,14 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
       rows.self_protected = rows.has_installed_row && installed_resolution.self_protected;
     }
     rows.upgrade_spec = upgrade_transaction_spec(rows.has_installed_row ? rows.installed_row : selected);
-    rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
+    rows.exact_reinstall_available = resolved_row_exact_reinstall_available(selected, installed_resolution);
     return rows;
   }
 
   // Older available rows can be marked as a downgrade to that exact package ID.
   if (rows.install_is_downgrade) {
     rows.has_install_row = true;
-    rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
+    rows.exact_reinstall_available = resolved_row_exact_reinstall_available(selected, installed_resolution);
     return rows;
   }
 
@@ -314,8 +315,8 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
     rows.has_install_row = true;
   }
 
-  // Reinstall needs an installed package that is still available from repositories.
-  rows.can_try_reinstall = resolved_row_can_try_reinstall(selected, installed_resolution);
+  // Reinstall needs the exact installed package to still be available from repositories.
+  rows.exact_reinstall_available = resolved_row_exact_reinstall_available(selected, installed_resolution);
 
   return rows;
 }
