@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.5.3
+Version:        0.5.4
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,9 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Sun Aug 02 2026 ErikMN <dnfui@proton.me> - 0.5.4-1
+- Restore reinstall actions for installed packages that still exist in enabled repositories
+
 * Sun Aug 02 2026 ErikMN <dnfui@proton.me> - 0.5.3-1
 - Fix package-state handling for parallel installed versions and installonly packages
 - Keep self-protection active after failed rediscovery
