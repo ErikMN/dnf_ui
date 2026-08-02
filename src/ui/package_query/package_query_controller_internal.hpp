@@ -36,7 +36,7 @@ void package_query_set_displayed_search_query(MainWindowUiState *widgets,
 // -----------------------------------------------------------------------------
 // Remember the List Packages options that produced the current table.
 // -----------------------------------------------------------------------------
-void package_query_set_displayed_list_available_query(MainWindowUiState *widgets, bool latest_only);
+void package_query_set_displayed_list_packages_query(MainWindowUiState *widgets, bool latest_only);
 // -----------------------------------------------------------------------------
 // Finish one refresh of the package table and update the details pane.
 // -----------------------------------------------------------------------------
@@ -81,7 +81,7 @@ void package_query_start_list_installed_task(MainWindowUiState *widgets);
 // -----------------------------------------------------------------------------
 // Start one package browse worker.
 // -----------------------------------------------------------------------------
-void package_query_start_list_available_task(MainWindowUiState *widgets, const DnfBackendSearchOptions &options);
+void package_query_start_list_packages_task(MainWindowUiState *widgets, const DnfBackendSearchOptions &options);
 // -----------------------------------------------------------------------------
 // Start one upgradable-package list worker.
 // -----------------------------------------------------------------------------

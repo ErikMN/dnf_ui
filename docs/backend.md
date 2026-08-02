@@ -240,19 +240,9 @@ apply always go through dnf5daemon.
 
 ## Self protection
 
-DNF UI blocks direct downgrade, remove, and reinstall requests for the package
-that owns the running GUI executable from inside the app. Normal upgrades are
-allowed because users must be able to update DNF UI and dnf5daemon from the
-package manager UI.
-
 The backend finds the current executable path and asks libdnf5 which installed
-package owns it. The UI disables package changes for that exact installed row.
-The pending transaction request is checked again before it is sent to
-dnf5daemon. After dnf5daemon resolves the preview, DNF UI rejects any transaction
-that would downgrade, reinstall, remove, or replace the running app package.
-Normal upgrades are allowed even when the old package appears in the replaced
-section, because the check compares the complete preview before deciding whether
-the package would be left installed.
+package owns it. Transaction safety policy is documented in
+[transactions.md](transactions.md).
 
 The discovered package owner is treated as a process-lifetime safety boundary.
 If a later lookup cannot rediscover the package, for example after the running

@@ -85,14 +85,14 @@ package_query_set_displayed_search_query(MainWindowUiState *widgets,
 // Remember the List Packages options that produced the current table.
 // -----------------------------------------------------------------------------
 void
-package_query_set_displayed_list_available_query(MainWindowUiState *widgets, bool latest_only)
+package_query_set_displayed_list_packages_query(MainWindowUiState *widgets, bool latest_only)
 {
   if (!widgets) {
     return;
   }
 
   widgets->query_state.displayed_query = DisplayedPackageQueryState();
-  widgets->query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  widgets->query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_PACKAGES;
   widgets->query_state.displayed_query.latest_only = latest_only;
 }
 
@@ -171,7 +171,7 @@ package_query_set_idle_controls_sensitive(MainWindowUiState *widgets, bool sensi
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.latest_checkbox), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.history_list), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_button), sensitive);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_available_button), sensitive);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_packages_button), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.list_upgradeable_button), sensitive);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.search_button), sensitive);
 }
@@ -189,8 +189,8 @@ package_list_stop_button(MainWindowUiState *widgets, PackageListRequestKind kind
   switch (kind) {
   case PackageListRequestKind::LIST_INSTALLED:
     return widgets->query.list_button;
-  case PackageListRequestKind::LIST_AVAILABLE:
-    return widgets->query.list_available_button;
+  case PackageListRequestKind::LIST_PACKAGES:
+    return widgets->query.list_packages_button;
   case PackageListRequestKind::LIST_UPGRADEABLE:
     return widgets->query.list_upgradeable_button;
   case PackageListRequestKind::SEARCH:
@@ -212,7 +212,7 @@ package_list_cancelled_status(PackageListRequestKind kind)
     return _("Search cancelled.");
   case PackageListRequestKind::LIST_INSTALLED:
     return _("Listing installed packages cancelled.");
-  case PackageListRequestKind::LIST_AVAILABLE:
+  case PackageListRequestKind::LIST_PACKAGES:
     return _("Listing packages cancelled.");
   case PackageListRequestKind::LIST_UPGRADEABLE:
     return _("Listing upgradable packages cancelled.");
@@ -236,7 +236,7 @@ package_list_stopping_status(PackageListRequestKind kind)
     return _("Stopping search...");
   case PackageListRequestKind::LIST_INSTALLED:
     return _("Stopping installed package listing...");
-  case PackageListRequestKind::LIST_AVAILABLE:
+  case PackageListRequestKind::LIST_PACKAGES:
     return _("Stopping package listing...");
   case PackageListRequestKind::LIST_UPGRADEABLE:
     return _("Stopping upgradable package listing...");
@@ -274,7 +274,7 @@ package_query_begin_package_list_request(MainWindowUiState *widgets,
 
   ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", _("Search"));
   ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", _("List Installed"));
-  ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", _("List Packages"));
+  ui_helpers_set_icon_button(widgets->query.list_packages_button, "view-list-symbolic", _("List Packages"));
   ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", _("List Upgradable"));
   ui_helpers_set_icon_button(stop_button, "process-stop-symbolic", _("Stop"));
   package_query_set_idle_controls_sensitive(widgets, false);
@@ -296,7 +296,7 @@ restore_package_list_controls(MainWindowUiState *widgets)
 
   ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", _("Search"));
   ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", _("List Installed"));
-  ui_helpers_set_icon_button(widgets->query.list_available_button, "view-list-symbolic", _("List Packages"));
+  ui_helpers_set_icon_button(widgets->query.list_packages_button, "view-list-symbolic", _("List Packages"));
   ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", _("List Upgradable"));
   package_query_set_idle_controls_sensitive(widgets, true);
   if (widgets->transaction.mark_listed_upgrades_button) {

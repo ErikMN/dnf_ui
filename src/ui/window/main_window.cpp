@@ -184,7 +184,7 @@ create_main_window_ui_state(const AppWidgets *ui)
   widgets->query.spinner = GTK_SPINNER(ui->spinner);
   widgets->query.search_button = GTK_BUTTON(ui->search_button);
   widgets->query.list_button = GTK_BUTTON(ui->list_button);
-  widgets->query.list_available_button = GTK_BUTTON(ui->list_available_button);
+  widgets->query.list_packages_button = GTK_BUTTON(ui->list_packages_button);
   widgets->query.list_upgradeable_button = GTK_BUTTON(ui->list_upgradeable_button);
   widgets->query.refresh_button = GTK_BUTTON(ui->refresh_button);
   widgets->query.status_label = GTK_LABEL(ui->status_label);
@@ -436,7 +436,7 @@ connect_signals(const AppWidgets *ui, MainWindowUiState *widgets)
   g_signal_connect(ui->list_button, "clicked", G_CALLBACK(package_query_on_list_button_clicked), widgets);
 
   g_signal_connect(
-      ui->list_available_button, "clicked", G_CALLBACK(package_query_on_list_available_button_clicked), widgets);
+      ui->list_packages_button, "clicked", G_CALLBACK(package_query_on_list_packages_button_clicked), widgets);
 
   g_signal_connect(
       ui->list_upgradeable_button, "clicked", G_CALLBACK(package_query_on_list_upgradeable_button_clicked), widgets);

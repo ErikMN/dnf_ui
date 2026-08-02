@@ -133,9 +133,9 @@ main_window_build_layout(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_buttons), list_button);
   ui->list_button = list_button;
 
-  GtkWidget *list_available_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Packages"));
-  gtk_box_append(GTK_BOX(hbox_buttons), list_available_button);
-  ui->list_available_button = list_available_button;
+  GtkWidget *list_packages_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Packages"));
+  gtk_box_append(GTK_BOX(hbox_buttons), list_packages_button);
+  ui->list_packages_button = list_packages_button;
 
   GtkWidget *list_upgradeable_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Upgradable"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_upgradeable_button);

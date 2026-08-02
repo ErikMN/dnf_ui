@@ -16,7 +16,7 @@
 // -----------------------------------------------------------------------------
 // Active background request using the package-list action buttons
 // -----------------------------------------------------------------------------
-enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE, LIST_UPGRADEABLE, EXACT_RELOAD };
+enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_PACKAGES, LIST_UPGRADEABLE, EXACT_RELOAD };
 
 // -----------------------------------------------------------------------------
 // Last query-backed package view shown in the main table.
@@ -24,7 +24,7 @@ enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE
 // Exact one-package views from the pending-actions sidebar are
 // refreshed via the currently selected NEVRA instead of adding more global UI state.
 // -----------------------------------------------------------------------------
-enum class DisplayedPackageQueryKind { NONE, SEARCH, LIST_INSTALLED, LIST_AVAILABLE, LIST_UPGRADEABLE };
+enum class DisplayedPackageQueryKind { NONE, SEARCH, LIST_INSTALLED, LIST_PACKAGES, LIST_UPGRADEABLE };
 
 struct DisplayedPackageQueryState {
   DisplayedPackageQueryKind kind = DisplayedPackageQueryKind::NONE;
@@ -46,7 +46,7 @@ displayed_package_query_uses_compact_rows(const DisplayedPackageQueryState &disp
   }
 
   if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
-      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
+      displayed.kind == DisplayedPackageQueryKind::LIST_PACKAGES) {
     return displayed.latest_only;
   }
 
@@ -65,7 +65,7 @@ displayed_package_query_projects_upgrade_actions(const DisplayedPackageQueryStat
   }
 
   if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
-      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
+      displayed.kind == DisplayedPackageQueryKind::LIST_PACKAGES) {
     return displayed.latest_only;
   }
 
@@ -81,7 +81,7 @@ displayed_package_query_allows_installed_upgrade_action(const DisplayedPackageQu
 {
   return displayed.kind == DisplayedPackageQueryKind::SEARCH ||
       displayed.kind == DisplayedPackageQueryKind::LIST_INSTALLED ||
-      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE ||
+      displayed.kind == DisplayedPackageQueryKind::LIST_PACKAGES ||
       displayed.kind == DisplayedPackageQueryKind::LIST_UPGRADEABLE;
 }
 
@@ -92,7 +92,7 @@ inline bool
 displayed_package_query_uses_exact_available_rows(const DisplayedPackageQueryState &displayed)
 {
   if (displayed.kind == DisplayedPackageQueryKind::SEARCH ||
-      displayed.kind == DisplayedPackageQueryKind::LIST_AVAILABLE) {
+      displayed.kind == DisplayedPackageQueryKind::LIST_PACKAGES) {
     return !displayed.latest_only;
   }
 

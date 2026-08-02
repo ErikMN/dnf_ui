@@ -29,7 +29,7 @@ struct AppWidgets {
   GtkWidget *spinner = NULL;
 
   GtkWidget *list_button = NULL;
-  GtkWidget *list_available_button = NULL;
+  GtkWidget *list_packages_button = NULL;
   GtkWidget *list_upgradeable_button = NULL;
   GtkWidget *refresh_button = NULL;
 

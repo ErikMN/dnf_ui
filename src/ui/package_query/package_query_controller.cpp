@@ -143,11 +143,11 @@ package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
 // The same button changes to Stop while the worker task is running.
 // -----------------------------------------------------------------------------
 void
-package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
+package_query_on_list_packages_button_clicked(GtkButton *, gpointer user_data)
 {
   MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
   if (package_query_has_active_package_list_request(widgets)) {
-    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::LIST_AVAILABLE) {
+    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::LIST_PACKAGES) {
       package_query_cancel_active_package_list_request(widgets);
     }
     return;
@@ -155,7 +155,7 @@ package_query_on_list_available_button_clicked(GtkButton *, gpointer user_data)
 
   ui_helpers_set_status(widgets->query.status_label, _("Listing packages..."), "blue");
   DnfBackendSearchOptions options = package_query_options_from_controls(widgets);
-  package_query_start_list_available_task(widgets, options);
+  package_query_start_list_packages_task(widgets, options);
 }
 
 // -----------------------------------------------------------------------------
@@ -281,12 +281,12 @@ package_query_reload_current_view(MainWindowUiState *widgets)
   case DisplayedPackageQueryKind::LIST_INSTALLED:
     package_query_on_list_button_clicked(nullptr, widgets);
     return;
-  case DisplayedPackageQueryKind::LIST_AVAILABLE: {
+  case DisplayedPackageQueryKind::LIST_PACKAGES: {
     ui_helpers_set_status(widgets->query.status_label, _("Listing packages..."), "blue");
     DnfBackendSearchOptions options {
       .latest_only = view_state.latest_only,
     };
-    package_query_start_list_available_task(widgets, options);
+    package_query_start_list_packages_task(widgets, options);
     return;
   }
   case DisplayedPackageQueryKind::LIST_UPGRADEABLE:

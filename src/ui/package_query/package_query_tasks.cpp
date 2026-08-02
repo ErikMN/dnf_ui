@@ -291,7 +291,7 @@ on_list_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 // The result includes repository candidates and installed-only local RPMs.
 // -----------------------------------------------------------------------------
 static void
-on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
+on_list_packages_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
   QueryBackendBaseDropGuard base_drop_guard(cancellable);
 
@@ -311,7 +311,7 @@ on_list_available_task(GTask *task, gpointer, gpointer, GCancellable *cancellabl
 // Refresh the installed snapshot before updating package status in the table.
 // -----------------------------------------------------------------------------
 static void
-on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
+on_list_packages_task_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
   MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
@@ -322,7 +322,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
       if (GCancellable *c = g_task_get_cancellable(task)) {
         if (g_cancellable_is_cancelled(c) && td) {
           widgets_spinner_release(widgets->query.spinner);
-          package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+          package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_PACKAGES);
         }
       }
     }
@@ -330,7 +330,7 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   }
 
   if (td && td->generation != BaseManager::instance().current_generation()) {
-    package_query_finish_generation_rejected_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+    package_query_finish_generation_rejected_request(widgets, td->request_id, PackageListRequestKind::LIST_PACKAGES);
     return;
   }
 
@@ -342,11 +342,11 @@ on_list_available_task_finished(GObject *, GAsyncResult *res, gpointer user_data
   widgets_spinner_release(widgets->query.spinner);
 
   if (td) {
-    package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
+    package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_PACKAGES);
   }
 
   if (packages) {
-    package_query_set_displayed_list_available_query(widgets, td ? td->options.latest_only : true);
+    package_query_set_displayed_list_packages_query(widgets, td ? td->options.latest_only : true);
 
     if (!widgets->query_state.reload_selected_nevra.empty()) {
       widgets->results.selected_nevra = widgets->query_state.reload_selected_nevra;
@@ -791,7 +791,7 @@ package_query_start_list_installed_task(MainWindowUiState *widgets)
 // Start one package browse worker.
 // -----------------------------------------------------------------------------
 void
-package_query_start_list_available_task(MainWindowUiState *widgets, const DnfBackendSearchOptions &options)
+package_query_start_list_packages_task(MainWindowUiState *widgets, const DnfBackendSearchOptions &options)
 {
   widgets_spinner_acquire(widgets->query.spinner);
 
@@ -802,11 +802,11 @@ package_query_start_list_available_task(MainWindowUiState *widgets, const DnfBac
   td->started_at_us = g_get_monotonic_time();
   td->options = options;
 
-  package_query_begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_AVAILABLE);
-  GTask *task = widgets_task_new_for_main_window_ui_state(widgets, c, on_list_available_task_finished);
+  package_query_begin_package_list_request(widgets, c, td->request_id, PackageListRequestKind::LIST_PACKAGES);
+  GTask *task = widgets_task_new_for_main_window_ui_state(widgets, c, on_list_packages_task_finished);
   g_task_set_task_data(task, td, [](gpointer p) { delete static_cast<PackageListTaskData *>(p); });
 
-  g_task_run_in_thread(task, on_list_available_task);
+  g_task_run_in_thread(task, on_list_packages_task);
   g_object_unref(task);
   g_object_unref(c);
 }

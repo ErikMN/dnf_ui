@@ -59,7 +59,7 @@ require_stored_status_matches_pending_action(MainWindowUiState &widgets, Package
 static void
 set_compact_package_view(MainWindowUiState &widgets)
 {
-  widgets.query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  widgets.query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_PACKAGES;
   widgets.query_state.displayed_query.latest_only = true;
 }
 
@@ -69,7 +69,7 @@ set_compact_package_view(MainWindowUiState &widgets)
 static void
 set_all_version_package_view(MainWindowUiState &widgets)
 {
-  widgets.query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_AVAILABLE;
+  widgets.query_state.displayed_query.kind = DisplayedPackageQueryKind::LIST_PACKAGES;
   widgets.query_state.displayed_query.latest_only = false;
 }
 
