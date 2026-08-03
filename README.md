@@ -57,29 +57,18 @@ There are other applications for this like [GNOME Software](https://apps.gnome.o
 
 ## Current features
 
-- Search repo packages together with installed-only local RPMs
-- List available, installed and upgradable packages
-- View package details, files, dependencies, and changelog information
-- Mark packages for install, upgrade, downgrade, reinstall, and removal
-- Upgrade all installed packages with available updates
-- Review a transaction summary before applying changes
-- Apply transactions through DNF5 dnf5daemon with Polkit authorization
+- Search packages from enabled repositories and installed local RPMs
+- Browse available, installed, and upgradable packages
+- Switch between latest-version and exact-version views
+- View package details, files, dependencies, and changelogs
+- Mark packages for installation, upgrade, downgrade, reinstallation, or removal
+- Select which available updates to apply or upgrade everything
+- Review all package changes before applying a transaction
+- Apply package changes through dnf5daemon with Polkit authorization
 - Cancel long-running package queries
-- Search history
+- Search previous queries
 - Export the visible package list as CSV
-- Browse read-only DNF transaction history
-
-Search and List Packages use the compact `Latest only` view by default. That
-keeps one visible row per package name and architecture, with update columns
-showing the newest available version when one exists.
-
-Disabling `Latest only` shows distinct exact package versions instead. The
-globally newest available version can be marked for upgrade, older available
-versions can be marked for downgrade, and intermediate newer versions remain
-visible for inspection. Locally installed RPMs that are not present in enabled
-repositories are listed as `Installed (local only)`.
-For install-only packages such as kernels, available exact versions are marked
-for installation so several versions can coexist.
+- Browse DNF transaction history
 
 ## Why?
 
