@@ -301,7 +301,7 @@ instead of building a local list of upgrade specs.
 
 The dnf5daemon client builds `TransactionPreview` values from daemon replies.
 That shared preview model lives in
-[src/transaction_preview.hpp](../src/transaction_preview.hpp), not in the
+[src/transaction/transaction_preview.hpp](../src/transaction/transaction_preview.hpp), not in the
 libdnf backend facade. Preview parsing fails closed when a daemon transaction
 item cannot be represented by the UI preview model.
 

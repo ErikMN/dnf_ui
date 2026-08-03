@@ -7,8 +7,8 @@
 
 #include "debug_trace.hpp"
 #include "i18n.hpp"
-#include "transaction_preview.hpp"
-#include "transaction_request.hpp"
+#include "transaction/transaction_preview.hpp"
+#include "transaction/transaction_request.hpp"
 
 #include <glib.h>
 

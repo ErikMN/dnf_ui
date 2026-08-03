@@ -8,7 +8,7 @@
 #pragma once
 
 #include "ui/transaction/pending_transaction_state.hpp"
-#include "transaction_request.hpp"
+#include "transaction/transaction_request.hpp"
 
 #include <string>
 #include <vector>

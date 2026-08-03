@@ -5,7 +5,7 @@
 // -----------------------------------------------------------------------------
 #include <catch2/catch_test_macros.hpp>
 
-#include "transaction_request.hpp"
+#include "transaction/transaction_request.hpp"
 
 #include <string>
 

@@ -6,8 +6,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "test_utils.hpp"
-#include "transaction_preview.hpp"
-#include "transaction_request.hpp"
+#include "transaction/transaction_preview.hpp"
+#include "transaction/transaction_request.hpp"
 #include "dnf5daemon_client/transaction_service_client.hpp"
 
 #include <glib.h>

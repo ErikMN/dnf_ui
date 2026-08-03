@@ -9,8 +9,8 @@
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
 #include "i18n.hpp"
-#include "transaction_preview.hpp"
-#include "transaction_request.hpp"
+#include "transaction/transaction_preview.hpp"
+#include "transaction/transaction_request.hpp"
 #include "transaction_service_client_internal.hpp"
 
 #include <algorithm>

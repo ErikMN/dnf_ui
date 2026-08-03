@@ -6,7 +6,7 @@
 
 #include "dnf_backend/dnf_backend.hpp"
 #include "test_utils.hpp"
-#include "transaction_request.hpp"
+#include "transaction/transaction_request.hpp"
 #include "ui/transaction/pending_transaction_request.hpp"
 
 #include <string>

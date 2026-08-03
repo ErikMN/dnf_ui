@@ -7,7 +7,7 @@
 #include "ui/transaction/transaction_dialogs.hpp"
 
 #include "i18n.hpp"
-#include "transaction_preview.hpp"
+#include "transaction/transaction_preview.hpp"
 #include "dnf5daemon_client/transaction_service_client.hpp"
 #include "ui/common/widgets.hpp"
 

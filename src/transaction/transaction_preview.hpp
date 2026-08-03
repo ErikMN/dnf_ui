@@ -1,5 +1,5 @@
 // -----------------------------------------------------------------------------
-// src/transaction_preview.hpp
+// src/transaction/transaction_preview.hpp
 // Shared transaction preview model
 // Carries the resolved daemon actions shown before Apply.
 // -----------------------------------------------------------------------------

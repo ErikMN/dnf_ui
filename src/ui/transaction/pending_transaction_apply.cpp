@@ -10,7 +10,7 @@
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
 #include "i18n.hpp"
-#include "transaction_preview.hpp"
+#include "transaction/transaction_preview.hpp"
 #include "ui/details/package_details_controller.hpp"
 #include "ui/package_table/package_table_view.hpp"
 #include "ui/history/transaction_history_view.hpp"

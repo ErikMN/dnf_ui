@@ -154,7 +154,7 @@ The UI does not use libdnf5 types directly.
 The public backend API is [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp).
 It exposes small value types such as `PackageRow` and `PackageInstallState`.
 Resolved transaction previews are shared through
-[src/transaction_preview.hpp](../src/transaction_preview.hpp).
+[src/transaction/transaction_preview.hpp](../src/transaction/transaction_preview.hpp).
 
 The backend implementation is split by responsibility:
 
@@ -204,7 +204,7 @@ Preview and apply go through DNF5 dnf5daemon:
 - GUI client: [src/dnf5daemon_client/transaction_service_client.cpp](../src/dnf5daemon_client/transaction_service_client.cpp)
 - GUI client D-Bus calls: [src/dnf5daemon_client/transaction_service_client_dbus.cpp](../src/dnf5daemon_client/transaction_service_client_dbus.cpp)
 - GUI client wait handling: [src/dnf5daemon_client/transaction_service_client_wait.cpp](../src/dnf5daemon_client/transaction_service_client_wait.cpp)
-- shared request model: [src/transaction_request.hpp](../src/transaction_request.hpp)
+- shared transaction models: [src/transaction/](../src/transaction/)
 
 ```mermaid
 flowchart TD
@@ -247,7 +247,7 @@ A practical reading order for new contributors:
 7. [src/ui/transaction/pending_transaction_controller.cpp](../src/ui/transaction/pending_transaction_controller.cpp)
 8. [src/ui/transaction/pending_transaction_view.cpp](../src/ui/transaction/pending_transaction_view.cpp)
 9. [src/ui/transaction/pending_transaction_apply.cpp](../src/ui/transaction/pending_transaction_apply.cpp)
-10. [src/transaction_preview.hpp](../src/transaction_preview.hpp)
+10. [src/transaction/transaction_preview.hpp](../src/transaction/transaction_preview.hpp)
 11. [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp)
 12. [src/dnf_backend/base_manager.cpp](../src/dnf_backend/base_manager.cpp)
 13. [src/dnf_backend/dnf_query.cpp](../src/dnf_backend/dnf_query.cpp)
