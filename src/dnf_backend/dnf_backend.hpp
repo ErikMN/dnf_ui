@@ -146,6 +146,11 @@ struct InstalledPackageResolution {
 struct TransactionPreviewPackageIdentity {
   std::string name;
   std::string arch;
+
+  std::string name_arch_key() const
+  {
+    return name + "\n" + arch;
+  }
 };
 
 // Resolved transaction preview used by the confirmation dialog before apply.

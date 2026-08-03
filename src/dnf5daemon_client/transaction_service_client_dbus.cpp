@@ -40,19 +40,13 @@ constexpr const char *kDnfDaemonGoalInterface = "org.rpm.dnf.v0.Goal";
 // -----------------------------------------------------------------------------
 constexpr const char *kRequiredDaemonServerPackage = "dnf5daemon-server";
 
-std::string
-preview_package_key(const TransactionPreviewPackageIdentity &pkg)
-{
-  return pkg.name + "\n" + pkg.arch;
-}
-
 bool
 preview_section_contains_package_key(const std::vector<TransactionPreviewPackageIdentity> &packages,
                                      const TransactionPreviewPackageIdentity &pkg)
 {
-  const std::string key = preview_package_key(pkg);
+  const std::string key = pkg.name_arch_key();
   return std::any_of(packages.begin(), packages.end(), [&](const TransactionPreviewPackageIdentity &candidate) {
-    return preview_package_key(candidate) == key;
+    return candidate.name_arch_key() == key;
   });
 }
 
