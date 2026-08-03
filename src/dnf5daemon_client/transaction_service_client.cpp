@@ -198,7 +198,8 @@ transaction_service_client_preview_request(const TransactionRequest &request,
     return false;
   }
 
-  if (!transaction_service_client_start_transaction_request(connection, request, transaction_path_out, error_out)) {
+  if (!transaction_service_client_start_transaction_request(
+          connection, request, transaction_path_out, error_out, cancellable)) {
     g_object_unref(connection);
     return false;
   }
@@ -250,7 +251,8 @@ transaction_service_client_preview_upgrade_all_request(TransactionPreview &previ
     return false;
   }
 
-  if (!transaction_service_client_start_upgrade_all_transaction_request(connection, transaction_path_out, error_out)) {
+  if (!transaction_service_client_start_upgrade_all_transaction_request(
+          connection, transaction_path_out, error_out, cancellable)) {
     g_object_unref(connection);
     return false;
   }

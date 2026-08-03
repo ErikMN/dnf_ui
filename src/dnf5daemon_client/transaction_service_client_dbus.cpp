@@ -681,6 +681,7 @@ mark_package_specs(GDBusConnection *connection,
                    const std::string &transaction_path,
                    const char *method,
                    const std::vector<std::string> &specs,
+                   GCancellable *cancellable,
                    std::string &error_out)
 {
   if (specs.empty()) {
@@ -699,7 +700,7 @@ mark_package_specs(GDBusConnection *connection,
                                                 nullptr,
                                                 G_DBUS_CALL_FLAGS_NONE,
                                                 -1,
-                                                nullptr,
+                                                cancellable,
                                                 &error);
   if (!reply) {
     error_out = error ? error->message : _("Could not mark packages in dnf5daemon.");
@@ -720,6 +721,7 @@ mark_package_specs(GDBusConnection *connection,
 bool
 open_daemon_session_with_options(GDBusConnection *connection,
                                  GVariant *options,
+                                 GCancellable *cancellable,
                                  std::string &transaction_path_out,
                                  std::string &error_out)
 {
@@ -731,6 +733,7 @@ open_daemon_session_with_options(GDBusConnection *connection,
 #endif
   DNFUI_TRACE("dnf5daemon session open start");
   GError *error = nullptr;
+  // open_session creates daemon state. Wait for the reply so a returned path can be closed after cancellation.
   GVariant *reply = g_dbus_connection_call_sync(connection,
                                                 kDnfDaemonName,
                                                 kDnfDaemonManagerPath,
@@ -767,6 +770,15 @@ open_daemon_session_with_options(GDBusConnection *connection,
     return false;
   }
 
+  if (cancellable && g_cancellable_is_cancelled(cancellable)) {
+    std::string release_error;
+    transaction_service_client_release_transaction_request(connection, transaction_path_out, release_error);
+    transaction_path_out.clear();
+    error_out = _("Operation cancelled.");
+    DNFUI_TRACE("dnf5daemon session open cancelled after path was returned");
+    return false;
+  }
+
   DNFUI_TRACE("dnf5daemon session opened path=%s elapsed_ms=%lld",
               transaction_path_out.c_str(),
               elapsed_ms_since(started_at_us));
@@ -777,9 +789,12 @@ open_daemon_session_with_options(GDBusConnection *connection,
 // Open one normal dnf5daemon session and return its object path.
 // -----------------------------------------------------------------------------
 bool
-open_daemon_session(GDBusConnection *connection, std::string &transaction_path_out, std::string &error_out)
+open_daemon_session(GDBusConnection *connection,
+                    GCancellable *cancellable,
+                    std::string &transaction_path_out,
+                    std::string &error_out)
 {
-  return open_daemon_session_with_options(connection, empty_options(), transaction_path_out, error_out);
+  return open_daemon_session_with_options(connection, empty_options(), cancellable, transaction_path_out, error_out);
 }
 
 } // namespace
@@ -923,7 +938,8 @@ bool
 transaction_service_client_start_transaction_request(GDBusConnection *connection,
                                                      const TransactionRequest &request,
                                                      std::string &transaction_path_out,
-                                                     std::string &error_out)
+                                                     std::string &error_out,
+                                                     GCancellable *cancellable)
 {
   transaction_path_out.clear();
   error_out.clear();
@@ -939,16 +955,16 @@ transaction_service_client_start_transaction_request(GDBusConnection *connection
     return false;
   }
 
-  if (!open_daemon_session(connection, transaction_path_out, error_out)) {
+  if (!open_daemon_session(connection, cancellable, transaction_path_out, error_out)) {
     DNFUI_TRACE("dnf5daemon selected transaction failed before mark error=%s", error_out.c_str());
     return false;
   }
 
-  if (!mark_package_specs(connection, transaction_path_out, "install", request.install, error_out) ||
-      !mark_package_specs(connection, transaction_path_out, "upgrade", request.upgrade, error_out) ||
-      !mark_package_specs(connection, transaction_path_out, "downgrade", request.downgrade, error_out) ||
-      !mark_package_specs(connection, transaction_path_out, "remove", request.remove, error_out) ||
-      !mark_package_specs(connection, transaction_path_out, "reinstall", request.reinstall, error_out)) {
+  if (!mark_package_specs(connection, transaction_path_out, "install", request.install, cancellable, error_out) ||
+      !mark_package_specs(connection, transaction_path_out, "upgrade", request.upgrade, cancellable, error_out) ||
+      !mark_package_specs(connection, transaction_path_out, "downgrade", request.downgrade, cancellable, error_out) ||
+      !mark_package_specs(connection, transaction_path_out, "remove", request.remove, cancellable, error_out) ||
+      !mark_package_specs(connection, transaction_path_out, "reinstall", request.reinstall, cancellable, error_out)) {
     DNFUI_TRACE("dnf5daemon selected transaction mark failed path=%s error=%s",
                 transaction_path_out.c_str(),
                 error_out.c_str());
@@ -969,7 +985,8 @@ transaction_service_client_start_transaction_request(GDBusConnection *connection
 bool
 transaction_service_client_start_upgrade_all_transaction_request(GDBusConnection *connection,
                                                                  std::string &transaction_path_out,
-                                                                 std::string &error_out)
+                                                                 std::string &error_out,
+                                                                 GCancellable *cancellable)
 {
   transaction_path_out.clear();
   error_out.clear();
@@ -983,7 +1000,7 @@ transaction_service_client_start_upgrade_all_transaction_request(GDBusConnection
     return false;
   }
 
-  if (!open_daemon_session(connection, transaction_path_out, error_out)) {
+  if (!open_daemon_session(connection, cancellable, transaction_path_out, error_out)) {
     DNFUI_TRACE("dnf5daemon upgrade-all transaction failed before mark error=%s", error_out.c_str());
     return false;
   }
@@ -1001,7 +1018,7 @@ transaction_service_client_start_upgrade_all_transaction_request(GDBusConnection
                                                 nullptr,
                                                 G_DBUS_CALL_FLAGS_NONE,
                                                 -1,
-                                                nullptr,
+                                                cancellable,
                                                 &error);
   if (!reply) {
     error_out = error ? error->message : _("Could not mark upgrade-all in dnf5daemon.");
@@ -1036,7 +1053,8 @@ transaction_service_client_refresh_repositories(std::string &error_out, GCancell
   }
 
   std::string transaction_path;
-  if (!open_daemon_session_with_options(connection, refresh_session_options(), transaction_path, error_out)) {
+  if (!open_daemon_session_with_options(
+          connection, refresh_session_options(), cancellable, transaction_path, error_out)) {
     g_object_unref(connection);
     return false;
   }
@@ -1095,7 +1113,7 @@ transaction_service_client_list_daemon_upgrade_targets(GDBusConnection *connecti
   DNFUI_TRACE("dnf5daemon upgrade target list start");
 
   std::string transaction_path;
-  if (!open_daemon_session(connection, transaction_path, error_out)) {
+  if (!open_daemon_session(connection, cancellable, transaction_path, error_out)) {
     return false;
   }
 

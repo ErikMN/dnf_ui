@@ -41,11 +41,13 @@ GDBusConnection *transaction_service_client_connect(std::string &error_out);
 bool transaction_service_client_start_transaction_request(GDBusConnection *connection,
                                                           const TransactionRequest &request,
                                                           std::string &transaction_path_out,
-                                                          std::string &error_out);
+                                                          std::string &error_out,
+                                                          GCancellable *cancellable);
 
 bool transaction_service_client_start_upgrade_all_transaction_request(GDBusConnection *connection,
                                                                       std::string &transaction_path_out,
-                                                                      std::string &error_out);
+                                                                      std::string &error_out,
+                                                                      GCancellable *cancellable);
 
 bool transaction_service_client_get_transaction_preview(GDBusConnection *connection,
                                                         const std::string &transaction_path,
