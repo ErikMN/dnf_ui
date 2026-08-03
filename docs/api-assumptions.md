@@ -109,9 +109,6 @@ Why this matters:
 - Selected downgrades are different. DNF UI sends the exact selected older NEVRA
   to the daemon's `downgrade` method because the user chose a specific package
   version from the table.
-- `replaced` preview items can be the outgoing side of a normal upgrade.
-  DNF UI's transaction safety policy is documented in
-  [transactions.md](transactions.md).
 - Do not document this as bit-for-bit equivalence with every possible `dnf`
   command-line configuration, plugin, or option. The maintained guarantee is
   that DNF UI sends the upgrade request through the app's configured backend and

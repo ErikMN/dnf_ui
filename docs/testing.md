@@ -35,6 +35,7 @@ Key files:
 - [test/unit/test_package_query_cache.cpp](../test/unit/test_package_query_cache.cpp)
 - [test/unit/test_package_table_export.cpp](../test/unit/test_package_table_export.cpp)
 - [test/unit/test_package_table_sort.cpp](../test/unit/test_package_table_sort.cpp)
+- [test/unit/test_package_table_status.cpp](../test/unit/test_package_table_status.cpp)
 - [test/unit/test_pending_transaction_request.cpp](../test/unit/test_pending_transaction_request.cpp)
 - [test/unit/test_search.cpp](../test/unit/test_search.cpp)
 - [test/unit/test_transaction_history.cpp](../test/unit/test_transaction_history.cpp)
