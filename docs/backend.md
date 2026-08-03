@@ -17,7 +17,6 @@ controller layer by exposing small value types:
 - `PackageInstallState`
 - `PackageRepoCandidateRelation`
 - `DnfBackendSearchOptions`
-- `TransactionPreview`
 - `TransactionHistoryAction`
 - `TransactionHistoryPackageRow`
 - `TransactionHistoryCursor`
@@ -300,9 +299,11 @@ Selected downgrades are sent as exact NEVRA specs through dnf5daemon's
 downgrade method. Upgrade All uses dnf5daemon's native upgrade-all behavior
 instead of building a local list of upgrade specs.
 
-The dnf5daemon client builds `TransactionPreview` values from daemon replies and
-fails closed when a daemon transaction item cannot be represented by the UI
-preview model.
+The dnf5daemon client builds `TransactionPreview` values from daemon replies.
+That shared preview model lives in
+[src/transaction_preview.hpp](../src/transaction_preview.hpp), not in the
+libdnf backend facade. Preview parsing fails closed when a daemon transaction
+item cannot be represented by the UI preview model.
 
 ## Internal helpers
 

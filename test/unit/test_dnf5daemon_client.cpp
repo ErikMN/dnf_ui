@@ -5,8 +5,8 @@
 // -----------------------------------------------------------------------------
 #include <catch2/catch_test_macros.hpp>
 
-#include "dnf_backend/dnf_backend.hpp"
 #include "test_utils.hpp"
+#include "transaction_preview.hpp"
 #include "transaction_request.hpp"
 #include "dnf5daemon_client/transaction_service_client.hpp"
 
@@ -49,10 +49,24 @@ dnf5daemon_test_downgrade_spec()
 // Return true when a preview section contains a package label by name.
 // -----------------------------------------------------------------------------
 bool
-preview_section_contains_name(const std::vector<std::string> &items, const std::string &name)
+preview_section_contains_name(const std::vector<TransactionPreviewPackage> &items, const std::string &name)
+{
+  return std::any_of(items.begin(), items.end(), [&](const TransactionPreviewPackage &item) {
+    return item.label.rfind(name + "-", 0) == 0;
+  });
+}
+
+bool
+preview_section_contains_label(const std::vector<TransactionPreviewPackage> &items, const std::string &label)
 {
   return std::any_of(
-      items.begin(), items.end(), [&](const std::string &item) { return item.rfind(name + "-", 0) == 0; });
+      items.begin(), items.end(), [&](const TransactionPreviewPackage &item) { return item.label == label; });
+}
+
+TransactionPreviewPackage
+preview_package(const std::string &name, const std::string &arch = "x86_64")
+{
+  return { name + "-1.2.3-1." + arch, name, arch };
 }
 
 // -----------------------------------------------------------------------------
@@ -109,7 +123,10 @@ TEST_CASE("dnf5daemon preview parser represents replaced package actions")
 
   REQUIRE(ok);
   REQUIRE(error.empty());
-  REQUIRE(preview.replaced == std::vector<std::string> { "test-package-2.0-3.x86_64" });
+  REQUIRE(preview.replaced.size() == 1);
+  REQUIRE(preview.replaced[0].label == "test-package-2.0-3.x86_64");
+  REQUIRE(preview.replaced[0].name == "test-package");
+  REQUIRE(preview.replaced[0].arch == "x86_64");
   REQUIRE(preview.disk_space_delta == -4096);
   REQUIRE_FALSE(preview.empty());
 }
@@ -127,7 +144,10 @@ TEST_CASE("dnf5daemon preview parser represents downgrade package actions")
 
   REQUIRE(ok);
   REQUIRE(error.empty());
-  REQUIRE(preview.downgrade == std::vector<std::string> { "test-package-2.0-3.x86_64" });
+  REQUIRE(preview.downgrade.size() == 1);
+  REQUIRE(preview.downgrade[0].label == "test-package-2.0-3.x86_64");
+  REQUIRE(preview.downgrade[0].name == "test-package");
+  REQUIRE(preview.downgrade[0].arch == "x86_64");
   REQUIRE(preview.disk_space_delta == 4096);
   REQUIRE_FALSE(preview.empty());
 }
@@ -178,7 +198,7 @@ TEST_CASE("dnf5daemon preview validation rejects removing dnf5daemon-server")
   TransactionPreview preview;
   std::string error;
 
-  preview.remove_packages.push_back({ "dnf5daemon-server", "x86_64" });
+  preview.remove.push_back(preview_package("dnf5daemon-server"));
 
   REQUIRE_FALSE(transaction_service_client_testonly_verify_preview_keeps_required_daemon_server(preview, error));
   REQUIRE(error.find("dnf5daemon-server") != std::string::npos);
@@ -192,12 +212,12 @@ TEST_CASE("dnf5daemon preview validation handles dnf5daemon-server replacement p
   TransactionPreview preview;
   std::string error;
 
-  preview.replaced_packages.push_back({ "dnf5daemon-server", "x86_64" });
+  preview.replaced.push_back(preview_package("dnf5daemon-server"));
   REQUIRE_FALSE(transaction_service_client_testonly_verify_preview_keeps_required_daemon_server(preview, error));
   REQUIRE(error.find("dnf5daemon-server") != std::string::npos);
 
   error.clear();
-  preview.upgrade_packages.push_back({ "dnf5daemon-server", "x86_64" });
+  preview.upgrade.push_back(preview_package("dnf5daemon-server"));
   REQUIRE(transaction_service_client_testonly_verify_preview_keeps_required_daemon_server(preview, error));
   REQUIRE(error.empty());
 }
@@ -210,8 +230,7 @@ TEST_CASE("dnf5daemon preview self-protection allows normal upgrades")
   ScopedEnvVar protected_name("DNFUI_TEST_SELF_PROTECTED_PACKAGE_NAME", "dnf-ui");
 
   TransactionPreview preview;
-  preview.upgrade.push_back("dnf-ui-1.2.3-1.x86_64");
-  preview.upgrade_packages.push_back({ "dnf-ui", "x86_64" });
+  preview.upgrade.push_back(preview_package("dnf-ui"));
   std::string error;
 
   REQUIRE(transaction_service_client_testonly_verify_preview_keeps_running_app_package(preview, error));
@@ -226,10 +245,8 @@ TEST_CASE("dnf5daemon preview self-protection allows normal upgrade replacement 
   ScopedEnvVar protected_name("DNFUI_TEST_SELF_PROTECTED_PACKAGE_NAME", "dnf-ui");
 
   TransactionPreview preview;
-  preview.upgrade.push_back("dnf-ui-1.2.4-1.x86_64");
-  preview.replaced.push_back("dnf-ui-1.2.3-1.x86_64");
-  preview.upgrade_packages.push_back({ "dnf-ui", "x86_64" });
-  preview.replaced_packages.push_back({ "dnf-ui", "x86_64" });
+  preview.upgrade.push_back(preview_package("dnf-ui"));
+  preview.replaced.push_back(preview_package("dnf-ui"));
   std::string error;
 
   REQUIRE(transaction_service_client_testonly_verify_preview_keeps_running_app_package(preview, error));
@@ -244,8 +261,7 @@ TEST_CASE("dnf5daemon preview self-protection rejects replacements")
   ScopedEnvVar protected_name("DNFUI_TEST_SELF_PROTECTED_PACKAGE_NAME", "dnf-ui");
 
   TransactionPreview preview;
-  preview.replaced.push_back("dnf-ui-1.2.3-1.x86_64");
-  preview.replaced_packages.push_back({ "dnf-ui", "x86_64" });
+  preview.replaced.push_back(preview_package("dnf-ui"));
   std::string error;
 
   REQUIRE_FALSE(transaction_service_client_testonly_verify_preview_keeps_running_app_package(preview, error));
@@ -260,8 +276,7 @@ TEST_CASE("dnf5daemon preview self-protection rejects downgrades")
   ScopedEnvVar protected_name("DNFUI_TEST_SELF_PROTECTED_PACKAGE_NAME", "dnf-ui");
 
   TransactionPreview preview;
-  preview.downgrade.push_back("dnf-ui-1.2.3-1.x86_64");
-  preview.downgrade_packages.push_back({ "dnf-ui", "x86_64" });
+  preview.downgrade.push_back(preview_package("dnf-ui"));
   std::string error;
 
   REQUIRE_FALSE(transaction_service_client_testonly_verify_preview_keeps_running_app_package(preview, error));
@@ -276,8 +291,7 @@ TEST_CASE("dnf5daemon preview self-protection rejects reinstalls")
   ScopedEnvVar protected_name("DNFUI_TEST_SELF_PROTECTED_PACKAGE_NAME", "dnf-ui");
 
   TransactionPreview preview;
-  preview.reinstall.push_back("dnf-ui-1.2.3-1.x86_64");
-  preview.reinstall_packages.push_back({ "dnf-ui", "x86_64" });
+  preview.reinstall.push_back(preview_package("dnf-ui"));
   std::string error;
 
   REQUIRE_FALSE(transaction_service_client_testonly_verify_preview_keeps_running_app_package(preview, error));
@@ -461,7 +475,7 @@ TEST_CASE("dnf5daemon client previews downgrade requests", "[dnf5daemon]")
   REQUIRE_FALSE(transaction_path.empty());
 
   bool preview_contains_package = preview_section_contains_name(preview.downgrade, downgrade_spec) ||
-      std::find(preview.downgrade.begin(), preview.downgrade.end(), downgrade_spec) != preview.downgrade.end();
+      preview_section_contains_label(preview.downgrade, downgrade_spec);
 
   transaction_service_client_release_request(transaction_path);
   transaction_service_client_reset_for_tests();

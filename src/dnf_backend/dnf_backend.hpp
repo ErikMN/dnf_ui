@@ -143,52 +143,6 @@ struct InstalledPackageResolution {
   PackageRow installed_row;
 };
 
-struct TransactionPreviewPackageIdentity {
-  std::string name;
-  std::string arch;
-
-  std::string name_arch_key() const
-  {
-    return name + "\n" + arch;
-  }
-};
-
-// Resolved transaction preview used by the confirmation dialog before apply.
-// The model must fully describe every resolved transaction action.
-// Callers must never receive a partial preview when the backend cannot represent the whole
-// resolved transaction.
-struct TransactionPreview {
-  // Human-readable warnings returned with a successful daemon resolve.
-  std::string resolve_warnings;
-  std::vector<std::string> install;
-  std::vector<std::string> upgrade;
-  std::vector<std::string> downgrade;
-  std::vector<std::string> reinstall;
-  std::vector<std::string> remove;
-  std::vector<std::string> replaced;
-  // Raw daemon package identities used for safety checks.
-  std::vector<TransactionPreviewPackageIdentity> install_packages;
-  std::vector<TransactionPreviewPackageIdentity> upgrade_packages;
-  std::vector<TransactionPreviewPackageIdentity> downgrade_packages;
-  std::vector<TransactionPreviewPackageIdentity> reinstall_packages;
-  std::vector<TransactionPreviewPackageIdentity> remove_packages;
-  std::vector<TransactionPreviewPackageIdentity> replaced_packages;
-  long long disk_space_delta = 0;
-
-  // -----------------------------------------------------------------------------
-  // Return true when the preview contains no resolved package actions.
-  // -----------------------------------------------------------------------------
-  bool empty() const
-  {
-    const bool labels_empty = install.empty() && upgrade.empty() && downgrade.empty() && reinstall.empty() &&
-        remove.empty() && replaced.empty();
-    const bool identities_empty = install_packages.empty() && upgrade_packages.empty() && downgrade_packages.empty() &&
-        reinstall_packages.empty() && remove_packages.empty() && replaced_packages.empty();
-
-    return labels_empty && identities_empty;
-  }
-};
-
 // -----------------------------------------------------------------------------
 // Read-only transaction history model.
 // The UI uses this to inspect past package changes without depending on

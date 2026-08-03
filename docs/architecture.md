@@ -152,8 +152,9 @@ flowchart TD
 The UI does not use libdnf5 types directly.
 
 The public backend API is [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp).
-It exposes small value types such as `PackageRow`, `PackageInstallState`, and
-`TransactionPreview`.
+It exposes small value types such as `PackageRow` and `PackageInstallState`.
+Resolved transaction previews are shared through
+[src/transaction_preview.hpp](../src/transaction_preview.hpp).
 
 The backend implementation is split by responsibility:
 
@@ -246,10 +247,11 @@ A practical reading order for new contributors:
 7. [src/ui/transaction/pending_transaction_controller.cpp](../src/ui/transaction/pending_transaction_controller.cpp)
 8. [src/ui/transaction/pending_transaction_view.cpp](../src/ui/transaction/pending_transaction_view.cpp)
 9. [src/ui/transaction/pending_transaction_apply.cpp](../src/ui/transaction/pending_transaction_apply.cpp)
-10. [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp)
-11. [src/dnf_backend/base_manager.cpp](../src/dnf_backend/base_manager.cpp)
-12. [src/dnf_backend/dnf_query.cpp](../src/dnf_backend/dnf_query.cpp)
-13. [src/dnf5daemon_client/transaction_service_client.cpp](../src/dnf5daemon_client/transaction_service_client.cpp)
-14. [src/dnf5daemon_client/transaction_service_client_dbus.cpp](../src/dnf5daemon_client/transaction_service_client_dbus.cpp)
-15. [src/dnf5daemon_client/transaction_service_client_wait.cpp](../src/dnf5daemon_client/transaction_service_client_wait.cpp)
-16. [docs/transactions.md](transactions.md)
+10. [src/transaction_preview.hpp](../src/transaction_preview.hpp)
+11. [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp)
+12. [src/dnf_backend/base_manager.cpp](../src/dnf_backend/base_manager.cpp)
+13. [src/dnf_backend/dnf_query.cpp](../src/dnf_backend/dnf_query.cpp)
+14. [src/dnf5daemon_client/transaction_service_client.cpp](../src/dnf5daemon_client/transaction_service_client.cpp)
+15. [src/dnf5daemon_client/transaction_service_client_dbus.cpp](../src/dnf5daemon_client/transaction_service_client_dbus.cpp)
+16. [src/dnf5daemon_client/transaction_service_client_wait.cpp](../src/dnf5daemon_client/transaction_service_client_wait.cpp)
+17. [docs/transactions.md](transactions.md)

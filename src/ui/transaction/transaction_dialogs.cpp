@@ -6,8 +6,8 @@
 // -----------------------------------------------------------------------------
 #include "ui/transaction/transaction_dialogs.hpp"
 
-#include "dnf_backend/dnf_backend.hpp"
 #include "i18n.hpp"
+#include "transaction_preview.hpp"
 #include "dnf5daemon_client/transaction_service_client.hpp"
 #include "ui/common/widgets.hpp"
 
@@ -15,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <sstream>
+#include <vector>
 
 struct SummaryDialogApplyData {
   std::shared_ptr<MainWindowUiState> widgets;
@@ -383,6 +384,20 @@ append_transaction_summary_section(GtkBox *parent, const char *title, const std:
   }
 }
 
+static void
+append_transaction_package_summary_section(GtkBox *parent,
+                                           const char *title,
+                                           const std::vector<TransactionPreviewPackage> &packages)
+{
+  std::vector<std::string> labels;
+  labels.reserve(packages.size());
+  for (const auto &package : packages) {
+    labels.push_back(package.label);
+  }
+
+  append_transaction_summary_section(parent, title, labels);
+}
+
 // -----------------------------------------------------------------------------
 // Show the final confirmation dialog before starting the package transaction.
 // -----------------------------------------------------------------------------
@@ -446,12 +461,12 @@ transaction_dialogs_show_summary_dialog(MainWindowUiState *widgets,
   }
 
   // Show the resolved backend changes, not only the packages marked manually.
-  append_transaction_summary_section(GTK_BOX(contents), _("To be installed"), preview.install);
-  append_transaction_summary_section(GTK_BOX(contents), _("To be upgraded"), preview.upgrade);
-  append_transaction_summary_section(GTK_BOX(contents), _("To be downgraded"), preview.downgrade);
-  append_transaction_summary_section(GTK_BOX(contents), _("To be reinstalled"), preview.reinstall);
-  append_transaction_summary_section(GTK_BOX(contents), _("To be removed"), preview.remove);
-  append_transaction_summary_section(GTK_BOX(contents), _("To be replaced"), preview.replaced);
+  append_transaction_package_summary_section(GTK_BOX(contents), _("To be installed"), preview.install);
+  append_transaction_package_summary_section(GTK_BOX(contents), _("To be upgraded"), preview.upgrade);
+  append_transaction_package_summary_section(GTK_BOX(contents), _("To be downgraded"), preview.downgrade);
+  append_transaction_package_summary_section(GTK_BOX(contents), _("To be reinstalled"), preview.reinstall);
+  append_transaction_package_summary_section(GTK_BOX(contents), _("To be removed"), preview.remove);
+  append_transaction_package_summary_section(GTK_BOX(contents), _("To be replaced"), preview.replaced);
 
   GtkWidget *summary_heading = gtk_label_new(nullptr);
   gchar *summary_markup = g_markup_printf_escaped("<b>%s</b>", _("Summary"));

@@ -117,6 +117,8 @@ freeze the window.
 
 Preview resolves the current daemon session and converts the daemon reply into
 `TransactionPreview`.
+Each preview package carries the label shown in the summary dialog together
+with the package name and architecture used by safety checks.
 
 The preview dialog does not lock DNF for other tools. If package state changes
 before Apply, dnf5daemon may reject the prepared transaction. DNF UI then closes

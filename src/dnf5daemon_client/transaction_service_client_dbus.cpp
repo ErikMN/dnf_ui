@@ -6,8 +6,8 @@
 #include "transaction_service_client_internal.hpp"
 
 #include "debug_trace.hpp"
-#include "dnf_backend/dnf_backend.hpp"
 #include "i18n.hpp"
+#include "transaction_preview.hpp"
 #include "transaction_request.hpp"
 
 #include <glib.h>
@@ -41,36 +41,35 @@ constexpr const char *kDnfDaemonGoalInterface = "org.rpm.dnf.v0.Goal";
 constexpr const char *kRequiredDaemonServerPackage = "dnf5daemon-server";
 
 bool
-preview_section_contains_package_key(const std::vector<TransactionPreviewPackageIdentity> &packages,
-                                     const TransactionPreviewPackageIdentity &pkg)
+preview_section_contains_package_key(const std::vector<TransactionPreviewPackage> &packages,
+                                     const TransactionPreviewPackage &pkg)
 {
   const std::string key = pkg.name_arch_key();
-  return std::any_of(packages.begin(), packages.end(), [&](const TransactionPreviewPackageIdentity &candidate) {
+  return std::any_of(packages.begin(), packages.end(), [&](const TransactionPreviewPackage &candidate) {
     return candidate.name_arch_key() == key;
   });
 }
 
 bool
-preview_has_incoming_required_daemon_package(const TransactionPreview &preview,
-                                             const TransactionPreviewPackageIdentity &pkg)
+preview_has_incoming_required_daemon_package(const TransactionPreview &preview, const TransactionPreviewPackage &pkg)
 {
-  return preview_section_contains_package_key(preview.install_packages, pkg) ||
-      preview_section_contains_package_key(preview.upgrade_packages, pkg) ||
-      preview_section_contains_package_key(preview.downgrade_packages, pkg) ||
-      preview_section_contains_package_key(preview.reinstall_packages, pkg);
+  return preview_section_contains_package_key(preview.install, pkg) ||
+      preview_section_contains_package_key(preview.upgrade, pkg) ||
+      preview_section_contains_package_key(preview.downgrade, pkg) ||
+      preview_section_contains_package_key(preview.reinstall, pkg);
 }
 
 bool
 preview_keeps_required_daemon_server_package(const TransactionPreview &preview, std::string &error_out)
 {
-  for (const auto &pkg : preview.remove_packages) {
+  for (const auto &pkg : preview.remove) {
     if (pkg.name == kRequiredDaemonServerPackage) {
       error_out = _("This transaction would remove dnf5daemon-server, which DNF UI needs to apply package changes.");
       return false;
     }
   }
 
-  for (const auto &pkg : preview.replaced_packages) {
+  for (const auto &pkg : preview.replaced) {
     if (pkg.name == kRequiredDaemonServerPackage && !preview_has_incoming_required_daemon_package(preview, pkg)) {
       error_out = _("This transaction would replace dnf5daemon-server, which DNF UI needs to apply package changes.");
       return false;
@@ -343,17 +342,13 @@ daemon_apply_error_message(GError *error)
 }
 
 // -----------------------------------------------------------------------------
-// Build the package label used by the existing preview dialog.
+// Build the package item used by preview display and safety checks.
 // A daemon package item must contain enough fields to identify one package.
 // -----------------------------------------------------------------------------
 bool
-package_label_from_daemon_object(GVariant *object,
-                                 std::string &label_out,
-                                 TransactionPreviewPackageIdentity &identity_out,
-                                 std::string &error_out)
+package_from_daemon_object(GVariant *object, TransactionPreviewPackage &package_out, std::string &error_out)
 {
-  label_out.clear();
-  identity_out = {};
+  package_out = {};
 
   const std::string name = map_lookup_string(object, "name");
   const std::string epoch = map_lookup_string(object, "epoch");
@@ -366,8 +361,8 @@ package_label_from_daemon_object(GVariant *object,
     return false;
   }
 
-  identity_out.name = name;
-  identity_out.arch = arch;
+  package_out.name = name;
+  package_out.arch = arch;
 
   std::ostringstream label;
   label << name << "-";
@@ -375,7 +370,7 @@ package_label_from_daemon_object(GVariant *object,
     label << epoch << ":";
   }
   label << version << "-" << release << "." << arch;
-  label_out = label.str();
+  package_out.label = label.str();
   return true;
 }
 
@@ -441,46 +436,39 @@ append_daemon_preview_item(TransactionPreview &preview,
 
   const std::string lower_action = ascii_lower(action);
 
-  std::string label;
-  TransactionPreviewPackageIdentity identity;
-  if (!package_label_from_daemon_object(object, label, identity, error_out)) {
+  TransactionPreviewPackage package;
+  if (!package_from_daemon_object(object, package, error_out)) {
     return false;
   }
 
   const long long install_size = map_lookup_int64(object, "install_size");
 
   if (lower_action == "install") {
-    preview.install.push_back(label);
-    preview.install_packages.push_back(identity);
+    preview.install.push_back(package);
     preview.disk_space_delta += install_size;
     return true;
   }
   if (lower_action == "upgrade") {
-    preview.upgrade.push_back(label);
-    preview.upgrade_packages.push_back(identity);
+    preview.upgrade.push_back(package);
     preview.disk_space_delta += install_size;
     return true;
   }
   if (lower_action == "downgrade") {
-    preview.downgrade.push_back(label);
-    preview.downgrade_packages.push_back(identity);
+    preview.downgrade.push_back(package);
     preview.disk_space_delta += install_size;
     return true;
   }
   if (lower_action == "reinstall") {
-    preview.reinstall.push_back(label);
-    preview.reinstall_packages.push_back(identity);
+    preview.reinstall.push_back(package);
     return true;
   }
   if (lower_action == "remove") {
-    preview.remove.push_back(label);
-    preview.remove_packages.push_back(identity);
+    preview.remove.push_back(package);
     preview.disk_space_delta -= install_size;
     return true;
   }
   if (lower_action == "replaced") {
-    preview.replaced.push_back(label);
-    preview.replaced_packages.push_back(identity);
+    preview.replaced.push_back(package);
     preview.disk_space_delta -= install_size;
     return true;
   }

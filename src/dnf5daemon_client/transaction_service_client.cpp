@@ -9,6 +9,7 @@
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
 #include "i18n.hpp"
+#include "transaction_preview.hpp"
 #include "transaction_request.hpp"
 #include "transaction_service_client_internal.hpp"
 
@@ -17,19 +18,19 @@
 namespace {
 
 bool
-preview_section_contains_package_key(const std::vector<TransactionPreviewPackageIdentity> &packages,
-                                     const TransactionPreviewPackageIdentity &pkg)
+preview_section_contains_package_key(const std::vector<TransactionPreviewPackage> &packages,
+                                     const TransactionPreviewPackage &pkg)
 {
   const std::string key = pkg.name_arch_key();
-  return std::any_of(packages.begin(), packages.end(), [&](const TransactionPreviewPackageIdentity &candidate) {
+  return std::any_of(packages.begin(), packages.end(), [&](const TransactionPreviewPackage &candidate) {
     return candidate.name_arch_key() == key;
   });
 }
 
 bool
-preview_section_contains_self_protected_package(const std::vector<TransactionPreviewPackageIdentity> &packages)
+preview_section_contains_self_protected_package(const std::vector<TransactionPreviewPackage> &packages)
 {
-  return std::any_of(packages.begin(), packages.end(), [](const TransactionPreviewPackageIdentity &pkg) {
+  return std::any_of(packages.begin(), packages.end(), [](const TransactionPreviewPackage &pkg) {
     return dnf_backend_is_self_protected_package_name(pkg.name);
   });
 }
@@ -64,15 +65,15 @@ release_request_task(GTask *task, gpointer, gpointer task_data, GCancellable *)
 bool
 transaction_preview_changes_self_protected_package(const TransactionPreview &preview)
 {
-  if (preview_section_contains_self_protected_package(preview.downgrade_packages) ||
-      preview_section_contains_self_protected_package(preview.reinstall_packages) ||
-      preview_section_contains_self_protected_package(preview.remove_packages)) {
+  if (preview_section_contains_self_protected_package(preview.downgrade) ||
+      preview_section_contains_self_protected_package(preview.reinstall) ||
+      preview_section_contains_self_protected_package(preview.remove)) {
     return true;
   }
 
-  for (const auto &pkg : preview.replaced_packages) {
+  for (const auto &pkg : preview.replaced) {
     if (dnf_backend_is_self_protected_package_name(pkg.name) &&
-        !preview_section_contains_package_key(preview.upgrade_packages, pkg)) {
+        !preview_section_contains_package_key(preview.upgrade, pkg)) {
       return true;
     }
   }
