@@ -168,8 +168,9 @@ The repository has a GitHub Actions workflow that publishes tagged releases to C
 .github/workflows/publish-copr.yml
 ```
 
-It runs when a tag like `0.1.0` is pushed. The workflow validates the tag,
-checks that `dnf-ui.spec` has the same version, builds the SRPM, and submits it to COPR.
+It runs when a tag like `0.1.0` is pushed. The workflow validates that the
+tag, Meson project version, and RPM spec version all match, builds the SRPM,
+and submits it to COPR.
 
 Set these GitHub repository secrets before using it:
 
@@ -331,7 +332,7 @@ copr-cli build dnf-ui dnf-ui-latest.src.rpm
 Suggested Git flow:
 
 ```bash
-git add dnf-ui.spec
+git add meson.build dnf-ui.spec
 git commit -m "Release dnf-ui <new-version>"
 git tag -a <new-version> -m "Release <new-version>"
 git push
@@ -344,7 +345,8 @@ The GitHub release RPM workflow runs for tags that look like:
 <new-version>
 ```
 
-The Meson project version, spec version, and tag version must all match.
+The release workflows validate that the Meson project version, spec version,
+and tag version all match.
 
 ## 11. Packaging rebuild without changing app version
 

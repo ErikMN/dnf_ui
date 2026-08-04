@@ -42,7 +42,7 @@ The application is split into five main areas:
 - Startup and main window setup
 - UI controllers
 - libdnf5 backend
-- Shared transaction request model
+- Shared transaction models
 - dnf5daemon transaction client
 
 ```mermaid

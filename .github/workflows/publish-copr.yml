@@ -1,7 +1,6 @@
 name: Publish COPR
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "*.*.*"

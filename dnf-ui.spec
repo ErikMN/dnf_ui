@@ -100,7 +100,7 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 - Use one pending-action resolver for package table Status text, rendering, and export
 - Show a retry message when stale package query results are rejected
 
-* Tue Jul 21 2026 ErikMN [dnfui@proton.me](mailto:dnfui@proton.me) - 0.4.1-1
+* Tue Jul 21 2026 ErikMN <dnfui@proton.me> - 0.4.1-1
 - Improve package search and backend state handling
 - Simplify asynchronous ownership and BaseManager locking
 - Show installed package origin in package details

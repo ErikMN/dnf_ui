@@ -52,7 +52,8 @@ This file states the rules that should stay true as DNF UI changes.
 ## libdnf5 access
 
 - GTK code should **never** use libdnf5 types directly.
-- libdnf5 access **must** stay behind the backend API or the transaction client.
+- libdnf5 access **must** stay behind the backend API.
+- dnf5daemon access **must** stay behind the transaction client.
 - Shared Base access **must** stay serialized.
 - A system-only Base should be used for installed-only checks.
 - Dropping the cached Base is a memory choice and should be reviewed when query
