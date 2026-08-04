@@ -148,6 +148,15 @@ bool transaction_service_client_testonly_key_import_answer_after_callback(const 
 // -----------------------------------------------------------------------------
 GCancellable *transaction_service_client_testonly_key_import_confirmation_cancellable(bool confirmed,
                                                                                       GCancellable *cancellable);
+// -----------------------------------------------------------------------------
+// Return the user-facing preparation error for one daemon D-Bus error.
+// -----------------------------------------------------------------------------
+std::string transaction_service_client_testonly_prepare_error_message(const std::string &remote_error,
+                                                                      const std::string &daemon_message);
+// -----------------------------------------------------------------------------
+// Return true when one selected request should load available repositories.
+// -----------------------------------------------------------------------------
+bool transaction_service_client_testonly_request_loads_available_repos(const TransactionRequest &request);
 #endif
 
 // -----------------------------------------------------------------------------

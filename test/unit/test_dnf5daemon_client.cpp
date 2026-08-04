@@ -81,6 +81,48 @@ progress_contains(const std::vector<std::string> &progress_lines, const std::str
 }
 
 // -----------------------------------------------------------------------------
+// Verify that cold-offline repository load failures are shown as user-facing preparation errors.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon preparation maps repository load failures to a clear message")
+{
+  const std::string message =
+      transaction_service_client_testonly_prepare_error_message("org.rpm.dnf.v0.Error", "Cannot load repositories.");
+
+  REQUIRE(message.find("Repository data is unavailable") != std::string::npos);
+  REQUIRE(message.find("refresh repositories") != std::string::npos);
+  REQUIRE(message.find("GDBus.Error") == std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
+// Verify that only remove-only selected transactions skip available repository loading.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon selected transaction sessions load repositories by request type")
+{
+  TransactionRequest request;
+  request.remove.push_back("test-package.x86_64");
+  REQUIRE_FALSE(transaction_service_client_testonly_request_loads_available_repos(request));
+
+  request.install.push_back("other-package.x86_64");
+  REQUIRE(transaction_service_client_testonly_request_loads_available_repos(request));
+
+  request = {};
+  request.install.push_back("test-package.x86_64");
+  REQUIRE(transaction_service_client_testonly_request_loads_available_repos(request));
+
+  request = {};
+  request.upgrade.push_back("test-package.x86_64");
+  REQUIRE(transaction_service_client_testonly_request_loads_available_repos(request));
+
+  request = {};
+  request.downgrade.push_back("test-package-1.0-1.x86_64");
+  REQUIRE(transaction_service_client_testonly_request_loads_available_repos(request));
+
+  request = {};
+  request.reinstall.push_back("test-package.x86_64");
+  REQUIRE(transaction_service_client_testonly_request_loads_available_repos(request));
+}
+
+// -----------------------------------------------------------------------------
 // Return progress lines as one string so Catch2 can show them on failure.
 // -----------------------------------------------------------------------------
 std::string

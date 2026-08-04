@@ -184,6 +184,9 @@ msgstr "dnf5daemon kunde inte lösa transaktionen."
 msgid "dnf5daemon could not resolve the transaction."
 msgstr "dnf5daemon kunde inte lösa transaktionen."
 
+msgid "Repository data is unavailable. Connect to the network, refresh repositories, and try again."
+msgstr "Förrådsdata är inte tillgänglig. Anslut till nätverket, uppdatera förråd och försök igen."
+
 msgid "dnf5daemon returned an unsupported transaction resolve result."
 msgstr "dnf5daemon returnerade ett transaktionsresultat som inte stöds."
 

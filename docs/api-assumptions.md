@@ -276,6 +276,10 @@ Assumptions:
 - dnf5daemon is available on the system bus as `org.rpm.dnf.v0`.
 - The session manager object path is `/org/rpm/dnf/v0`.
 - Sessions are opened through `org.rpm.dnf.v0.SessionManager.open_session(a{sv}) -> (o)`.
+- Selected transactions open sessions with `load_system_repo=true`.
+  Remove-only requests use `load_available_repos=false`. Other selected
+  transactions use `load_available_repos=true` because install, upgrade,
+  downgrade, reinstall, and mixed requests may need repository packages.
 - Manual repository refresh opens a session with `load_available_repos=false`
   and `load_system_repo=false`, then explicitly expires and reloads repositories.
 - Session cleanup uses `org.rpm.dnf.v0.SessionManager.close_session(o) -> (b)`.

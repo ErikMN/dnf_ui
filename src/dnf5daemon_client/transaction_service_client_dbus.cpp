@@ -128,6 +128,32 @@ empty_options()
 }
 
 // -----------------------------------------------------------------------------
+// Return true when one selected request contains only removals.
+// Remove-only transactions can be resolved from the installed system repository.
+// -----------------------------------------------------------------------------
+bool
+transaction_request_is_remove_only(const TransactionRequest &request)
+{
+  return !request.upgrade_all && !request.remove.empty() && request.install.empty() && request.upgrade.empty() &&
+      request.downgrade.empty() && request.reinstall.empty();
+}
+
+// -----------------------------------------------------------------------------
+// Return repository-loading options for one selected transaction.
+// Remove-only requests do not need available repository metadata.
+// -----------------------------------------------------------------------------
+GVariant *
+transaction_session_options(const TransactionRequest &request)
+{
+  GVariantBuilder options;
+  g_variant_builder_init(&options, G_VARIANT_TYPE("a{sv}"));
+  g_variant_builder_add(&options, "{sv}", "load_system_repo", g_variant_new_boolean(TRUE));
+  g_variant_builder_add(
+      &options, "{sv}", "load_available_repos", g_variant_new_boolean(!transaction_request_is_remove_only(request)));
+  return g_variant_new("a{sv}", &options);
+}
+
+// -----------------------------------------------------------------------------
 // Return options for the read-only daemon upgrade target list.
 // This uses dnf5daemon's package-list API, not a resolved transaction preview.
 // -----------------------------------------------------------------------------
@@ -264,6 +290,50 @@ bool
 daemon_is_access_denied_error(GError *error)
 {
   return error && g_error_matches(error, G_DBUS_ERROR, G_DBUS_ERROR_ACCESS_DENIED);
+}
+
+// -----------------------------------------------------------------------------
+// Return true for the daemon error raised when repository data cannot be loaded.
+// Package changes are resolved by dnf5daemon, so even remove requests need the daemon repository state.
+// -----------------------------------------------------------------------------
+bool
+daemon_cannot_load_repositories_error(GError *error)
+{
+  if (!error) {
+    return false;
+  }
+
+  gchar *remote_error = g_dbus_error_get_remote_error(error);
+  const bool daemon_error_name = g_strcmp0(remote_error, "org.rpm.dnf.v0.Error") == 0;
+  g_free(remote_error);
+
+  if (!daemon_error_name) {
+    return false;
+  }
+
+  GError *stripped_error = g_error_copy(error);
+  g_dbus_error_strip_remote_error(stripped_error);
+  const std::string daemon_message = stripped_error && stripped_error->message ? stripped_error->message : "";
+  g_error_free(stripped_error);
+
+  return daemon_message == "Cannot load repositories." || daemon_message == "Cannot load repositories";
+}
+
+// -----------------------------------------------------------------------------
+// Return a useful preparation error while preserving other daemon messages.
+// -----------------------------------------------------------------------------
+std::string
+daemon_prepare_error_message(GError *error, const char *fallback)
+{
+  if (daemon_cannot_load_repositories_error(error)) {
+    return _("Repository data is unavailable. Connect to the network, refresh repositories, and try again.");
+  }
+
+  if (error && error->message && *error->message) {
+    return error->message;
+  }
+
+  return fallback;
 }
 
 // -----------------------------------------------------------------------------
@@ -685,7 +755,7 @@ mark_package_specs(GDBusConnection *connection,
                                                 cancellable,
                                                 &error);
   if (!reply) {
-    error_out = error ? error->message : _("Could not mark packages in dnf5daemon.");
+    error_out = daemon_prepare_error_message(error, _("Could not mark packages in dnf5daemon."));
     DNFUI_TRACE(
         "dnf5daemon mark failed method=%s path=%s error=%s", method, transaction_path.c_str(), error_out.c_str());
     g_clear_error(&error);
@@ -734,7 +804,7 @@ open_daemon_session_with_options(GDBusConnection *connection,
       error_out = _("dnf5daemon is installed, but DNF UI is not allowed to talk to it. "
                     "Reinstall dnf5daemon-server or check the D-Bus policy.");
     } else {
-      error_out = error ? error->message : _("Could not open a dnf5daemon session.");
+      error_out = daemon_prepare_error_message(error, _("Could not open a dnf5daemon session."));
     }
     DNFUI_TRACE("dnf5daemon session open failed error=%s", error_out.c_str());
     g_clear_error(&error);
@@ -820,6 +890,22 @@ transaction_service_client_testonly_verify_preview_keeps_required_daemon_server(
                                                                                 std::string &error_out)
 {
   return preview_keeps_required_daemon_server_package(preview, error_out);
+}
+
+std::string
+transaction_service_client_testonly_prepare_error_message(const std::string &remote_error,
+                                                          const std::string &daemon_message)
+{
+  GError *error = g_dbus_error_new_for_dbus_error(remote_error.c_str(), daemon_message.c_str());
+  const std::string message = daemon_prepare_error_message(error, _("dnf5daemon failed to resolve the transaction."));
+  g_error_free(error);
+  return message;
+}
+
+bool
+transaction_service_client_testonly_request_loads_available_repos(const TransactionRequest &request)
+{
+  return !transaction_request_is_remove_only(request);
 }
 
 // -----------------------------------------------------------------------------
@@ -937,7 +1023,8 @@ transaction_service_client_start_transaction_request(GDBusConnection *connection
     return false;
   }
 
-  if (!open_daemon_session(connection, cancellable, transaction_path_out, error_out)) {
+  if (!open_daemon_session_with_options(
+          connection, transaction_session_options(request), cancellable, transaction_path_out, error_out)) {
     DNFUI_TRACE("dnf5daemon selected transaction failed before mark error=%s", error_out.c_str());
     return false;
   }
@@ -1003,7 +1090,7 @@ transaction_service_client_start_upgrade_all_transaction_request(GDBusConnection
                                                 cancellable,
                                                 &error);
   if (!reply) {
-    error_out = error ? error->message : _("Could not mark upgrade-all in dnf5daemon.");
+    error_out = daemon_prepare_error_message(error, _("Could not mark upgrade-all in dnf5daemon."));
     DNFUI_TRACE("dnf5daemon upgrade-all mark failed path=%s error=%s", transaction_path_out.c_str(), error_out.c_str());
     g_clear_error(&error);
     std::string release_error;
@@ -1116,7 +1203,7 @@ transaction_service_client_list_daemon_upgrade_targets(GDBusConnection *connecti
   transaction_service_client_release_transaction_request(connection, transaction_path, release_error);
 
   if (!reply) {
-    error_out = error ? error->message : _("Could not list upgrade targets from dnf5daemon.");
+    error_out = daemon_prepare_error_message(error, _("Could not list upgrade targets from dnf5daemon."));
     DNFUI_TRACE("dnf5daemon upgrade target list failed error=%s", error_out.c_str());
     g_clear_error(&error);
     return false;
@@ -1257,7 +1344,7 @@ transaction_service_client_get_transaction_preview(GDBusConnection *connection,
   }
 
   if (!state.reply) {
-    error_out = state.error ? state.error->message : _("dnf5daemon failed to resolve the transaction.");
+    error_out = daemon_prepare_error_message(state.error, _("dnf5daemon failed to resolve the transaction."));
     DNFUI_TRACE("dnf5daemon resolve call failed path=%s error=%s", transaction_path.c_str(), error_out.c_str());
     g_clear_error(&state.error);
     return false;
