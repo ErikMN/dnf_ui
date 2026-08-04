@@ -94,6 +94,19 @@ TEST_CASE("dnf5daemon preparation maps repository load failures to a clear messa
 }
 
 // -----------------------------------------------------------------------------
+// Verify that package download failures are shown without the raw D-Bus prefix.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon apply maps package download failures to a clear message")
+{
+  const std::string message =
+      transaction_service_client_testonly_apply_error_message("org.rpm.dnf.v0.Error", "Failed to download packages.");
+
+  REQUIRE(message.find("Required packages could not be downloaded") != std::string::npos);
+  REQUIRE(message.find("network connection") != std::string::npos);
+  REQUIRE(message.find("GDBus.Error") == std::string::npos);
+}
+
+// -----------------------------------------------------------------------------
 // Verify that only remove-only selected transactions skip available repository loading.
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon selected transaction sessions load repositories by request type")

@@ -115,6 +115,13 @@ msgstr ""
 msgid "Details: "
 msgstr "Detaljer: "
 
+msgid ""
+"Required packages could not be downloaded. Check the network connection and "
+"repository availability, then prepare the preview again."
+msgstr ""
+"Nödvändiga paket kunde inte hämtas. Kontrollera nätverksanslutningen och "
+"förrådens tillgänglighet, och förbered sedan förhandsgranskningen igen."
+
 msgid "dnf5daemon returned an incomplete package item."
 msgstr "dnf5daemon returnerade ett ofullständigt paketobjekt."
 
@@ -911,11 +918,11 @@ msgstr "Transaktionen lyckades."
 msgid "Transaction failed."
 msgstr "Transaktionen misslyckades."
 
+msgid "Transaction failed. See the transaction window for details."
+msgstr "Transaktionen misslyckades. Se transaktionsfönstret för detaljer."
+
 msgid "Transaction Failed"
 msgstr "Transaktionen misslyckades"
-
-msgid "The transaction could not be completed. Review the details below."
-msgstr "Transaktionen kunde inte slutföras. Granska detaljerna nedan."
 
 msgid "Preparing transaction preview..."
 msgstr "Förbereder transaktionsförhandsgranskning..."

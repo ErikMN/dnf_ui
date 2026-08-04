@@ -157,6 +157,11 @@ std::string transaction_service_client_testonly_prepare_error_message(const std:
 // Return true when one selected request should load available repositories.
 // -----------------------------------------------------------------------------
 bool transaction_service_client_testonly_request_loads_available_repos(const TransactionRequest &request);
+// -----------------------------------------------------------------------------
+// Return the user-facing apply error for one daemon D-Bus error.
+// -----------------------------------------------------------------------------
+std::string transaction_service_client_testonly_apply_error_message(const std::string &remote_error,
+                                                                    const std::string &daemon_message);
 #endif
 
 // -----------------------------------------------------------------------------

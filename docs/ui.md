@@ -292,7 +292,8 @@ live progress window shown while apply is running.
 
 [src/ui/transaction/transaction_dialogs.cpp](../src/ui/transaction/transaction_dialogs.cpp)
 builds the confirmation dialog shown before apply, the error dialog shown when
-preview or apply fails, and the repository signing key prompt.
+preview fails, and the repository signing key prompt. Apply failures remain in
+the transaction progress window.
 
 The progress window can receive progress messages after the apply request has
 started. The code keeps the progress state alive while queued GTK callbacks are

@@ -293,6 +293,23 @@ daemon_is_access_denied_error(GError *error)
 }
 
 // -----------------------------------------------------------------------------
+// Return one daemon error message without the GDBus remote-error prefix.
+// -----------------------------------------------------------------------------
+std::string
+daemon_error_text(GError *error)
+{
+  if (!error || !error->message || !*error->message) {
+    return "";
+  }
+
+  GError *stripped_error = g_error_copy(error);
+  g_dbus_error_strip_remote_error(stripped_error);
+  const std::string message = stripped_error && stripped_error->message ? stripped_error->message : "";
+  g_clear_error(&stripped_error);
+  return message;
+}
+
+// -----------------------------------------------------------------------------
 // Return true for the daemon error raised when repository data cannot be loaded.
 // Package changes are resolved by dnf5daemon, so even remove requests need the daemon repository state.
 // -----------------------------------------------------------------------------
@@ -311,10 +328,7 @@ daemon_cannot_load_repositories_error(GError *error)
     return false;
   }
 
-  GError *stripped_error = g_error_copy(error);
-  g_dbus_error_strip_remote_error(stripped_error);
-  const std::string daemon_message = stripped_error && stripped_error->message ? stripped_error->message : "";
-  g_error_free(stripped_error);
+  const std::string daemon_message = daemon_error_text(error);
 
   return daemon_message == "Cannot load repositories." || daemon_message == "Cannot load repositories";
 }
@@ -400,12 +414,19 @@ map_lookup_int64(GVariant *map, const char *key)
 std::string
 daemon_apply_error_message(GError *error)
 {
+  const std::string details = daemon_error_text(error);
+
+  if (details == "Failed to download packages." || details == "Failed to download packages") {
+    return _("Required packages could not be downloaded. Check the network connection and repository availability, "
+             "then prepare the preview again.");
+  }
+
   std::string message = _("The approved transaction was not applied. Prepare the preview again before retrying.");
 
-  if (error && error->message && *error->message) {
+  if (!details.empty()) {
     message += "\n\n";
     message += _("Details: ");
-    message += error->message;
+    message += details;
   }
 
   return message;
@@ -906,6 +927,16 @@ bool
 transaction_service_client_testonly_request_loads_available_repos(const TransactionRequest &request)
 {
   return !transaction_request_is_remove_only(request);
+}
+
+std::string
+transaction_service_client_testonly_apply_error_message(const std::string &remote_error,
+                                                        const std::string &daemon_message)
+{
+  GError *error = g_dbus_error_new_for_dbus_error(remote_error.c_str(), daemon_message.c_str());
+  const std::string message = daemon_apply_error_message(error);
+  g_clear_error(&error);
+  return message;
 }
 
 // -----------------------------------------------------------------------------

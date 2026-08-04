@@ -344,9 +344,8 @@ start_apply_transaction(MainWindowUiState *widgets)
         transaction_history_set_transaction_busy(false);
         set_main_window_sensitive_for_apply(widgets, true);
 
-        transaction_progress_finish(td ? td->progress_window : nullptr, success, "");
-
         if (success) {
+          transaction_progress_finish(td ? td->progress_window : nullptr, true, "");
           DaemonUpgradeState::instance().mark_stale();
           package_query_clear_displayed_upgradeable_table(widgets);
           pending_transaction_invalidate_service_preview(widgets);
@@ -361,15 +360,12 @@ start_apply_transaction(MainWindowUiState *widgets)
           // Rebuild repository data and refresh package state in the background.
           rebuild_after_tx_async(widgets);
         } else {
+          std::string details = error ? error->message : _("Transaction failed.");
+          transaction_progress_finish(td ? td->progress_window : nullptr, false, details);
           pending_transaction_invalidate_service_preview(widgets);
           pending_transaction_set_preview_controls_sensitive(widgets, true);
-          std::string details = error ? error->message : _("Transaction failed.");
-          ui_helpers_set_status(widgets->query.status_label, details.c_str(), "red");
-          // Show the full backend error in a copyable dialog instead of only in the status bar.
-          transaction_dialogs_show_error_dialog(widgets,
-                                                _("Transaction Failed"),
-                                                _("The transaction could not be completed. Review the details below."),
-                                                details);
+          ui_helpers_set_status(
+              widgets->query.status_label, _("Transaction failed. See the transaction window for details."), "red");
           if (error) {
             g_error_free(error);
           }
