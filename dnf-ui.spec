@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.5.4
+Version:        0.5.5
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Wed Aug 05 2026 ErikMN <dnfui@proton.me> - 0.5.5-1
+- Allow remove-only transactions in cold offline mode
+- Show clearer repository and package download errors
+- Keep apply failures in the transaction progress window without opening a second popup
+- Improve cancellation responsiveness during transaction preparation and repository operations
+
 * Sun Aug 02 2026 ErikMN <dnfui@proton.me> - 0.5.4-1
 - Restore reinstall actions for installed packages that still exist in enabled repositories
 
