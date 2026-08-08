@@ -194,8 +194,7 @@ class CancelableDownloadCallbacks : public libdnf5::repo::DownloadCallbacks {
 
 // -----------------------------------------------------------------------------
 // Clear download callbacks before a temporary Base leaves scope.
-// Repository refresh cancellation raises exceptions from libdnf callbacks, so
-// callback cleanup must not depend on the normal return path.
+// Repository refresh cancellation raises exceptions from libdnf callbacks, so cleanup must not depend on normal return.
 // -----------------------------------------------------------------------------
 class DownloadCallbacksReset {
   public:

@@ -88,7 +88,7 @@ of the public callback file:
   completion.
 - [src/ui/package_query/package_query_tasks.cpp](../src/ui/package_query/package_query_tasks.cpp)
   contains the `GTask` workers and completion handlers for package queries.
-- [src/ui/package_query/package_query_controller_internal.hpp](../src/ui/package_query/package_query_controller_internal.hpp)
+- [package_query_controller_internal.hpp](../src/ui/package_query/package_query_controller_internal.hpp)
   declares the shared functions used by those files.
 
 Long-running package queries run on worker threads through `GTask`. Completion
@@ -106,7 +106,8 @@ List Installed and List Upgradable do not use this checkbox.
 The bottom bar shows the visible row count on the left and the last completed
 package query time on the right.
 
-Search results are cached in [src/ui/package_query/package_query_cache.cpp](../src/ui/package_query/package_query_cache.cpp).
+Search result caching uses this file:
+[src/ui/package_query/package_query_cache.cpp](../src/ui/package_query/package_query_cache.cpp).
 The cache is tied to the current backend Base generation and a cache epoch kept
 by the query cache layer. Repository refreshes, transaction follow-up refreshes,
 and installed-state refreshes clear cached search rows and advance that epoch,
@@ -195,7 +196,8 @@ backed by libdnf5 transaction history. It lists recent package changes and lets
 the user filter them by package, action, result, date range, repository,
 architecture, or command text.
 
-The history window lives in [src/ui/history/transaction_history_view.cpp](../src/ui/history/transaction_history_view.cpp).
+The history window implementation is this file:
+[src/ui/history/transaction_history_view.cpp](../src/ui/history/transaction_history_view.cpp).
 It loads history on a worker thread and displays value objects from the backend
 instead of libdnf5 objects. It shows 100 package changes per page and supports
 Newer, Older, and direct page navigation without creating an unbounded GTK list.
@@ -209,7 +211,8 @@ The action filter uses checkboxes so the user can include one action, several
 actions, or all actions in the same history search.
 When the history window is focused, Ctrl+F focuses the package filter and Ctrl+W closes the window.
 If a package transaction summary is open, the history window remains usable.
-If a package transaction is being applied, the history window stays open and can be closed, but its controls are disabled until apply finishes.
+If a package transaction is being applied, the history window stays open and can be closed.
+Its controls are disabled until apply finishes.
 The navigation row shows how long the last completed history search or page load took.
 The feature is intentionally read-only. It does not offer rollback, replay, or
 undo actions.
@@ -246,7 +249,8 @@ It is responsible for:
 - clearing pending actions after a successful apply
 - refreshing package state after apply
 
-The pending action data model lives in [src/ui/transaction/pending_transaction_state.hpp](../src/ui/transaction/pending_transaction_state.hpp).
+The pending action data model is this header:
+[src/ui/transaction/pending_transaction_state.hpp](../src/ui/transaction/pending_transaction_state.hpp).
 Conversion from pending actions to a shared `TransactionRequest` lives in
 [src/ui/transaction/pending_transaction_request.cpp](../src/ui/transaction/pending_transaction_request.cpp).
 
@@ -280,8 +284,8 @@ downgrade.
 Mark Listed Upgrades marks only valid upgrade candidates from the current table.
 It does not mark downgradeable rows or intermediate newer rows.
 
-[src/ui/transaction/pending_transaction_action_rows.cpp](../src/ui/transaction/pending_transaction_action_rows.cpp) keeps those
-row-selection rules in one place. This is needed because an update can be shown
+[src/ui/transaction/pending_transaction_action_rows.cpp](../src/ui/transaction/pending_transaction_action_rows.cpp)
+keeps those row-selection rules in one place. This is needed because an update can be shown
 from either the installed package list or the upgradable package list. The helper
 must not run libdnf queries because it is called while updating GTK controls.
 

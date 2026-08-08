@@ -40,16 +40,13 @@ enum class DaemonUpgradePublishResult {
 // It does not fetch data from dnf5daemon. Workers load targets, then GTK
 // publishes the result only after cancellation and state checks pass.
 //
-// Table rows keep the snapshot generation they were built from. Later action
-// handling uses that generation to reject stale rows instead of marking an
-// upgrade from an old daemon result.
+// Table rows keep their snapshot generation so later actions can reject stale rows from old daemon results.
 //
-// Refresh IDs let only the worker that started the current refresh publish or
-// fail it. Cancelled workers abandon their refresh instead of marking newer work stale.
+// Refresh IDs let only the worker that started the current refresh publish or fail it.
+// Cancelled workers abandon their refresh instead of marking newer work stale.
 //
-// Own one active daemon refresh until the GTK completion either publishes it or
-// rejects it. Destruction abandons an unclosed refresh so a cancelled worker
-// cannot keep the shared state locked in REFRESHING.
+// Own one active daemon refresh until the GTK completion publishes or rejects it.
+// Destruction abandons an unclosed refresh so a cancelled worker cannot keep the shared state locked in REFRESHING.
 class DaemonUpgradeRefreshOwner {
   public:
   explicit DaemonUpgradeRefreshOwner(DaemonUpgradeRefreshId refresh_id = 0);

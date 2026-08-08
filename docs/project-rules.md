@@ -36,9 +36,12 @@ This file states the rules that should stay true as DNF UI changes.
   comes from dnf5daemon.
 - dnf5daemon is the source for transaction previews, apply work, Upgrade All,
   and the List Upgradable upgrade target set.
-- The generic Status column may show that repository metadata contains a newer candidate. It must not be treated as proof that dnf5daemon can apply that upgrade.
-- The List Upgradable view must start from dnf5daemon upgrade targets. libdnf5 may add display metadata, but it must not add extra upgrade rows that the daemon did not report.
-- If dnf5daemon reports an upgrade whose metadata cannot be loaded from libdnf5, keep a basic daemon row visible instead of hiding the upgrade.
+- The generic Status column may show that repository metadata contains a newer candidate.
+  It must not be treated as proof that dnf5daemon can apply that upgrade.
+- The List Upgradable view must start from dnf5daemon upgrade targets. libdnf5 may add display metadata, but it must not
+  add extra upgrade rows that the daemon did not report.
+- If dnf5daemon reports an upgrade whose metadata cannot be loaded from libdnf5, keep a basic daemon row visible instead
+  of hiding the upgrade.
 - When showing an upgradable package, details tabs should describe the currently
   installed package unless the text clearly says it is showing update information.
 - For daemon-backed List Upgradable rows, the Info tab must use the attached

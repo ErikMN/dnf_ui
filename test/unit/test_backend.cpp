@@ -1086,8 +1086,7 @@ TEST_CASE("Exact installed rows distinguish local-only and repo-backed states")
 }
 
 // -----------------------------------------------------------------------------
-// Verify that an older installed EVR is not treated as upgradeable when the
-// candidate version is already installed.
+// Verify that an older installed EVR is not treated as upgradeable when the candidate version is already installed.
 // -----------------------------------------------------------------------------
 TEST_CASE("Older parallel installed rows do not expose already-installed updates")
 {

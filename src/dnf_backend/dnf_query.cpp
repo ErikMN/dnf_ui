@@ -645,8 +645,7 @@ visible_rows_from_maps(std::map<std::string, PackageRow> available_rows,
 
 // -----------------------------------------------------------------------------
 // Build an exact-version package view.
-// Available rows remain one row per exact NEVRA, and every installed NEVRA that
-// is not already visible is added separately.
+// Available rows remain one row per exact NEVRA. Installed NEVRAs that are not already visible are added separately.
 // -----------------------------------------------------------------------------
 std::vector<PackageRow>
 visible_rows_from_available_view(AvailableViewRows available_rows, const InstalledQueryResult &installed)

@@ -205,8 +205,7 @@ dnf_backend_get_package_info(const std::string &pkg_nevra,
   }
 
   // Installed context uses installed metadata for the header when the package is installed.
-  // This keeps version, repo, install size, and install reason consistent when the user opens the package from
-  // different lists.
+  // This keeps version, repo, install size, and install reason consistent across different lists.
   const bool show_installed_context = use_installed_context && have_installed_counterpart;
   const PackageRow &display_row = show_installed_context ? installed_row : selected_row;
   const unsigned long long display_install_size =
