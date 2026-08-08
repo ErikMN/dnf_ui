@@ -681,7 +681,7 @@ package_details_load_selected_package_info(MainWindowUiState *widgets, const Pac
   PackageDetailsContext details_context = package_details_context_for_selection(widgets, selected, selected_resolution);
   std::optional<PackageRow> upgrade_row_override =
       package_details_upgrade_override_for_selection(selected, selected_resolution);
-  if (const TransactionServiceUpgradeTarget *target = selected.upgrade_target()) {
+  if (const DaemonUpgradeTarget *target = selected.upgrade_target()) {
     if (!target->nevra.empty()) {
       changelog_query_nevra = target->nevra;
     }

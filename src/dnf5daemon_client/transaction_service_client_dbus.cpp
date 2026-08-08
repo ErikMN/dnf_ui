@@ -469,9 +469,9 @@ package_from_daemon_object(GVariant *object, TransactionPreviewPackage &package_
 // Build one upgrade target returned by dnf5daemon's package-list API.
 // -----------------------------------------------------------------------------
 bool
-upgrade_target_from_daemon_object(GVariant *object, TransactionServiceUpgradeTarget &target_out, std::string &error_out)
+upgrade_target_from_daemon_object(GVariant *object, DaemonUpgradeTarget &target_out, std::string &error_out)
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   target.name = map_lookup_string(object, "name");
   target.epoch = map_lookup_string(object, "epoch");
   target.version = map_lookup_string(object, "version");
@@ -951,7 +951,7 @@ transaction_service_client_testonly_build_upgrade_target_from_fields(const std::
                                                                      const std::string &repo_id,
                                                                      const std::string &nevra,
                                                                      const std::string &full_nevra,
-                                                                     TransactionServiceUpgradeTarget &target_out,
+                                                                     DaemonUpgradeTarget &target_out,
                                                                      std::string &error_out)
 {
   target_out = {};
@@ -1201,7 +1201,7 @@ transaction_service_client_refresh_repositories(std::string &error_out, GCancell
 bool
 transaction_service_client_list_daemon_upgrade_targets(GDBusConnection *connection,
                                                        GCancellable *cancellable,
-                                                       std::vector<TransactionServiceUpgradeTarget> &targets_out,
+                                                       std::vector<DaemonUpgradeTarget> &targets_out,
                                                        std::string &error_out)
 {
   targets_out.clear();
@@ -1248,7 +1248,7 @@ transaction_service_client_list_daemon_upgrade_targets(GDBusConnection *connecti
     targets_out.reserve(n);
     for (gsize i = 0; i < n; ++i) {
       GVariant *pkg = g_variant_get_child_value(packages, i);
-      TransactionServiceUpgradeTarget target;
+      DaemonUpgradeTarget target;
       if (!upgrade_target_from_daemon_object(pkg, target, error_out)) {
         g_variant_unref(pkg);
         g_variant_unref(packages);

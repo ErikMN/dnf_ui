@@ -75,7 +75,7 @@ bool transaction_service_client_confirm_key(GDBusConnection *connection,
 
 bool transaction_service_client_list_daemon_upgrade_targets(GDBusConnection *connection,
                                                             GCancellable *cancellable,
-                                                            std::vector<TransactionServiceUpgradeTarget> &targets_out,
+                                                            std::vector<DaemonUpgradeTarget> &targets_out,
                                                             std::string &error_out);
 
 guint transaction_service_client_subscribe_progress(GDBusConnection *connection,

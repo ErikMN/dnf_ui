@@ -141,7 +141,7 @@ pending_action_matches_row(const MainWindowUiState *widgets,
     return true;
   }
 
-  const TransactionServiceUpgradeTarget *upgrade_target = row.upgrade_target();
+  const DaemonUpgradeTarget *upgrade_target = row.upgrade_target();
   if (upgrade_target && action.nevra == upgrade_target->nevra) {
     return true;
   }

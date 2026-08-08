@@ -55,7 +55,7 @@ sort_evr_from_row(const PackageRow &row)
 // Return the EVR value used for sorting one daemon upgrade target.
 // -----------------------------------------------------------------------------
 static PackageTableSortEvr
-sort_evr_from_daemon_target(const TransactionServiceUpgradeTarget &target)
+sort_evr_from_daemon_target(const DaemonUpgradeTarget &target)
 {
   return sort_evr_from_values(target.epoch, target.version, target.release);
 }
@@ -129,7 +129,7 @@ package_table_fill_item_display_values(PackageItem &item,
   item.current_evr = sort_evr_from_row(item.row);
   item.update_evr = {};
 
-  if (const TransactionServiceUpgradeTarget *upgrade_target = item.upgrade_target()) {
+  if (const DaemonUpgradeTarget *upgrade_target = item.upgrade_target()) {
     if (resolution.has_installed_row) {
       values.version = resolution.installed_row.version;
       values.release = resolution.installed_row.release;

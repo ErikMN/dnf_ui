@@ -286,7 +286,7 @@ transaction_service_client_preview_upgrade_all_request(TransactionPreview &previ
 // List upgrade targets from dnf5daemon's package-list API.
 // -----------------------------------------------------------------------------
 bool
-transaction_service_client_list_upgrade_targets(std::vector<TransactionServiceUpgradeTarget> &targets_out,
+transaction_service_client_list_upgrade_targets(std::vector<DaemonUpgradeTarget> &targets_out,
                                                 std::string &error_out,
                                                 GCancellable *cancellable)
 {

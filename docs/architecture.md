@@ -163,6 +163,8 @@ The backend implementation is split by responsibility:
 - [src/dnf_backend/dnf_details.cpp](../src/dnf_backend/dnf_details.cpp) formats package details, files, dependencies, and changelog text.
 - [src/dnf_backend/dnf_history.cpp](../src/dnf_backend/dnf_history.cpp) reads read-only transaction history.
 - [src/dnf_backend/dnf_state.cpp](../src/dnf_backend/dnf_state.cpp) keeps installed-package snapshot state and package status classification.
+- [src/upgrade/daemon_upgrade_target.hpp](../src/upgrade/daemon_upgrade_target.hpp) defines daemon-reported upgrade
+  targets.
 - [src/upgrade/daemon_upgrade_state.cpp](../src/upgrade/daemon_upgrade_state.cpp) keeps the latest complete daemon upgrade snapshot.
 
 Most query and details calls take serialized read access to the shared Base.

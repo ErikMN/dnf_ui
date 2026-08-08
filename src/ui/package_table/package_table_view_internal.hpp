@@ -43,7 +43,7 @@ struct PackageItem {
   std::string status_text;
   int status_rank = 0;
 
-  const TransactionServiceUpgradeTarget *upgrade_target() const
+  const DaemonUpgradeTarget *upgrade_target() const
   {
     return daemon_upgrade ? &daemon_upgrade->target : nullptr;
   }

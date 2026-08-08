@@ -559,7 +559,7 @@ TEST_CASE("Package table daemon upgrade pending status is shared")
 {
   reset_backend_globals();
 
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   target.name = "demo";
   target.arch = "x86_64";
   target.version = "2.0";

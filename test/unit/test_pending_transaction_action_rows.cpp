@@ -46,14 +46,14 @@ make_single_installed_query_result(const PackageRow &row)
 // -----------------------------------------------------------------------------
 // Build one daemon upgrade target for resolver tests.
 // -----------------------------------------------------------------------------
-static TransactionServiceUpgradeTarget
+static DaemonUpgradeTarget
 make_test_upgrade_target(const char *nevra,
                          const char *name,
                          const char *version,
                          const char *release,
                          const char *arch)
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   target.name = name;
   target.arch = arch;
   target.version = version;
@@ -829,7 +829,7 @@ TEST_CASE("Pending transaction action rows resolve daemon upgrade target")
 
   PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
-  TransactionServiceUpgradeTarget target = make_test_upgrade_target("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  DaemonUpgradeTarget target = make_test_upgrade_target("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -862,7 +862,7 @@ TEST_CASE("Pending transaction action rows resolve daemon target without install
   state.reset_for_tests();
 
   PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
-  TransactionServiceUpgradeTarget target = make_test_upgrade_target("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  DaemonUpgradeTarget target = make_test_upgrade_target("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
 
   std::optional<DaemonUpgradeRefreshId> refresh_id = state.begin_refresh();
   REQUIRE(refresh_id.has_value());
@@ -893,7 +893,7 @@ TEST_CASE("Pending transaction action rows reject stale daemon upgrade target")
 
   PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
-  TransactionServiceUpgradeTarget target = make_test_upgrade_target("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  DaemonUpgradeTarget target = make_test_upgrade_target("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 
@@ -928,7 +928,7 @@ TEST_CASE("Pending transaction upgrade marking uses daemon target")
 
   PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
   PackageRow update_metadata = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
-  TransactionServiceUpgradeTarget target = make_test_upgrade_target("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  DaemonUpgradeTarget target = make_test_upgrade_target("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
 
   dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
 

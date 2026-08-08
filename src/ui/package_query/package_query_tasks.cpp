@@ -73,7 +73,7 @@ struct PackageListTaskData {
 
 struct UpgradeablePackageListResult {
   DaemonUpgradeRefreshOwner refresh_owner;
-  std::vector<TransactionServiceUpgradeTarget> targets;
+  std::vector<DaemonUpgradeTarget> targets;
   std::vector<PackageRow> metadata_rows;
   bool package_state_changed = false;
 };
@@ -155,7 +155,7 @@ struct QueryBackendBaseDropGuard {
 // appears in List Upgradable.
 // -----------------------------------------------------------------------------
 static PackageRow
-package_row_from_daemon_upgrade_target(const TransactionServiceUpgradeTarget &target)
+package_row_from_daemon_upgrade_target(const DaemonUpgradeTarget &target)
 {
   PackageRow row;
   row.nevra = target.nevra.empty() ? target.full_nevra : target.nevra;
@@ -399,7 +399,7 @@ on_list_upgradeable_task(GTask *task, gpointer, gpointer, GCancellable *cancella
       return;
     }
 
-    std::vector<TransactionServiceUpgradeTarget> targets;
+    std::vector<DaemonUpgradeTarget> targets;
     std::string error;
     if (!transaction_service_client_list_upgrade_targets(targets, error, cancellable)) {
       if (cancellable && g_cancellable_is_cancelled(cancellable)) {

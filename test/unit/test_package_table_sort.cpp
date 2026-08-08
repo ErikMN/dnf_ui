@@ -348,7 +348,7 @@ TEST_CASE("Package table update columns use daemon upgrade target")
   item.row = make_table_test_row("demo-1.2.4-1.fc44.x86_64", "demo", "1.2.4", "1.fc44", "x86_64");
   item.row.repo = "metadata-repo";
 
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   target.name = "demo";
   target.arch = "x86_64";
   target.version = "1.2.5";
@@ -384,7 +384,7 @@ TEST_CASE("Package table daemon upgrade rows use installed version when availabl
   PackageItem item {};
   item.row = make_table_test_row("demo-1.2.5-2.fc44.x86_64", "demo", "1.2.5", "2.fc44", "x86_64");
 
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   target.name = "demo";
   target.arch = "x86_64";
   target.version = "1.2.5";
@@ -554,7 +554,7 @@ TEST_CASE("Package table Update Version sorter uses daemon target epoch")
     .row = make_table_test_row("left-99.0-1.x86_64", "left", "99.0", "1", "x86_64", "0"),
     .daemon_upgrade = {},
   };
-  TransactionServiceUpgradeTarget left_target;
+  DaemonUpgradeTarget left_target;
   left_target.name = "left";
   left_target.arch = "x86_64";
   left_target.epoch = "0";
@@ -569,7 +569,7 @@ TEST_CASE("Package table Update Version sorter uses daemon target epoch")
     .row = make_table_test_row("right-1.0-1.x86_64", "right", "1.0", "1", "x86_64", "1"),
     .daemon_upgrade = {},
   };
-  TransactionServiceUpgradeTarget right_target;
+  DaemonUpgradeTarget right_target;
   right_target.name = "right";
   right_target.arch = "x86_64";
   right_target.epoch = "1";

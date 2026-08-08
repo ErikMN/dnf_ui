@@ -5,7 +5,7 @@
 // -----------------------------------------------------------------------------
 #pragma once
 
-#include "dnf5daemon_client/transaction_service_client.hpp"
+#include "upgrade/daemon_upgrade_target.hpp"
 
 #include <cstdint>
 #include <map>
@@ -25,7 +25,7 @@ enum class DaemonUpgradeSnapshotStatus {
 struct DaemonUpgradeSnapshot {
   uint64_t generation = 0;
   DaemonUpgradeSnapshotStatus status = DaemonUpgradeSnapshotStatus::NOT_LOADED;
-  std::map<std::string, TransactionServiceUpgradeTarget> targets_by_name_arch;
+  std::map<std::string, DaemonUpgradeTarget> targets_by_name_arch;
 };
 
 using DaemonUpgradeRefreshId = uint64_t;
@@ -70,10 +70,10 @@ class DaemonUpgradeState {
   static DaemonUpgradeState &instance();
 
   DaemonUpgradeSnapshot snapshot() const;
-  bool is_current_target(const TransactionServiceUpgradeTarget &target, uint64_t generation) const;
+  bool is_current_target(const DaemonUpgradeTarget &target, uint64_t generation) const;
   std::optional<DaemonUpgradeRefreshId> begin_refresh();
   DaemonUpgradePublishResult publish_success(DaemonUpgradeRefreshId refresh_id,
-                                             const std::vector<TransactionServiceUpgradeTarget> &targets,
+                                             const std::vector<DaemonUpgradeTarget> &targets,
                                              std::string &error_out);
   void publish_failure(DaemonUpgradeRefreshId refresh_id);
   bool abandon_refresh(DaemonUpgradeRefreshId refresh_id);

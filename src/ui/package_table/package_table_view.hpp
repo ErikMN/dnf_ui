@@ -8,8 +8,8 @@
 #pragma once
 
 #include "dnf_backend/dnf_backend.hpp"
-#include "dnf5daemon_client/transaction_service_client.hpp"
 #include "ui/package_table/package_table_columns.hpp"
+#include "upgrade/daemon_upgrade_target.hpp"
 
 #include <memory>
 #include <vector>
@@ -23,7 +23,7 @@ enum class PackageTableEmptyState {
 
 // Only List Upgradable rows need daemon target data. Keep it behind a pointer so normal package rows stay small.
 struct DaemonUpgradeRowContext {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   uint64_t upgrade_generation = 0;
 };
 
@@ -33,7 +33,7 @@ struct PackageTableRow {
   PackageRow row;
   DaemonUpgradeRowContextPtr daemon_upgrade;
 
-  const TransactionServiceUpgradeTarget *upgrade_target() const
+  const DaemonUpgradeTarget *upgrade_target() const
   {
     return daemon_upgrade ? &daemon_upgrade->target : nullptr;
   }

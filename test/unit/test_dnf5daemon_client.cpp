@@ -358,7 +358,7 @@ TEST_CASE("dnf5daemon preview self-protection rejects reinstalls")
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon upgrade target parser exposes stable identity helpers")
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   std::string error;
 
   REQUIRE(transaction_service_client_testonly_build_upgrade_target_from_fields("demo",
@@ -381,7 +381,7 @@ TEST_CASE("dnf5daemon upgrade target parser exposes stable identity helpers")
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon upgrade target parser keeps normal and full NEVRA")
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   std::string error;
 
   REQUIRE(transaction_service_client_testonly_build_upgrade_target_from_fields("demo",
@@ -404,7 +404,7 @@ TEST_CASE("dnf5daemon upgrade target parser keeps normal and full NEVRA")
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon upgrade target parser builds normal NEVRA when missing")
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   std::string error;
 
   REQUIRE(transaction_service_client_testonly_build_upgrade_target_from_fields(
@@ -418,7 +418,7 @@ TEST_CASE("dnf5daemon upgrade target parser builds normal NEVRA when missing")
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon upgrade target parser builds epoch-zero full NEVRA")
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   std::string error;
 
   REQUIRE(transaction_service_client_testonly_build_upgrade_target_from_fields(
@@ -432,7 +432,7 @@ TEST_CASE("dnf5daemon upgrade target parser builds epoch-zero full NEVRA")
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon upgrade target parser builds nonzero epoch NEVRA")
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   std::string error;
 
   REQUIRE(transaction_service_client_testonly_build_upgrade_target_from_fields(
@@ -446,7 +446,7 @@ TEST_CASE("dnf5daemon upgrade target parser builds nonzero epoch NEVRA")
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon upgrade target parser rejects missing required fields")
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   std::string error;
 
   REQUIRE_FALSE(transaction_service_client_testonly_build_upgrade_target_from_fields(
@@ -547,7 +547,7 @@ TEST_CASE("dnf5daemon client lists upgrade targets", "[dnf5daemon]")
   require_dnf5daemon_test_enabled();
   transaction_service_client_reset_for_tests();
 
-  std::vector<TransactionServiceUpgradeTarget> targets;
+  std::vector<DaemonUpgradeTarget> targets;
   std::string error;
 
   bool listed = transaction_service_client_list_upgrade_targets(targets, error);

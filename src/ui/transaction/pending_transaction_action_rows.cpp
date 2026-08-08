@@ -238,7 +238,7 @@ apply_pending_install_side_action(PendingTransactionActionRows &rows,
 // -----------------------------------------------------------------------------
 PendingTransactionActionRows
 pending_transaction_action_rows_for_resolved_selection(const PackageRow &selected,
-                                                       const TransactionServiceUpgradeTarget *upgrade_target,
+                                                       const DaemonUpgradeTarget *upgrade_target,
                                                        uint64_t upgrade_generation,
                                                        const InstalledPackageResolution &installed_resolution,
                                                        bool exact_installonly_actions)
@@ -323,7 +323,7 @@ pending_transaction_action_rows_for_resolved_selection(const PackageRow &selecte
 
 PendingTransactionActionRows
 pending_transaction_action_rows_for_selection(const PackageRow &selected,
-                                              const TransactionServiceUpgradeTarget *upgrade_target,
+                                              const DaemonUpgradeTarget *upgrade_target,
                                               uint64_t upgrade_generation,
                                               bool exact_installonly_actions)
 {
@@ -335,7 +335,7 @@ pending_transaction_action_rows_for_selection(const PackageRow &selected,
 PendingTransactionActionRows
 pending_transaction_action_rows_for_resolved_selection_with_pending(
     const PackageRow &selected,
-    const TransactionServiceUpgradeTarget *upgrade_target,
+    const DaemonUpgradeTarget *upgrade_target,
     uint64_t upgrade_generation,
     const InstalledPackageResolution &installed_resolution,
     bool exact_installonly_actions,
@@ -354,7 +354,7 @@ pending_transaction_action_rows_for_resolved_selection_with_pending(
 
 PendingTransactionActionRows
 pending_transaction_action_rows_for_selection_with_pending(const PackageRow &selected,
-                                                           const TransactionServiceUpgradeTarget *upgrade_target,
+                                                           const DaemonUpgradeTarget *upgrade_target,
                                                            uint64_t upgrade_generation,
                                                            bool exact_installonly_actions,
                                                            const std::vector<PendingAction> &actions)

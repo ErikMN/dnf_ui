@@ -76,7 +76,7 @@ DaemonUpgradeState::snapshot() const
 // Return true when one displayed daemon target still matches the current snapshot.
 // -----------------------------------------------------------------------------
 bool
-DaemonUpgradeState::is_current_target(const TransactionServiceUpgradeTarget &target, uint64_t generation) const
+DaemonUpgradeState::is_current_target(const DaemonUpgradeTarget &target, uint64_t generation) const
 {
   std::lock_guard<std::mutex> lock(mutex);
   if (current.status != DaemonUpgradeSnapshotStatus::READY || current.generation != generation) {
@@ -115,11 +115,11 @@ DaemonUpgradeState::begin_refresh()
 // -----------------------------------------------------------------------------
 DaemonUpgradePublishResult
 DaemonUpgradeState::publish_success(DaemonUpgradeRefreshId refresh_id,
-                                    const std::vector<TransactionServiceUpgradeTarget> &targets,
+                                    const std::vector<DaemonUpgradeTarget> &targets,
                                     std::string &error_out)
 {
   error_out.clear();
-  std::map<std::string, TransactionServiceUpgradeTarget> next_targets;
+  std::map<std::string, DaemonUpgradeTarget> next_targets;
 
   for (const auto &target : targets) {
     const std::string key = target.name_arch_key();

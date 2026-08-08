@@ -15,10 +15,10 @@ namespace {
 // -----------------------------------------------------------------------------
 // Build one daemon upgrade target for state publication tests.
 // -----------------------------------------------------------------------------
-TransactionServiceUpgradeTarget
+DaemonUpgradeTarget
 make_target(const std::string &name, const std::string &arch, const std::string &version, const std::string &full_nevra)
 {
-  TransactionServiceUpgradeTarget target;
+  DaemonUpgradeTarget target;
   target.name = name;
   target.arch = arch;
   target.epoch = "0";
@@ -80,7 +80,7 @@ TEST_CASE("daemon upgrade state publishes successful targets")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
 
@@ -104,8 +104,8 @@ TEST_CASE("daemon upgrade state validates current targets")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  TransactionServiceUpgradeTarget target = make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64");
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  DaemonUpgradeTarget target = make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64");
+  std::vector<DaemonUpgradeTarget> targets {
     target,
   };
 
@@ -116,7 +116,7 @@ TEST_CASE("daemon upgrade state validates current targets")
   DaemonUpgradeSnapshot snapshot = state.snapshot();
   REQUIRE(state.is_current_target(target, snapshot.generation));
 
-  TransactionServiceUpgradeTarget changed_target = target;
+  DaemonUpgradeTarget changed_target = target;
   changed_target.full_nevra = "demo-0:3.0-1.fc44.x86_64";
   REQUIRE_FALSE(state.is_current_target(changed_target, snapshot.generation));
   REQUIRE_FALSE(state.is_current_target(target, snapshot.generation + 1));
@@ -168,7 +168,7 @@ TEST_CASE("daemon upgrade state marks snapshots stale")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
 
@@ -190,7 +190,7 @@ TEST_CASE("daemon upgrade state collapses exact duplicate targets")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
@@ -212,10 +212,10 @@ TEST_CASE("daemon upgrade state rejects conflicting duplicate targets")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> first_targets {
+  std::vector<DaemonUpgradeTarget> first_targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
-  std::vector<TransactionServiceUpgradeTarget> conflicting_targets {
+  std::vector<DaemonUpgradeTarget> conflicting_targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
     make_target("demo", "x86_64", "3.0", "demo-0:3.0-1.fc44.x86_64"),
   };
@@ -243,7 +243,7 @@ TEST_CASE("daemon upgrade state recovers after error and stale states")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
 
@@ -273,7 +273,7 @@ TEST_CASE("daemon upgrade state rejects publication after stale")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
 
@@ -332,7 +332,7 @@ TEST_CASE("daemon upgrade state abandons later refresh as stale")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
 
@@ -375,10 +375,10 @@ TEST_CASE("daemon upgrade state rejects old success during newer refresh")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> old_targets {
+  std::vector<DaemonUpgradeTarget> old_targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
-  std::vector<TransactionServiceUpgradeTarget> new_targets {
+  std::vector<DaemonUpgradeTarget> new_targets {
     make_target("demo", "x86_64", "3.0", "demo-0:3.0-1.fc44.x86_64"),
   };
 
@@ -409,7 +409,7 @@ TEST_CASE("daemon upgrade state ignores old failure during newer refresh")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "3.0", "demo-0:3.0-1.fc44.x86_64"),
   };
 
@@ -438,7 +438,7 @@ TEST_CASE("daemon upgrade state reports inactive old conflict during newer refre
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> conflicting_targets {
+  std::vector<DaemonUpgradeTarget> conflicting_targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
     make_target("demo", "x86_64", "3.0", "demo-0:3.0-1.fc44.x86_64"),
   };
@@ -466,7 +466,7 @@ TEST_CASE("daemon upgrade state rejects publication without refresh")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
 
@@ -505,7 +505,7 @@ TEST_CASE("daemon upgrade refresh owner keeps accepted results")
 {
   DaemonUpgradeState &state = reset_state();
   std::string error;
-  std::vector<TransactionServiceUpgradeTarget> targets {
+  std::vector<DaemonUpgradeTarget> targets {
     make_target("demo", "x86_64", "2.0", "demo-0:2.0-1.fc44.x86_64"),
   };
 

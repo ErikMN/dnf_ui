@@ -5,6 +5,8 @@
 // -----------------------------------------------------------------------------
 #pragma once
 
+#include "upgrade/daemon_upgrade_target.hpp"
+
 #include <functional>
 #include <string>
 #include <vector>
@@ -13,27 +15,6 @@ typedef struct _GCancellable GCancellable;
 
 struct TransactionRequest;
 struct TransactionPreview;
-
-struct TransactionServiceUpgradeTarget {
-  std::string name;
-  std::string arch;
-  std::string epoch;
-  std::string version;
-  std::string release;
-  std::string nevra;
-  std::string full_nevra;
-  std::string repo_id;
-
-  std::string name_arch_key() const
-  {
-    return name + "\n" + arch;
-  }
-
-  std::string upgrade_spec() const
-  {
-    return name + "." + arch;
-  }
-};
 
 struct TransactionKeyImportRequest {
   std::string key_id;
@@ -67,7 +48,7 @@ transaction_service_client_preview_upgrade_all_request(TransactionPreview &previ
 // List upgrade targets directly from dnf5daemon's package-list API.
 // This is a read-only snapshot of daemon upgrade state, not a transaction preview.
 // -----------------------------------------------------------------------------
-bool transaction_service_client_list_upgrade_targets(std::vector<TransactionServiceUpgradeTarget> &targets_out,
+bool transaction_service_client_list_upgrade_targets(std::vector<DaemonUpgradeTarget> &targets_out,
                                                      std::string &error_out,
                                                      GCancellable *cancellable = nullptr);
 
@@ -130,7 +111,7 @@ bool transaction_service_client_testonly_build_upgrade_target_from_fields(const 
                                                                           const std::string &repo_id,
                                                                           const std::string &nevra,
                                                                           const std::string &full_nevra,
-                                                                          TransactionServiceUpgradeTarget &target_out,
+                                                                          DaemonUpgradeTarget &target_out,
                                                                           std::string &error_out);
 // -----------------------------------------------------------------------------
 // Check the resolved-preview self-protection rule used by daemon previews.
