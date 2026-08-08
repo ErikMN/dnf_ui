@@ -40,7 +40,7 @@ require_stored_status_matches_pending_action(MainWindowUiState &widgets, Package
                                                                  table_row.upgrade_target(),
                                                                  table_row.upgrade_generation(),
                                                                  exact_installonly_actions,
-                                                                 widgets.transaction.actions);
+                                                                 widgets.transaction_state.actions);
   PendingAction::Type action_type;
   REQUIRE(package_table_pending_action_for_resolved_row(&widgets, table_row, action_rows, action_type));
 
@@ -93,7 +93,7 @@ TEST_CASE("Package table pending install status is shared")
   MainWindowUiState widgets;
   PackageItem item;
   item.row = make_status_test_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::INSTALL, item.row.nevra, item.row.nevra },
   };
 
@@ -121,7 +121,7 @@ TEST_CASE("Package table installonly update action shows pending install status"
   item.row = update;
 
   PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_selection(item.row, nullptr, 0, true);
-  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction.actions, action_rows));
+  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction_state.actions, action_rows));
 
   InstalledPackageResolution resolution = dnf_backend_resolve_installed_package(item.row);
   REQUIRE(resolution.state == PackageInstallState::UPGRADEABLE);
@@ -153,7 +153,7 @@ TEST_CASE("Package table compact installonly row preserves pending exact install
   set_all_version_package_view(widgets);
 
   PendingTransactionActionRows exact_rows = pending_transaction_action_rows_for_selection(update, nullptr, 0, true);
-  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction.actions, exact_rows));
+  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction_state.actions, exact_rows));
 
   set_compact_package_view(widgets);
   PackageItem item;
@@ -189,7 +189,7 @@ TEST_CASE("Package table exact installonly row preserves pending upgrade status"
 
   PendingTransactionActionRows compact_rows =
       pending_transaction_action_rows_for_selection(installed, nullptr, 0, false);
-  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction.actions, compact_rows));
+  REQUIRE(pending_transaction_mark_install_side_action(widgets.transaction_state.actions, compact_rows));
 
   set_all_version_package_view(widgets);
   PackageItem item;
@@ -239,7 +239,7 @@ TEST_CASE("Package table pending upgrade status uses resolved install row")
 
   MainWindowUiState widgets;
   set_compact_package_view(widgets);
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::UPGRADE, installed.repo_candidate_nevra, "demo.x86_64" },
   };
 
@@ -268,7 +268,7 @@ TEST_CASE("Package table all-version pending upgrade status uses exact row")
 
   MainWindowUiState widgets;
   set_all_version_package_view(widgets);
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::UPGRADE, update.nevra, "demo.x86_64", update.name_arch_key() },
   };
 
@@ -281,7 +281,7 @@ TEST_CASE("Package table all-version pending upgrade status uses exact row")
                                                                  installed_table_row.upgrade_target(),
                                                                  installed_table_row.upgrade_generation(),
                                                                  false,
-                                                                 widgets.transaction.actions);
+                                                                 widgets.transaction_state.actions);
 
   PendingAction::Type action_type;
   REQUIRE_FALSE(
@@ -310,7 +310,7 @@ TEST_CASE("Package table pending upgrade does not match downgrade row")
 
   MainWindowUiState widgets;
   set_all_version_package_view(widgets);
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::UPGRADE, installed.nevra, "demo.x86_64", installed.name_arch_key() },
   };
 
@@ -406,7 +406,7 @@ TEST_CASE("Package table list installed upgrade status uses installed row")
   package_table_fill_item_status(&widgets, item, dnf_backend_resolve_installed_package(installed));
   REQUIRE(item.status_text == "Newer in repository");
 
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::UPGRADE, installed.repo_candidate_nevra, "demo.x86_64", installed.name_arch_key() },
   };
 
@@ -426,7 +426,7 @@ TEST_CASE("Package table compact update row shows pending removal")
 
   MainWindowUiState widgets;
   set_compact_package_view(widgets);
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::REMOVE, installed.nevra, installed.nevra },
   };
 
@@ -451,7 +451,7 @@ TEST_CASE("Package table compact update row shows pending reinstall")
 
   MainWindowUiState widgets;
   set_compact_package_view(widgets);
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::REINSTALL, installed.nevra, installed.nevra },
   };
 
@@ -475,7 +475,7 @@ TEST_CASE("Package table pending status keeps exact installed NEVRAs separate")
   dnf_backend_testonly_replace_installed_snapshot_rows({ older, newer });
 
   MainWindowUiState widgets;
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::REMOVE, newer.nevra, newer.nevra },
   };
 
@@ -504,7 +504,7 @@ TEST_CASE("Package table pending removal status does not leak to exact available
 
   MainWindowUiState widgets;
   set_all_version_package_view(widgets);
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::REMOVE, installed.nevra, installed.nevra, installed.name_arch_key() },
   };
 
@@ -535,7 +535,7 @@ TEST_CASE("Package table pending reinstall status does not leak to exact availab
 
   MainWindowUiState widgets;
   set_all_version_package_view(widgets);
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::REINSTALL, installed.nevra, installed.nevra, installed.name_arch_key() },
   };
 
@@ -569,7 +569,7 @@ TEST_CASE("Package table daemon upgrade pending status is shared")
   target.repo_id = "updates";
 
   MainWindowUiState widgets;
-  widgets.transaction.actions = {
+  widgets.transaction_state.actions = {
     { PendingAction::UPGRADE, target.nevra, target.upgrade_spec() },
   };
 

@@ -73,7 +73,7 @@ refresh_visible_status_labels(GtkWidget *widget, MainWindowUiState *widgets)
                                                                    row->upgrade_target(),
                                                                    row->upgrade_generation(),
                                                                    exact_installonly_actions,
-                                                                   widgets->transaction.actions);
+                                                                   widgets->transaction_state.actions);
     update_pending_action_css_for_cell(widget, widgets, *row, action_rows);
     if (g_object_get_data(G_OBJECT(widget), "package-status-cell")) {
       package_table_update_resolved_status_label(widget, widgets, *row, action_rows);
@@ -549,7 +549,7 @@ create_text_column(MainWindowUiState *widgets, const PackageTableColumnDefinitio
                                                                                     table_row.upgrade_target(),
                                                                                     table_row.upgrade_generation(),
                                                                                     exact_installonly_actions,
-                                                                                    widgets->transaction.actions);
+                                                                                    widgets->transaction_state.actions);
                      update_pending_action_css_for_cell(frame, widgets, table_row, action_rows);
                      if (kind == PackageColumnKind::STATUS) {
                        package_table_update_resolved_status_label(cell, widgets, table_row, action_rows);
@@ -924,7 +924,7 @@ finish_package_table_view(MainWindowUiState *widgets,
                                                                                     row.upgrade_target(),
                                                                                     row.upgrade_generation(),
                                                                                     exact_installonly_actions,
-                                                                                    widgets->transaction.actions);
+                                                                                    widgets->transaction_state.actions);
                      const bool allows_installed_upgrade_action =
                          displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
                      gtk_single_selection_set_selected(sel, position);

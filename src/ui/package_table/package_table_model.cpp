@@ -99,7 +99,7 @@ package_table_fill_item_status(MainWindowUiState *widgets,
   const bool exact_installonly_actions =
       widgets && displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
   const std::vector<PendingAction> empty_actions;
-  const std::vector<PendingAction> &actions = widgets ? widgets->transaction.actions : empty_actions;
+  const std::vector<PendingAction> &actions = widgets ? widgets->transaction_state.actions : empty_actions;
   PendingTransactionActionRows action_rows = pending_transaction_action_rows_for_resolved_selection_with_pending(
       item.row, item.upgrade_target(), table_row.upgrade_generation(), resolution, exact_installonly_actions, actions);
   PendingAction::Type action_type;

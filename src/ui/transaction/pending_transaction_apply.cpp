@@ -109,13 +109,13 @@ pending_transaction_invalidate_service_preview(MainWindowUiState *widgets)
     return;
   }
 
-  if (!widgets->transaction.preview_transaction_path.empty()) {
+  if (!widgets->transaction_state.preview_transaction_path.empty()) {
     // Drop the prepared service request without waiting on D-Bus from GTK.
-    transaction_service_client_release_request_async(widgets->transaction.preview_transaction_path);
+    transaction_service_client_release_request_async(widgets->transaction_state.preview_transaction_path);
   }
 
-  widgets->transaction.preview_transaction_path.clear();
-  widgets->transaction.preview_upgrade_all = false;
+  widgets->transaction_state.preview_transaction_path.clear();
+  widgets->transaction_state.preview_upgrade_all = false;
 }
 
 // -----------------------------------------------------------------------------
@@ -158,7 +158,7 @@ empty_preview_status_message(const TransactionRequest &request)
 bool
 pending_transaction_preview_is_busy(MainWindowUiState *widgets)
 {
-  return widgets && widgets->transaction.preview_request_in_progress;
+  return widgets && widgets->transaction_state.preview_request_in_progress;
 }
 
 // -----------------------------------------------------------------------------
@@ -176,7 +176,7 @@ pending_transaction_apply_busy_message()
 bool
 pending_transaction_apply_is_busy(MainWindowUiState *widgets)
 {
-  return widgets && widgets->transaction.apply_in_progress;
+  return widgets && widgets->transaction_state.apply_in_progress;
 }
 
 // -----------------------------------------------------------------------------
@@ -189,22 +189,22 @@ pending_transaction_set_preview_controls_sensitive(MainWindowUiState *widgets, b
     return;
   }
 
-  if (widgets->transaction.pending_list) {
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.pending_list), sensitive);
+  if (widgets->transaction_widgets.pending_list) {
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.pending_list), sensitive);
   }
-  if (widgets->transaction.upgrade_all_button) {
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.upgrade_all_button), sensitive);
+  if (widgets->transaction_widgets.upgrade_all_button) {
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.upgrade_all_button), sensitive);
   }
-  if (widgets->transaction.mark_listed_upgrades_button) {
-    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.mark_listed_upgrades_button), sensitive);
+  if (widgets->transaction_widgets.mark_listed_upgrades_button) {
+    gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.mark_listed_upgrades_button), sensitive);
   }
 
   if (!sensitive) {
-    if (widgets->transaction.apply_button) {
-      gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), FALSE);
+    if (widgets->transaction_widgets.apply_button) {
+      gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.apply_button), FALSE);
     }
-    if (widgets->transaction.clear_pending_button) {
-      gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), FALSE);
+    if (widgets->transaction_widgets.clear_pending_button) {
+      gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.clear_pending_button), FALSE);
     }
     return;
   }
@@ -222,11 +222,12 @@ set_preview_request_busy_state(MainWindowUiState *widgets, bool busy)
     return;
   }
 
-  widgets->transaction.preview_request_in_progress = busy;
+  widgets->transaction_state.preview_request_in_progress = busy;
   pending_transaction_set_preview_controls_sensitive(widgets, !busy);
 
   if (busy) {
-    ui_helpers_set_icon_button(widgets->transaction.apply_button, "object-select-symbolic", _("Preparing Preview..."));
+    ui_helpers_set_icon_button(
+        widgets->transaction_widgets.apply_button, "object-select-symbolic", _("Preparing Preview..."));
     return;
   }
 }
@@ -294,7 +295,7 @@ start_apply_transaction(MainWindowUiState *widgets)
     return;
   }
 
-  if (widgets->transaction.preview_transaction_path.empty()) {
+  if (widgets->transaction_state.preview_transaction_path.empty()) {
     ui_helpers_set_status(widgets->query.status_label, _("No prepared transaction request is available."), "red");
     return;
   }
@@ -303,23 +304,23 @@ start_apply_transaction(MainWindowUiState *widgets)
   transaction_history_set_transaction_busy(true);
   set_main_window_sensitive_for_apply(widgets, false);
 
-  widgets->transaction.apply_in_progress = true;
+  widgets->transaction_state.apply_in_progress = true;
   pending_transaction_set_preview_controls_sensitive(widgets, false);
 
   ApplyTaskData *td = new ApplyTaskData;
   td->widgets = widgets;
   // Apply now owns this dnf5daemon session path.
   // Pending action changes must not release it while the daemon is applying the transaction.
-  td->transaction_path = std::move(widgets->transaction.preview_transaction_path);
-  widgets->transaction.preview_transaction_path.clear();
-  size_t pending_count = widgets->transaction.preview_upgrade_all ? 0 : widgets->transaction.actions.size();
+  td->transaction_path = std::move(widgets->transaction_state.preview_transaction_path);
+  widgets->transaction_state.preview_transaction_path.clear();
+  size_t pending_count = widgets->transaction_state.preview_upgrade_all ? 0 : widgets->transaction_state.actions.size();
   td->progress_window = transaction_progress_create_window(widgets, pending_count);
   // Keep the progress state alive while the apply worker may still receive service progress.
   // Closing the window only removes the GTK widgets.
   transaction_progress_retain(td->progress_window);
 
   transaction_progress_append(td->progress_window, _("Queued transaction request."));
-  const char *status_message = widgets->transaction.preview_upgrade_all
+  const char *status_message = widgets->transaction_state.preview_upgrade_all
       ? _("Applying package upgrades. See transaction window for details.")
       : _("Applying pending changes. See transaction window for details.");
   ui_helpers_set_status(widgets->query.status_label, status_message, "blue");
@@ -340,7 +341,7 @@ start_apply_transaction(MainWindowUiState *widgets)
 
         // Release this task's spinner slot.
         widgets_spinner_release(widgets->query.spinner);
-        widgets->transaction.apply_in_progress = false;
+        widgets->transaction_state.apply_in_progress = false;
         transaction_history_set_transaction_busy(false);
         set_main_window_sensitive_for_apply(widgets, true);
 
@@ -350,7 +351,7 @@ start_apply_transaction(MainWindowUiState *widgets)
           package_query_clear_displayed_upgradeable_table(widgets);
           pending_transaction_invalidate_service_preview(widgets);
           // Clear pending actions and restore the transaction controls.
-          widgets->transaction.actions.clear();
+          widgets->transaction_state.actions.clear();
           pending_transaction_set_preview_controls_sensitive(widgets, true);
           package_table_refresh_statuses(widgets);
           package_details_refresh_selected_package_actions(widgets);
@@ -407,7 +408,7 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
 {
   package_details_cancel_active_load(widgets);
   pending_transaction_invalidate_service_preview(widgets);
-  widgets->transaction.preview_upgrade_all = request.upgrade_all;
+  widgets->transaction_state.preview_upgrade_all = request.upgrade_all;
   DNFUI_TRACE("Transaction preview request start upgrade_all=%d install=%zu upgrade=%zu downgrade=%zu remove=%zu "
               "reinstall=%zu",
               request.upgrade_all ? 1 : 0,
@@ -444,7 +445,7 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
           const char *status_message =
               error && error->message ? error->message : _("Unable to prepare transaction preview.");
           DNFUI_TRACE("Transaction preview request failed error=%s", status_message);
-          widgets->transaction.preview_upgrade_all = false;
+          widgets->transaction_state.preview_upgrade_all = false;
           ui_helpers_set_status(widgets->query.status_label, status_message, "red");
           transaction_dialogs_show_error_dialog(widgets,
                                                 _("Transaction Preview Failed"),
@@ -471,8 +472,8 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
             transaction_service_client_release_request_async(td->transaction_path);
             td->transaction_path.clear();
           }
-          widgets->transaction.preview_transaction_path.clear();
-          widgets->transaction.preview_upgrade_all = false;
+          widgets->transaction_state.preview_transaction_path.clear();
+          widgets->transaction_state.preview_upgrade_all = false;
           if (!td->preview.resolve_warnings.empty()) {
             transaction_dialogs_show_error_dialog(
                 widgets,
@@ -484,12 +485,12 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
           return;
         }
 
-        widgets->transaction.preview_transaction_path = td->transaction_path;
-        widgets->transaction.preview_upgrade_all = td->request.upgrade_all;
+        widgets->transaction_state.preview_transaction_path = td->transaction_path;
+        widgets->transaction_state.preview_upgrade_all = td->request.upgrade_all;
         td->transaction_path_transferred = true;
         DNFUI_TRACE("Transaction preview request ready upgrade_all=%d path=%s",
                     td->request.upgrade_all ? 1 : 0,
-                    widgets->transaction.preview_transaction_path.c_str());
+                    widgets->transaction_state.preview_transaction_path.c_str());
         ui_helpers_set_status(widgets->query.status_label, _("Ready."), "gray");
         transaction_dialogs_show_summary_dialog(
             widgets, td->preview, start_apply_transaction, pending_transaction_cancel_service_preview);
@@ -571,7 +572,7 @@ pending_transaction_on_upgrade_all_button_clicked(GtkButton *, gpointer user_dat
     return;
   }
 
-  if (!widgets->transaction.actions.empty()) {
+  if (!widgets->transaction_state.actions.empty()) {
     ui_helpers_set_status(
         widgets->query.status_label, _("Clear pending package actions before upgrading all packages."), "blue");
     return;
@@ -605,14 +606,14 @@ pending_transaction_on_apply_button_clicked(GtkButton *, gpointer user_data)
     return;
   }
 
-  if (widgets->transaction.actions.empty()) {
+  if (widgets->transaction_state.actions.empty()) {
     ui_helpers_set_status(widgets->query.status_label, _("No pending changes."), "gray");
     return;
   }
 
   TransactionRequest request;
   std::string error;
-  if (!pending_transaction_build_request(widgets->transaction.actions, request, error)) {
+  if (!pending_transaction_build_request(widgets->transaction_state.actions, request, error)) {
     ui_helpers_set_status(widgets->query.status_label, error.c_str(), "red");
     return;
   }

@@ -168,7 +168,7 @@ package_table_pending_action_for_resolved_row(MainWindowUiState *widgets,
                                               const PendingTransactionActionRows &action_rows,
                                               PendingAction::Type &out_type)
 {
-  for (const auto &action : widgets->transaction.actions) {
+  for (const auto &action : widgets->transaction_state.actions) {
     if (pending_action_matches_row(widgets, action, row, action_rows)) {
       out_type = action.type;
       return true;

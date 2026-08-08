@@ -77,7 +77,7 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
                                                                  selected.upgrade_target(),
                                                                  selected.upgrade_generation(),
                                                                  exact_installonly_actions,
-                                                                 widgets->transaction.actions);
+                                                                 widgets->transaction_state.actions);
   const bool allows_installed_upgrade_action =
       displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
   if (!pending_transaction_selection_allows_install_button_action(pkg, action_rows, allows_installed_upgrade_action)) {
@@ -107,7 +107,7 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
     pending_transaction_refresh_pending_tab(widgets);
     ui_helpers_set_status(widgets->query.status_label, (std::string(_("Unmarked: ")) + pkg.name).c_str(), "gray");
   } else {
-    bool marked = pending_transaction_mark_install_side_action(widgets->transaction.actions, action_rows);
+    bool marked = pending_transaction_mark_install_side_action(widgets->transaction_state.actions, action_rows);
     if (!marked) {
       package_query_clear_displayed_upgradeable_table(widgets);
       ui_helpers_set_status(
@@ -164,7 +164,7 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
                                                                  selected.upgrade_target(),
                                                                  selected.upgrade_generation(),
                                                                  exact_installonly_actions,
-                                                                 widgets->transaction.actions);
+                                                                 widgets->transaction_state.actions);
 
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
 
@@ -188,7 +188,7 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
     pending_transaction_refresh_pending_tab(widgets);
     ui_helpers_set_status(widgets->query.status_label, (std::string(_("Unmarked: ")) + pkg.name).c_str(), "gray");
   } else {
-    pending_transaction_mark_remove_action(widgets->transaction.actions, action_rows);
+    pending_transaction_mark_remove_action(widgets->transaction_state.actions, action_rows);
     pending_transaction_refresh_pending_tab(widgets);
     ui_helpers_set_status(
         widgets->query.status_label, (std::string(_("Marked for removal: ")) + pkg.name).c_str(), "blue");
@@ -233,7 +233,7 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
                                                                  selected.upgrade_target(),
                                                                  selected.upgrade_generation(),
                                                                  exact_installonly_actions,
-                                                                 widgets->transaction.actions);
+                                                                 widgets->transaction_state.actions);
 
   const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
 
@@ -262,7 +262,7 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
     pending_transaction_refresh_pending_tab(widgets);
     ui_helpers_set_status(widgets->query.status_label, (std::string(_("Unmarked: ")) + pkg.name).c_str(), "gray");
   } else {
-    pending_transaction_mark_reinstall_action(widgets->transaction.actions, action_rows);
+    pending_transaction_mark_reinstall_action(widgets->transaction_state.actions, action_rows);
     pending_transaction_refresh_pending_tab(widgets);
     ui_helpers_set_status(
         widgets->query.status_label, (std::string(_("Marked for reinstall: ")) + pkg.name).c_str(), "blue");
@@ -309,9 +309,9 @@ pending_transaction_on_mark_listed_upgrades_button_clicked(GtkButton *, gpointer
                                                                    row.upgrade_target(),
                                                                    row.upgrade_generation(),
                                                                    exact_installonly_actions,
-                                                                   widgets->transaction.actions);
+                                                                   widgets->transaction_state.actions);
     if (pending_transaction_mark_unique_upgrade_action(
-            widgets->transaction.actions, marked_package_keys, row.row, action_rows, projects_upgrade_actions)) {
+            widgets->transaction_state.actions, marked_package_keys, row.row, action_rows, projects_upgrade_actions)) {
       ++marked_count;
     }
   }
@@ -341,13 +341,13 @@ pending_transaction_on_clear_pending_button_clicked(GtkButton *, gpointer user_d
     return;
   }
 
-  if (widgets->transaction.actions.empty()) {
+  if (widgets->transaction_state.actions.empty()) {
     ui_helpers_set_status(widgets->query.status_label, _("No pending actions to clear."), "blue");
     return;
   }
 
-  size_t count = widgets->transaction.actions.size();
-  widgets->transaction.actions.clear();
+  size_t count = widgets->transaction_state.actions.size();
+  widgets->transaction_state.actions.clear();
   pending_transaction_invalidate_service_preview(widgets);
   pending_transaction_refresh_pending_tab(widgets);
 

@@ -58,7 +58,8 @@ smaller structs:
 
 - `PackageQueryWidgets` for search controls and status
 - `PackageResultsWidgets` for the package table and details panel
-- `PendingTransactionWidgets` for marked actions and apply controls
+- `PendingTransactionWidgets` for pending action controls
+- `PendingTransactionState` for marked actions and preview state
 - `MainWindowState` for window-level state
 - `MainWindowUiState` as the top-level shared state passed to controllers
 

@@ -37,20 +37,20 @@ pending_jump_button_data_free(gpointer p)
 static void
 update_apply_button(MainWindowUiState *widgets)
 {
-  if (!widgets || !widgets->transaction.apply_button || !widgets->transaction.clear_pending_button) {
+  if (!widgets || !widgets->transaction_widgets.apply_button || !widgets->transaction_widgets.clear_pending_button) {
     return;
   }
 
-  size_t pending_count = widgets->transaction.actions.size();
+  size_t pending_count = widgets->transaction_state.actions.size();
   bool has_pending = pending_count > 0;
   std::string apply_label = _("Apply Transactions");
   if (has_pending) {
     apply_label += " (" + std::to_string(pending_count) + ")";
   }
 
-  ui_helpers_set_icon_button(widgets->transaction.apply_button, "object-select-symbolic", apply_label.c_str());
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), has_pending);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), has_pending);
+  ui_helpers_set_icon_button(widgets->transaction_widgets.apply_button, "object-select-symbolic", apply_label.c_str());
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.apply_button), has_pending);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.clear_pending_button), has_pending);
 }
 
 // -----------------------------------------------------------------------------
@@ -60,12 +60,12 @@ void
 pending_transaction_refresh_pending_tab(MainWindowUiState *widgets)
 {
   // Remove existing rows.
-  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(widgets->transaction.pending_list, 0)) {
-    gtk_list_box_remove(widgets->transaction.pending_list, GTK_WIDGET(row));
+  while (GtkListBoxRow *row = gtk_list_box_get_row_at_index(widgets->transaction_widgets.pending_list, 0)) {
+    gtk_list_box_remove(widgets->transaction_widgets.pending_list, GTK_WIDGET(row));
   }
 
   // Add one row for each pending action.
-  for (const auto &a : widgets->transaction.actions) {
+  for (const auto &a : widgets->transaction_state.actions) {
     std::string prefix;
     switch (a.type) {
     case PendingAction::INSTALL:
@@ -114,7 +114,7 @@ pending_transaction_refresh_pending_tab(MainWindowUiState *widgets)
         +[](gpointer data, GClosure *) { pending_jump_button_data_free(data); },
         GConnectFlags(0));
 
-    gtk_list_box_append(widgets->transaction.pending_list, button);
+    gtk_list_box_append(widgets->transaction_widgets.pending_list, button);
   }
   update_apply_button(widgets);
 }
@@ -125,9 +125,9 @@ pending_transaction_refresh_pending_tab(MainWindowUiState *widgets)
 bool
 pending_transaction_remove_action(MainWindowUiState *widgets, const std::string &nevra)
 {
-  for (size_t i = 0; i < widgets->transaction.actions.size(); ++i) {
-    if (widgets->transaction.actions[i].nevra == nevra) {
-      widgets->transaction.actions.erase(widgets->transaction.actions.begin() + i);
+  for (size_t i = 0; i < widgets->transaction_state.actions.size(); ++i) {
+    if (widgets->transaction_state.actions[i].nevra == nevra) {
+      widgets->transaction_state.actions.erase(widgets->transaction_state.actions.begin() + i);
       return true;
     }
   }
@@ -140,7 +140,7 @@ pending_transaction_remove_action(MainWindowUiState *widgets, const std::string 
 bool
 pending_transaction_get_action_type(MainWindowUiState *widgets, const std::string &nevra, PendingAction::Type &out_type)
 {
-  for (const auto &a : widgets->transaction.actions) {
+  for (const auto &a : widgets->transaction_state.actions) {
     if (a.nevra == nevra) {
       out_type = a.type;
       return true;

@@ -134,7 +134,7 @@ ui_helpers_show_duration_label(GtkLabel *label, const char *title, const char *f
 static bool
 has_pending_action(MainWindowUiState *widgets, const std::string &nevra, PendingAction::Type type)
 {
-  for (const auto &a : widgets->transaction.actions) {
+  for (const auto &a : widgets->transaction_state.actions) {
     if (a.nevra == nevra && a.type == type) {
       return true;
     }
@@ -171,21 +171,28 @@ ui_helpers_update_action_button_labels_for_selection(MainWindowUiState *widgets,
   }
 
   if (pending_install || pending_upgrade || pending_downgrade) {
-    ui_helpers_set_icon_button(widgets->transaction.install_button, "edit-clear-symbolic", unmark_install);
-    ui_helpers_set_icon_button(widgets->transaction.remove_button, "list-remove-symbolic", _("Mark for Removal"));
-    ui_helpers_set_icon_button(widgets->transaction.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
+    ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "edit-clear-symbolic", unmark_install);
+    ui_helpers_set_icon_button(
+        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
+    ui_helpers_set_icon_button(
+        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
   } else if (pending_reinstall) {
-    ui_helpers_set_icon_button(widgets->transaction.install_button, "list-add-symbolic", mark_install);
-    ui_helpers_set_icon_button(widgets->transaction.remove_button, "list-remove-symbolic", _("Mark for Removal"));
-    ui_helpers_set_icon_button(widgets->transaction.reinstall_button, "edit-clear-symbolic", _("Unmark Reinstall"));
+    ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
+    ui_helpers_set_icon_button(
+        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
+    ui_helpers_set_icon_button(
+        widgets->transaction_widgets.reinstall_button, "edit-clear-symbolic", _("Unmark Reinstall"));
   } else if (pending_remove) {
-    ui_helpers_set_icon_button(widgets->transaction.install_button, "list-add-symbolic", mark_install);
-    ui_helpers_set_icon_button(widgets->transaction.remove_button, "edit-clear-symbolic", _("Unmark Removal"));
-    ui_helpers_set_icon_button(widgets->transaction.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
+    ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
+    ui_helpers_set_icon_button(widgets->transaction_widgets.remove_button, "edit-clear-symbolic", _("Unmark Removal"));
+    ui_helpers_set_icon_button(
+        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
   } else {
-    ui_helpers_set_icon_button(widgets->transaction.install_button, "list-add-symbolic", mark_install);
-    ui_helpers_set_icon_button(widgets->transaction.remove_button, "list-remove-symbolic", _("Mark for Removal"));
-    ui_helpers_set_icon_button(widgets->transaction.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
+    ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
+    ui_helpers_set_icon_button(
+        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
+    ui_helpers_set_icon_button(
+        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
   }
 }
 

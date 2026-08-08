@@ -27,7 +27,18 @@ struct PendingAction {
 };
 
 // -----------------------------------------------------------------------------
-// Pending transaction widgets and marked package actions
+// Pending transaction runtime state
+// -----------------------------------------------------------------------------
+struct PendingTransactionState {
+  bool preview_request_in_progress = false;
+  bool apply_in_progress = false;
+  bool preview_upgrade_all = false;
+  std::vector<PendingAction> actions;
+  std::string preview_transaction_path;
+};
+
+// -----------------------------------------------------------------------------
+// Pending transaction widgets
 // -----------------------------------------------------------------------------
 struct PendingTransactionWidgets {
   GtkButton *install_button = nullptr;
@@ -38,11 +49,6 @@ struct PendingTransactionWidgets {
   GtkButton *apply_button = nullptr;
   GtkButton *clear_pending_button = nullptr;
   GtkListBox *pending_list = nullptr;
-  bool preview_request_in_progress = false;
-  bool apply_in_progress = false;
-  bool preview_upgrade_all = false;
-  std::vector<PendingAction> actions;
-  std::string preview_transaction_path;
 };
 
 // -----------------------------------------------------------------------------

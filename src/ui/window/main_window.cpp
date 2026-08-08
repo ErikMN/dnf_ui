@@ -202,14 +202,14 @@ create_main_window_ui_state(const AppWidgets *ui)
   widgets->results.changelog_buffer = ui->changelog_buffer;
   widgets->results.count_label = GTK_LABEL(ui->count_label);
 
-  widgets->transaction.install_button = GTK_BUTTON(ui->install_button);
-  widgets->transaction.remove_button = GTK_BUTTON(ui->remove_button);
-  widgets->transaction.reinstall_button = GTK_BUTTON(ui->reinstall_button);
-  widgets->transaction.upgrade_all_button = GTK_BUTTON(ui->upgrade_all_button);
-  widgets->transaction.mark_listed_upgrades_button = GTK_BUTTON(ui->mark_listed_upgrades_button);
-  widgets->transaction.apply_button = GTK_BUTTON(ui->apply_button);
-  widgets->transaction.clear_pending_button = GTK_BUTTON(ui->clear_pending_button);
-  widgets->transaction.pending_list = GTK_LIST_BOX(ui->pending_list);
+  widgets->transaction_widgets.install_button = GTK_BUTTON(ui->install_button);
+  widgets->transaction_widgets.remove_button = GTK_BUTTON(ui->remove_button);
+  widgets->transaction_widgets.reinstall_button = GTK_BUTTON(ui->reinstall_button);
+  widgets->transaction_widgets.upgrade_all_button = GTK_BUTTON(ui->upgrade_all_button);
+  widgets->transaction_widgets.mark_listed_upgrades_button = GTK_BUTTON(ui->mark_listed_upgrades_button);
+  widgets->transaction_widgets.apply_button = GTK_BUTTON(ui->apply_button);
+  widgets->transaction_widgets.clear_pending_button = GTK_BUTTON(ui->clear_pending_button);
+  widgets->transaction_widgets.pending_list = GTK_LIST_BOX(ui->pending_list);
 
   widgets->window_state.backend_warmup_label = GTK_LABEL(ui->warmup_label);
   widgets->window_state.query_duration_label = GTK_LABEL(ui->query_duration_label);
@@ -414,8 +414,8 @@ static void
 initialize_ui_state(MainWindowUiState *widgets)
 {
   // Apply and Clear Transactions are meaningful only when there are pending actions
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.apply_button), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.clear_pending_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.apply_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.clear_pending_button), FALSE);
 
   ui_helpers_set_status(widgets->query.status_label, _("Ready."), "gray");
   package_table_fill_package_view(widgets, std::vector<PackageRow> {});
@@ -583,12 +583,12 @@ on_main_window_close_request(GtkWindow *window, gpointer user_data)
     return FALSE;
   }
 
-  if (widgets->transaction.apply_in_progress) {
+  if (widgets->transaction_state.apply_in_progress) {
     ui_helpers_set_status(widgets->query.status_label, _("A transaction is still applying."), "blue");
     return TRUE;
   }
 
-  if (widgets->window_state.allow_close_with_pending || widgets->transaction.actions.empty()) {
+  if (widgets->window_state.allow_close_with_pending || widgets->transaction_state.actions.empty()) {
     config_save_window_geometry(window);
     if (widgets->results.inner_paned) {
       config_save_paned_position(widgets->results.inner_paned);
@@ -641,9 +641,10 @@ connect_cleanup(GtkWidget *window, std::shared_ptr<MainWindowUiState> widgets, G
                      }
                      repository_refresh_cancel_active();
                      package_details_cancel_active_load(widgets);
-                     if (!widgets->transaction.preview_transaction_path.empty()) {
-                       transaction_service_client_release_request_async(widgets->transaction.preview_transaction_path);
-                       widgets->transaction.preview_transaction_path.clear();
+                     if (!widgets->transaction_state.preview_transaction_path.empty()) {
+                       transaction_service_client_release_request_async(
+                           widgets->transaction_state.preview_transaction_path);
+                       widgets->transaction_state.preview_transaction_path.clear();
                      }
                      delete cleanup_data;
                    }),

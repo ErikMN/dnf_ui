@@ -284,9 +284,9 @@ package_details_clear_selected_package_state(MainWindowUiState *widgets)
   widgets->results.deps_loaded_nevra.clear();
   widgets->results.changelog_loaded_nevra.clear();
   set_details_status_text(widgets, nullptr);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button), FALSE);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.install_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.remove_button), FALSE);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.reinstall_button), FALSE);
   ui_helpers_update_action_button_labels_for_selection(widgets, "", "", "", false);
 }
 
@@ -341,7 +341,7 @@ update_selected_package_actions(MainWindowUiState *widgets,
                                                                           selected.upgrade_generation(),
                                                                           resolution,
                                                                           exact_installonly_actions,
-                                                                          widgets->transaction.actions);
+                                                                          widgets->transaction_state.actions);
 
   // Compact upgrade rows represent the installed package stream.
   // Exact-version rows expose installed actions only when that exact NEVRA is installed.
@@ -358,10 +358,11 @@ update_selected_package_actions(MainWindowUiState *widgets,
   bool install_blocked =
       pending_transaction_install_action_blocked_by_self_protection(action_rows, action_rows.self_protected);
 
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.install_button), allows_install_action && !install_blocked);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.remove_button),
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.install_button),
+                           allows_install_action && !install_blocked);
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.remove_button),
                            allows_installed_action && !action_rows.self_protected);
-  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction.reinstall_button),
+  gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.reinstall_button),
                            allows_installed_action && action_rows.exact_reinstall_available &&
                                !action_rows.self_protected);
 
