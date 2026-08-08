@@ -9,6 +9,7 @@
 #include "debug_trace.hpp"
 #include "i18n.hpp"
 #include "ui/transaction/pending_transaction_action_rows.hpp"
+#include "ui/transaction/pending_transaction_view.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
 #include "ui/common/widgets_internal.hpp"
@@ -287,7 +288,7 @@ package_details_clear_selected_package_state(MainWindowUiState *widgets)
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.install_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.remove_button), FALSE);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.reinstall_button), FALSE);
-  ui_helpers_update_action_button_labels_for_selection(widgets, "", "", "", false);
+  pending_transaction_update_action_button_labels_for_selection(widgets, "", "", "", false);
 }
 
 // -----------------------------------------------------------------------------
@@ -369,12 +370,12 @@ update_selected_package_actions(MainWindowUiState *widgets,
   const std::string install_nevra = allows_install_action ? action_rows.install_row.nevra : "";
   const std::string installed_action_nevra = allows_installed_action ? action_rows.installed_row.nevra : "";
 
-  ui_helpers_update_action_button_labels_for_selection(widgets,
-                                                       install_nevra,
-                                                       installed_action_nevra,
-                                                       installed_action_nevra,
-                                                       action_rows.install_is_upgrade,
-                                                       action_rows.install_is_downgrade);
+  pending_transaction_update_action_button_labels_for_selection(widgets,
+                                                                install_nevra,
+                                                                installed_action_nevra,
+                                                                installed_action_nevra,
+                                                                action_rows.install_is_upgrade,
+                                                                action_rows.install_is_downgrade);
   set_details_status_text(widgets, selected_package_status_text(widgets, selected, action_rows));
 }
 

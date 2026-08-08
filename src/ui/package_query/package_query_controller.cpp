@@ -14,6 +14,7 @@
 #include "ui/package_query/package_query_cache.hpp"
 #include "ui/package_query/package_query_controller_internal.hpp"
 #include "ui/package_table/package_table_view.hpp"
+#include "ui/transaction/pending_transaction_view.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
 
@@ -243,7 +244,7 @@ package_query_on_clear_button_clicked(GtkButton *, gpointer user_data)
   // Reset status labels and package actions.
   ui_helpers_set_status(widgets->query.status_label, _("Ready."), "gray");
   package_details_reset_details_view(widgets);
-  ui_helpers_update_action_button_labels_for_selection(widgets, "", "", "", false);
+  pending_transaction_update_action_button_labels_for_selection(widgets, "", "", "", false);
 }
 
 // -----------------------------------------------------------------------------

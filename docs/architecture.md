@@ -130,7 +130,8 @@ The `src/ui` directory is split by UI concern: `window`, `package_query`,
 - [src/ui/package_table/package_table_model.cpp](../src/ui/package_table/package_table_model.cpp) stores package rows and table display values in GTK objects.
 - [src/ui/package_table/package_table_sort.cpp](../src/ui/package_table/package_table_sort.cpp) contains package table sorting rules.
 - [src/ui/transaction/pending_transaction_controller.cpp](../src/ui/transaction/pending_transaction_controller.cpp) handles package action buttons.
-- [src/ui/transaction/pending_transaction_view.cpp](../src/ui/transaction/pending_transaction_view.cpp) builds the Pending Actions tab.
+- [src/ui/transaction/pending_transaction_view.cpp](../src/ui/transaction/pending_transaction_view.cpp)
+  builds the Pending Actions tab and updates package action labels.
 - [src/ui/transaction/pending_transaction_apply.cpp](../src/ui/transaction/pending_transaction_apply.cpp) handles preview, apply, and post-apply refresh.
 - [src/ui/transaction/transaction_dialogs.cpp](../src/ui/transaction/transaction_dialogs.cpp) builds review, error, and repository key dialogs.
 - [src/ui/transaction/transaction_progress.cpp](../src/ui/transaction/transaction_progress.cpp) manages the live progress window.

@@ -10,8 +10,6 @@
 
 #include <gtk/gtk.h>
 
-struct MainWindowUiState;
-
 // -----------------------------------------------------------------------------
 // Create a button with an icon and text label.
 // -----------------------------------------------------------------------------
@@ -33,14 +31,6 @@ void ui_helpers_clear_duration_label(GtkLabel *label);
 // -----------------------------------------------------------------------------
 void
 ui_helpers_show_duration_label(GtkLabel *label, const char *title, const char *fallback_title, gint64 started_at_us);
-// Update action button labels when the visible row and installed row differ.
-// -----------------------------------------------------------------------------
-void ui_helpers_update_action_button_labels_for_selection(MainWindowUiState *widgets,
-                                                          const std::string &install_nevra,
-                                                          const std::string &remove_nevra,
-                                                          const std::string &reinstall_nevra,
-                                                          bool install_is_upgrade,
-                                                          bool install_is_downgrade = false);
 
 // -----------------------------------------------------------------------------
 // EOF

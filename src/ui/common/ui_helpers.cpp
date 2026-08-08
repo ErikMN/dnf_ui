@@ -1,12 +1,11 @@
 // -----------------------------------------------------------------------------
 // src/ui/common/ui_helpers.cpp
 // Shared UI helpers
-// Creates icon buttons, updates status text, and keeps transaction action labels in sync with pending actions.
+// Creates icon buttons, updates status text, and formats common labels.
 // -----------------------------------------------------------------------------
 #include "ui/common/ui_helpers.hpp"
 
 #include "i18n.hpp"
-#include "ui/common/widgets.hpp"
 
 namespace {
 
@@ -126,74 +125,6 @@ ui_helpers_show_duration_label(GtkLabel *label, const char *title, const char *f
   std::string text = dnfui_i18n_format(_("%s: %.1f s"), display_title, elapsed_seconds);
   gtk_label_set_text(label, text.c_str());
   gtk_widget_set_visible(GTK_WIDGET(label), TRUE);
-}
-
-// -----------------------------------------------------------------------------
-// Return true when one pending action matches the requested package and type.
-// -----------------------------------------------------------------------------
-static bool
-has_pending_action(MainWindowUiState *widgets, const std::string &nevra, PendingAction::Type type)
-{
-  for (const auto &a : widgets->transaction_state.actions) {
-    if (a.nevra == nevra && a.type == type) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-// -----------------------------------------------------------------------------
-// Update transaction action button labels based on pending actions.
-// -----------------------------------------------------------------------------
-void
-ui_helpers_update_action_button_labels_for_selection(MainWindowUiState *widgets,
-                                                     const std::string &install_nevra,
-                                                     const std::string &remove_nevra,
-                                                     const std::string &reinstall_nevra,
-                                                     bool install_is_upgrade,
-                                                     bool install_is_downgrade)
-{
-  bool pending_install = has_pending_action(widgets, install_nevra, PendingAction::INSTALL);
-  bool pending_upgrade = has_pending_action(widgets, install_nevra, PendingAction::UPGRADE);
-  bool pending_downgrade = has_pending_action(widgets, install_nevra, PendingAction::DOWNGRADE);
-  bool pending_remove = has_pending_action(widgets, remove_nevra, PendingAction::REMOVE);
-  bool pending_reinstall = has_pending_action(widgets, reinstall_nevra, PendingAction::REINSTALL);
-
-  const char *mark_install = _("Mark for Install");
-  const char *unmark_install = _("Unmark Install");
-  if (install_is_upgrade) {
-    mark_install = _("Mark for Upgrade");
-    unmark_install = _("Unmark Upgrade");
-  } else if (install_is_downgrade) {
-    mark_install = _("Mark for Downgrade");
-    unmark_install = _("Unmark Downgrade");
-  }
-
-  if (pending_install || pending_upgrade || pending_downgrade) {
-    ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "edit-clear-symbolic", unmark_install);
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
-  } else if (pending_reinstall) {
-    ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "edit-clear-symbolic", _("Unmark Reinstall"));
-  } else if (pending_remove) {
-    ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
-    ui_helpers_set_icon_button(widgets->transaction_widgets.remove_button, "edit-clear-symbolic", _("Unmark Removal"));
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
-  } else {
-    ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
-  }
 }
 
 // -----------------------------------------------------------------------------

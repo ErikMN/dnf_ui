@@ -231,13 +231,14 @@ It is responsible for:
 - clearing pending actions
 
 [src/ui/transaction/pending_transaction_view.cpp](../src/ui/transaction/pending_transaction_view.cpp)
-builds the Pending Actions tab.
+builds the Pending Actions tab and updates package action button labels.
 
 It is responsible for:
 
 - rebuilding the Pending Actions tab
 - jumping from a pending action back to its package row
 - enabling the Apply button only when actions are pending
+- keeping package action button labels aligned with pending actions
 
 [src/ui/transaction/pending_transaction_apply.cpp](../src/ui/transaction/pending_transaction_apply.cpp)
 handles preview and apply work.
