@@ -93,7 +93,7 @@ verify_preview_keeps_running_app_package(const TransactionPreview &preview,
   try {
     // A fresh app start may not have published the installed snapshot yet.
     // Refresh from the local rpmdb before checking whether the preview modifies DNF UI itself.
-    dnf_backend_refresh_installed_nevras();
+    dnf_backend_refresh_installed_snapshot();
     if (transaction_preview_changes_self_protected_package(preview)) {
       error_out = unsafe_message;
       return false;

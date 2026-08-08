@@ -239,7 +239,7 @@ TEST_CASE("BaseManager falls back to installed-package-only initialization when 
   {
     ScopedEnvVar force_failure("DNFUI_TEST_FORCE_FULL_REPO_LOAD_FAILURE", "1");
     ScopedEnvVar force_cache_failure("DNFUI_TEST_FORCE_CACHEONLY_REPO_LOAD_FAILURE", "1");
-    REQUIRE_NOTHROW(dnf_backend_refresh_installed_nevras());
+    REQUIRE_NOTHROW(dnf_backend_refresh_installed_snapshot());
     REQUIRE(dnf_backend_installed_snapshot_size_for_tests() > 0);
   }
   mgr.reset_for_tests();
@@ -264,7 +264,7 @@ TEST_CASE("BaseManager rebuild keeps the app usable when repo-backed refresh fai
   }
 
   REQUIRE(mgr.current_generation() > before);
-  REQUIRE_NOTHROW(dnf_backend_refresh_installed_nevras());
+  REQUIRE_NOTHROW(dnf_backend_refresh_installed_snapshot());
   REQUIRE(dnf_backend_installed_snapshot_size_for_tests() > 0);
   mgr.reset_for_tests();
 }
@@ -290,14 +290,14 @@ TEST_CASE("Installed package cache matches returned list")
 }
 
 // -----------------------------------------------------------------------------
-// Verify that refreshing installed NEVRAs creates a non-empty snapshot.
+// Verify that refreshing the installed snapshot creates a non-empty snapshot.
 // -----------------------------------------------------------------------------
-TEST_CASE("dnf_backend_refresh_installed_nevras populates installed NEVRA cache")
+TEST_CASE("dnf_backend_refresh_installed_snapshot populates installed snapshot")
 {
   reset_backend_globals();
 
-  REQUIRE(dnf_backend_refresh_installed_nevras());
-  REQUIRE_FALSE(dnf_backend_refresh_installed_nevras());
+  REQUIRE(dnf_backend_refresh_installed_snapshot());
+  REQUIRE_FALSE(dnf_backend_refresh_installed_snapshot());
 
   REQUIRE(dnf_backend_installed_snapshot_size_for_tests() > 0);
 }
@@ -353,7 +353,7 @@ TEST_CASE("Installed package refresh uses a short-lived system-only Base")
     ScopedEnvVar force_failure("DNFUI_TEST_FORCE_FULL_REPO_LOAD_FAILURE", "1");
     ScopedEnvVar force_cache_failure("DNFUI_TEST_FORCE_CACHEONLY_REPO_LOAD_FAILURE", "1");
 
-    REQUIRE_NOTHROW(dnf_backend_refresh_installed_nevras());
+    REQUIRE_NOTHROW(dnf_backend_refresh_installed_snapshot());
     REQUIRE(dnf_backend_installed_snapshot_size_for_tests() > 0);
     REQUIRE_FALSE(mgr.has_cached_base_for_tests());
   }

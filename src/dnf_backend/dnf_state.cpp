@@ -25,14 +25,16 @@
 
 namespace {
 
-// Cached NEVRAs of installed packages for UI highlighting.
-std::set<std::string> g_installed_nevras;
-// Mutex for thread-safe access to the installed-package cache and derived state.
+struct InstalledStateSnapshot {
+  std::set<std::string> nevras;
+  std::map<std::string, PackageRow> rows_by_name_arch;
+  std::set<std::string> self_protected_package_names;
+};
+
+// Installed-package data published together after a complete installed scan.
+InstalledStateSnapshot g_installed_state;
+// Mutex for thread-safe access to the installed snapshot.
 std::mutex g_installed_mutex;
-// Cached installed rows keyed by name and arch for upgrade-state classification.
-std::map<std::string, PackageRow> g_installed_rows_by_name_arch;
-// Installed package names that own the running GUI binary.
-std::set<std::string> g_self_protected_package_names;
 
 // -----------------------------------------------------------------------------
 // Return true when one package spec names a protected package.
@@ -79,11 +81,11 @@ InstalledPackageResolution
 resolve_installed_package_locked(const PackageRow &row)
 {
   InstalledPackageResolution resolution;
-  resolution.exact_installed = g_installed_nevras.count(row.nevra) > 0;
-  resolution.self_protected = g_self_protected_package_names.count(row.name) > 0;
+  resolution.exact_installed = g_installed_state.nevras.count(row.nevra) > 0;
+  resolution.self_protected = g_installed_state.self_protected_package_names.count(row.name) > 0;
 
-  auto installed_it = g_installed_rows_by_name_arch.find(row.name_arch_key());
-  if (installed_it != g_installed_rows_by_name_arch.end()) {
+  auto installed_it = g_installed_state.rows_by_name_arch.find(row.name_arch_key());
+  if (installed_it != g_installed_state.rows_by_name_arch.end()) {
     resolution.has_installed_row = true;
     resolution.installed_row = installed_it->second;
   }
@@ -142,15 +144,15 @@ void
 preserve_local_refresh_reinstall_availability_locked(dnf_backend_internal::InstalledQueryResult &installed)
 {
   for (auto &row : installed.rows) {
-    auto old_it = g_installed_rows_by_name_arch.find(row.name_arch_key());
-    if (old_it != g_installed_rows_by_name_arch.end() && old_it->second.nevra == row.nevra) {
+    auto old_it = g_installed_state.rows_by_name_arch.find(row.name_arch_key());
+    if (old_it != g_installed_state.rows_by_name_arch.end() && old_it->second.nevra == row.nevra) {
       row.repo_candidate_exact_available = old_it->second.repo_candidate_exact_available;
     }
   }
 
   for (auto &[key, row] : installed.rows_by_name_arch) {
-    auto old_it = g_installed_rows_by_name_arch.find(key);
-    if (old_it != g_installed_rows_by_name_arch.end() && old_it->second.nevra == row.nevra) {
+    auto old_it = g_installed_state.rows_by_name_arch.find(key);
+    if (old_it != g_installed_state.rows_by_name_arch.end() && old_it->second.nevra == row.nevra) {
       row.repo_candidate_exact_available = old_it->second.repo_candidate_exact_available;
     }
   }
@@ -163,14 +165,15 @@ bool
 publish_installed_snapshot_locked(dnf_backend_internal::InstalledQueryResult installed,
                                   std::set<std::string> protected_names)
 {
-  std::set<std::string> next_protected_names = g_self_protected_package_names;
+  std::set<std::string> next_protected_names = g_installed_state.self_protected_package_names;
   if (!protected_names.empty()) {
     next_protected_names.insert(protected_names.begin(), protected_names.end());
   }
-  const bool changed = g_installed_nevras != installed.nevras || g_self_protected_package_names != next_protected_names;
-  g_installed_nevras.swap(installed.nevras);
-  g_installed_rows_by_name_arch.swap(installed.rows_by_name_arch);
-  g_self_protected_package_names.swap(next_protected_names);
+  const bool changed = g_installed_state.nevras != installed.nevras ||
+      g_installed_state.self_protected_package_names != next_protected_names;
+  g_installed_state.nevras.swap(installed.nevras);
+  g_installed_state.rows_by_name_arch.swap(installed.rows_by_name_arch);
+  g_installed_state.self_protected_package_names.swap(next_protected_names);
   return changed;
 }
 
@@ -221,7 +224,7 @@ self_protected_package_name_snapshot()
   std::set<std::string> protected_names;
   {
     std::lock_guard<std::mutex> lock(g_installed_mutex);
-    protected_names = g_self_protected_package_names;
+    protected_names = g_installed_state.self_protected_package_names;
   }
 
   if (!protected_names.empty()) {
@@ -233,10 +236,10 @@ self_protected_package_name_snapshot()
 
   if (!protected_names.empty()) {
     std::lock_guard<std::mutex> lock(g_installed_mutex);
-    if (g_self_protected_package_names.empty()) {
-      g_self_protected_package_names = protected_names;
+    if (g_installed_state.self_protected_package_names.empty()) {
+      g_installed_state.self_protected_package_names = protected_names;
     } else {
-      protected_names = g_self_protected_package_names;
+      protected_names = g_installed_state.self_protected_package_names;
     }
   }
 
@@ -280,7 +283,7 @@ size_t
 dnf_backend_installed_snapshot_size_for_tests()
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  return g_installed_nevras.size();
+  return g_installed_state.nevras.size();
 }
 
 // -----------------------------------------------------------------------------
@@ -290,13 +293,13 @@ bool
 dnf_backend_installed_snapshot_contains_for_tests(const std::string &nevra)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  return g_installed_nevras.count(nevra) > 0;
+  return g_installed_state.nevras.count(nevra) > 0;
 }
 #endif
 
 // -----------------------------------------------------------------------------
-// Refresh the exact-installed and self-protection snapshots used by UI state classification.
-// Returns true when installed NEVRAs or self-protected package names changed.
+// Refresh the installed snapshot used by UI state classification.
+// Returns true when installed identities or self-protected package names changed.
 // This path uses only the local rpmdb.
 // The short-lived system-only Base prevents future queries from inheriting that mode.
 //
@@ -306,7 +309,7 @@ dnf_backend_installed_snapshot_contains_for_tests(const std::string &nevra)
 //   held, then published after that lock has been released.
 // -----------------------------------------------------------------------------
 bool
-dnf_backend_refresh_installed_nevras()
+dnf_backend_refresh_installed_snapshot()
 {
   InstalledQueryResult installed;
   std::set<std::string> protected_names;
@@ -369,7 +372,7 @@ dnf_backend_is_self_protected_package_name(const std::string &name)
   std::set<std::string> protected_names;
   {
     std::lock_guard<std::mutex> lock(g_installed_mutex);
-    protected_names = g_self_protected_package_names;
+    protected_names = g_installed_state.self_protected_package_names;
   }
 
   return protected_names.count(name) > 0;
@@ -425,9 +428,7 @@ void
 dnf_backend_testonly_clear_installed_snapshot()
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  g_installed_nevras.clear();
-  g_installed_rows_by_name_arch.clear();
-  g_self_protected_package_names.clear();
+  g_installed_state = {};
 }
 
 // -----------------------------------------------------------------------------
@@ -438,9 +439,9 @@ void
 dnf_backend_testonly_replace_installed_snapshot(const std::set<std::string> &nevras)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  g_installed_nevras = nevras;
-  g_installed_rows_by_name_arch.clear();
-  g_self_protected_package_names.clear();
+  g_installed_state.nevras = nevras;
+  g_installed_state.rows_by_name_arch.clear();
+  g_installed_state.self_protected_package_names.clear();
 }
 
 // -----------------------------------------------------------------------------
@@ -450,13 +451,11 @@ void
 dnf_backend_testonly_replace_installed_snapshot_rows(const std::vector<PackageRow> &rows)
 {
   std::lock_guard<std::mutex> lock(g_installed_mutex);
-  g_installed_nevras.clear();
-  g_installed_rows_by_name_arch.clear();
-  g_self_protected_package_names.clear();
+  g_installed_state = {};
 
   for (const auto &row : rows) {
-    g_installed_nevras.insert(row.nevra);
-    g_installed_rows_by_name_arch[row.name_arch_key()] = row;
+    g_installed_state.nevras.insert(row.nevra);
+    g_installed_state.rows_by_name_arch[row.name_arch_key()] = row;
   }
 }
 

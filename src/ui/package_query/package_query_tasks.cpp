@@ -384,7 +384,7 @@ on_list_upgradeable_task(GTask *task, gpointer, gpointer, GCancellable *cancella
     DNFUI_TRACE("Upgradable list task start");
 #endif
 
-    if (dnf_backend_refresh_installed_nevras()) {
+    if (dnf_backend_refresh_installed_snapshot()) {
       DaemonUpgradeState::instance().mark_stale();
     }
 
@@ -431,7 +431,7 @@ on_list_upgradeable_task(GTask *task, gpointer, gpointer, GCancellable *cancella
       metadata_rows.clear();
     }
 
-    if (dnf_backend_refresh_installed_nevras()) {
+    if (dnf_backend_refresh_installed_snapshot()) {
       return_package_state_changed_result(task);
       return;
     }
@@ -685,7 +685,7 @@ on_exact_package_reload_task(GTask *task, gpointer, gpointer task_data, GCancell
   const std::string nevra = td ? td->nevra : "";
 
   try {
-    dnf_backend_refresh_installed_nevras();
+    dnf_backend_refresh_installed_snapshot();
 
     if (cancellable && g_cancellable_is_cancelled(cancellable)) {
       g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_CANCELLED, "Reload cancelled."));
