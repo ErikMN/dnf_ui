@@ -8,8 +8,6 @@
 #include "i18n.hpp"
 #include "ui/transaction/pending_transaction_action_rows.hpp"
 #include "ui/transaction/pending_transaction_controller.hpp"
-#include "ui/transaction/pending_transaction_state.hpp"
-#include "ui/transaction/pending_transaction_view.hpp"
 #include "ui/common/widgets.hpp"
 
 // -----------------------------------------------------------------------------
@@ -63,70 +61,41 @@ package_table_show_context_menu(GtkWidget *anchor,
   GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   gtk_popover_set_child(GTK_POPOVER(popover), box);
 
-  const bool exact_installonly_actions =
-      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection_with_pending(row.row,
-                                                                 row.upgrade_target(),
-                                                                 row.upgrade_generation(),
-                                                                 exact_installonly_actions,
-                                                                 widgets->transaction_state.actions);
-
-  const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
-  const bool allows_installed_upgrade_action =
-      displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
-  const bool allows_install_action =
-      pending_transaction_selection_allows_install_button_action(row.row, action_rows, allows_installed_upgrade_action);
-  const bool allows_installed_action =
-      pending_transaction_selection_allows_installed_action(row.row, action_rows, compact_view);
+  PendingTransactionSelectionActions actions =
+      pending_transaction_actions_for_selection(row.row,
+                                                row.upgrade_target(),
+                                                row.upgrade_generation(),
+                                                widgets->query_state.displayed_query,
+                                                widgets->transaction_state.actions);
 
   // Match the main action buttons: install and upgrade use the available row,
   // while remove and reinstall use the installed row.
   // Keep the running app visible in the table, but block context-menu actions
   // that would modify the package currently owning this executable.
-  bool install_blocked =
-      pending_transaction_install_action_blocked_by_self_protection(action_rows, action_rows.self_protected);
-  bool can_reinstall = allows_installed_action && action_rows.exact_reinstall_available && !action_rows.self_protected;
-
-  PendingAction::Type pending_install_type;
-  bool has_pending_install = allows_install_action &&
-      pending_transaction_get_action_type(widgets, action_rows.install_row.nevra, pending_install_type);
-
-  PendingAction::Type pending_destructive_type;
-  bool has_pending_destructive = allows_installed_action &&
-      pending_transaction_get_action_type(widgets, action_rows.installed_row.nevra, pending_destructive_type);
-
-  // Keep context menu actions aligned with the normal package action buttons.
   const char *install_label = nullptr;
-  if (has_pending_install &&
-      (pending_install_type == PendingAction::INSTALL || pending_install_type == PendingAction::UPGRADE ||
-       pending_install_type == PendingAction::DOWNGRADE)) {
-    if (action_rows.install_is_upgrade) {
+  if (actions.install_is_pending) {
+    if (actions.rows.install_is_upgrade) {
       install_label = _("Unmark Upgrade");
-    } else if (action_rows.install_is_downgrade) {
+    } else if (actions.rows.install_is_downgrade) {
       install_label = _("Unmark Downgrade");
     } else {
       install_label = _("Unmark Install");
     }
   } else {
-    if (action_rows.install_is_upgrade) {
+    if (actions.rows.install_is_upgrade) {
       install_label = _("Mark for Upgrade");
-    } else if (action_rows.install_is_downgrade) {
+    } else if (actions.rows.install_is_downgrade) {
       install_label = _("Mark for Downgrade");
     } else {
       install_label = _("Mark for Install");
     }
   }
-  const char *remove_label = has_pending_destructive && pending_destructive_type == PendingAction::REMOVE
-      ? _("Unmark Removal")
-      : _("Mark for Removal");
-  const char *reinstall_label = has_pending_destructive && pending_destructive_type == PendingAction::REINSTALL
-      ? _("Unmark Reinstall")
-      : _("Mark for Reinstall");
+  const char *remove_label = actions.remove_is_pending ? _("Unmark Removal") : _("Mark for Removal");
+  const char *reinstall_label = actions.reinstall_is_pending ? _("Unmark Reinstall") : _("Mark for Reinstall");
 
   append_context_menu_action(GTK_BOX(box),
                              install_label,
-                             allows_install_action && !install_blocked,
+                             actions.can_install,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
@@ -137,7 +106,7 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              remove_label,
-                             allows_installed_action && !action_rows.self_protected,
+                             actions.can_remove,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));
@@ -148,7 +117,7 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              reinstall_label,
-                             can_reinstall,
+                             actions.can_reinstall,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
                                  gtk_popover_popdown(GTK_POPOVER(popover));

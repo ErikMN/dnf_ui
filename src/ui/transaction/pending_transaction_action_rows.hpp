@@ -17,6 +17,7 @@
 #include "upgrade/daemon_upgrade_target.hpp"
 
 #include <set>
+#include <string>
 #include <vector>
 
 struct PendingTransactionActionRows {
@@ -36,6 +37,24 @@ struct PendingTransactionActionRows {
   PackageRow install_row;
   PackageRow installed_row;
 };
+
+struct PendingTransactionSelectionActions {
+  PendingTransactionActionRows rows;
+  bool has_install_action = false;
+  bool has_installed_action = false;
+  bool install_blocked_by_self_protection = false;
+  bool installed_action_blocked_by_self_protection = false;
+  bool can_install = false;
+  bool can_remove = false;
+  bool can_reinstall = false;
+  bool install_is_pending = false;
+  bool remove_is_pending = false;
+  bool reinstall_is_pending = false;
+  std::string install_action_nevra;
+  std::string installed_action_nevra;
+};
+
+struct DisplayedPackageQueryState;
 
 // -----------------------------------------------------------------------------
 // Resolve package IDs for a row that may carry a dnf5daemon upgrade target.
@@ -63,6 +82,22 @@ PendingTransactionActionRows pending_transaction_action_rows_for_resolved_select
     const InstalledPackageResolution &installed_resolution,
     bool exact_installonly_actions,
     const std::vector<PendingAction> &actions);
+// -----------------------------------------------------------------------------
+// Resolve which package actions the visible row can use in the current table view.
+// -----------------------------------------------------------------------------
+PendingTransactionSelectionActions
+pending_transaction_actions_for_selection(const PackageRow &selected,
+                                          const DaemonUpgradeTarget *upgrade_target,
+                                          uint64_t upgrade_generation,
+                                          const DisplayedPackageQueryState &displayed,
+                                          const std::vector<PendingAction> &actions);
+PendingTransactionSelectionActions
+pending_transaction_actions_for_resolved_selection(const PackageRow &selected,
+                                                   const DaemonUpgradeTarget *upgrade_target,
+                                                   uint64_t upgrade_generation,
+                                                   const InstalledPackageResolution &installed_resolution,
+                                                   const DisplayedPackageQueryState &displayed,
+                                                   const std::vector<PendingAction> &actions);
 
 // -----------------------------------------------------------------------------
 // Return true when the selected row may use its install, upgrade, or downgrade action.

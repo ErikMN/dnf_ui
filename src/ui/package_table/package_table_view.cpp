@@ -917,23 +917,19 @@ finish_package_table_view(MainWindowUiState *widgets,
                      }
 
                      PackageTableRow row = package_table_row_from_item(*item);
-                     const bool exact_installonly_actions =
-                         displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
-                     PendingTransactionActionRows action_rows =
-                         pending_transaction_action_rows_for_selection_with_pending(row.row,
-                                                                                    row.upgrade_target(),
-                                                                                    row.upgrade_generation(),
-                                                                                    exact_installonly_actions,
-                                                                                    widgets->transaction_state.actions);
-                     const bool allows_installed_upgrade_action =
-                         displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
+                     PendingTransactionSelectionActions actions =
+                         pending_transaction_actions_for_selection(row.row,
+                                                                   row.upgrade_target(),
+                                                                   row.upgrade_generation(),
+                                                                   widgets->query_state.displayed_query,
+                                                                   widgets->transaction_state.actions);
                      gtk_single_selection_set_selected(sel, position);
                      g_object_unref(obj);
 
-                     if (pending_transaction_selection_allows_install_button_action(
-                             row.row, action_rows, allows_installed_upgrade_action)) {
+                     if (actions.can_install) {
                        pending_transaction_on_install_button_clicked(nullptr, widgets);
-                     } else if (pending_transaction_activation_should_remove(row.row, action_rows)) {
+                     } else if (actions.can_remove &&
+                                pending_transaction_activation_should_remove(row.row, actions.rows)) {
                        pending_transaction_on_remove_button_clicked(nullptr, widgets);
                      }
                    }),

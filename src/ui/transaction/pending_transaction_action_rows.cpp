@@ -8,6 +8,7 @@
 // -----------------------------------------------------------------------------
 #include "ui/transaction/pending_transaction_action_rows.hpp"
 
+#include "ui/package_query/package_query_state.hpp"
 #include "upgrade/daemon_upgrade_state.hpp"
 
 namespace {
@@ -179,6 +180,25 @@ find_pending_install_side_action(const std::vector<PendingAction> &actions,
   }
 
   return nullptr;
+}
+
+// -----------------------------------------------------------------------------
+// Return true when one queued action matches the requested package ID and type.
+// -----------------------------------------------------------------------------
+bool
+has_pending_action(const std::vector<PendingAction> &actions, const std::string &nevra, PendingAction::Type type)
+{
+  if (nevra.empty()) {
+    return false;
+  }
+
+  for (const auto &action : actions) {
+    if (action.nevra == nevra && action.type == type) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // -----------------------------------------------------------------------------
@@ -362,6 +382,60 @@ pending_transaction_action_rows_for_selection_with_pending(const PackageRow &sel
   InstalledPackageResolution installed_resolution = dnf_backend_resolve_installed_package(selected);
   return pending_transaction_action_rows_for_resolved_selection_with_pending(
       selected, upgrade_target, upgrade_generation, installed_resolution, exact_installonly_actions, actions);
+}
+
+// -----------------------------------------------------------------------------
+// Resolve which package actions the visible row can use in the current table view.
+// -----------------------------------------------------------------------------
+PendingTransactionSelectionActions
+pending_transaction_actions_for_resolved_selection(const PackageRow &selected,
+                                                   const DaemonUpgradeTarget *upgrade_target,
+                                                   uint64_t upgrade_generation,
+                                                   const InstalledPackageResolution &installed_resolution,
+                                                   const DisplayedPackageQueryState &displayed,
+                                                   const std::vector<PendingAction> &actions)
+{
+  PendingTransactionSelectionActions result;
+
+  const bool exact_installonly_actions = displayed_package_query_uses_exact_installonly_actions(displayed);
+  result.rows = pending_transaction_action_rows_for_resolved_selection_with_pending(
+      selected, upgrade_target, upgrade_generation, installed_resolution, exact_installonly_actions, actions);
+
+  const bool compact_view = displayed_package_query_uses_compact_rows(displayed);
+  const bool allows_installed_upgrade_action = displayed_package_query_allows_installed_upgrade_action(displayed);
+
+  result.has_install_action = pending_transaction_selection_allows_install_button_action(
+      selected, result.rows, allows_installed_upgrade_action);
+  result.has_installed_action =
+      pending_transaction_selection_allows_installed_action(selected, result.rows, compact_view);
+  result.install_blocked_by_self_protection =
+      pending_transaction_install_action_blocked_by_self_protection(result.rows, result.rows.self_protected);
+  result.installed_action_blocked_by_self_protection = result.rows.self_protected;
+  result.can_install = result.has_install_action && !result.install_blocked_by_self_protection;
+  result.can_remove = result.has_installed_action && !result.installed_action_blocked_by_self_protection;
+  result.can_reinstall = result.can_remove && result.rows.exact_reinstall_available;
+  result.install_action_nevra = result.has_install_action ? result.rows.install_row.nevra : "";
+  result.installed_action_nevra = result.has_installed_action ? result.rows.installed_row.nevra : "";
+
+  result.install_is_pending = has_pending_action(actions, result.install_action_nevra, PendingAction::INSTALL) ||
+      has_pending_action(actions, result.install_action_nevra, PendingAction::UPGRADE) ||
+      has_pending_action(actions, result.install_action_nevra, PendingAction::DOWNGRADE);
+  result.remove_is_pending = has_pending_action(actions, result.installed_action_nevra, PendingAction::REMOVE);
+  result.reinstall_is_pending = has_pending_action(actions, result.installed_action_nevra, PendingAction::REINSTALL);
+
+  return result;
+}
+
+PendingTransactionSelectionActions
+pending_transaction_actions_for_selection(const PackageRow &selected,
+                                          const DaemonUpgradeTarget *upgrade_target,
+                                          uint64_t upgrade_generation,
+                                          const DisplayedPackageQueryState &displayed,
+                                          const std::vector<PendingAction> &actions)
+{
+  InstalledPackageResolution installed_resolution = dnf_backend_resolve_installed_package(selected);
+  return pending_transaction_actions_for_resolved_selection(
+      selected, upgrade_target, upgrade_generation, installed_resolution, displayed, actions);
 }
 
 // -----------------------------------------------------------------------------

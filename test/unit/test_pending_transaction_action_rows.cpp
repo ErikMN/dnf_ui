@@ -115,6 +115,30 @@ TEST_CASE("Pending transaction action rows resolve plain available package")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that the shared action result enables only install for a plain available row.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction selection actions resolve plain available package")
+{
+  reset_backend_globals();
+
+  PackageRow available = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  DisplayedPackageQueryState displayed;
+  displayed.kind = DisplayedPackageQueryKind::LIST_PACKAGES;
+
+  PendingTransactionSelectionActions actions =
+      pending_transaction_actions_for_selection(available, nullptr, 0, displayed, {});
+
+  REQUIRE(actions.rows.has_install_row);
+  REQUIRE(actions.has_install_action);
+  REQUIRE(actions.can_install);
+  REQUIRE_FALSE(actions.has_installed_action);
+  REQUIRE_FALSE(actions.can_remove);
+  REQUIRE_FALSE(actions.can_reinstall);
+  REQUIRE(actions.install_action_nevra == available.nevra);
+  REQUIRE(actions.installed_action_nevra.empty());
+}
+
+// -----------------------------------------------------------------------------
 // Verify that normal package installs replace another version with the same name and architecture.
 // -----------------------------------------------------------------------------
 TEST_CASE("Pending transaction normal install marking replaces same package identity")
@@ -588,6 +612,48 @@ TEST_CASE("Pending transaction action rows resolve upgrade from available update
   REQUIRE(pending_transaction_selection_allows_install_button_action(update, rows, false));
   REQUIRE_FALSE(pending_transaction_selection_allows_installed_action(update, rows, false));
   REQUIRE(pending_transaction_selection_allows_installed_action(update, rows, true));
+}
+
+// -----------------------------------------------------------------------------
+// Verify that the shared action result applies compact-view installed action rules.
+// -----------------------------------------------------------------------------
+TEST_CASE("Pending transaction selection actions resolve compact update row")
+{
+  reset_backend_globals();
+
+  PackageRow installed = make_test_package_row("demo-1.0-1.x86_64", "demo", "1.0", "1", "x86_64");
+  installed.repo_candidate_exact_available = true;
+  PackageRow update = make_test_package_row("demo-2.0-1.x86_64", "demo", "2.0", "1", "x86_64");
+  update.is_newest_available = true;
+
+  dnf_backend_testonly_replace_installed_snapshot_rows({ installed });
+
+  DisplayedPackageQueryState displayed;
+  displayed.kind = DisplayedPackageQueryKind::LIST_PACKAGES;
+  displayed.latest_only = true;
+
+  PendingTransactionSelectionActions actions =
+      pending_transaction_actions_for_selection(update, nullptr, 0, displayed, {});
+
+  REQUIRE(actions.rows.install_is_upgrade);
+  REQUIRE(actions.has_install_action);
+  REQUIRE(actions.has_installed_action);
+  REQUIRE(actions.can_install);
+  REQUIRE(actions.can_remove);
+  REQUIRE(actions.can_reinstall);
+  REQUIRE(actions.install_action_nevra == update.nevra);
+  REQUIRE(actions.installed_action_nevra == installed.nevra);
+
+  std::vector<PendingAction> pending_actions = {
+    { PendingAction::UPGRADE, update.nevra, "demo.x86_64", update.name_arch_key() },
+    { PendingAction::REINSTALL, installed.nevra, installed.nevra, installed.name_arch_key() },
+  };
+  PendingTransactionSelectionActions pending =
+      pending_transaction_actions_for_selection(update, nullptr, 0, displayed, pending_actions);
+
+  REQUIRE(pending.install_is_pending);
+  REQUIRE_FALSE(pending.remove_is_pending);
+  REQUIRE(pending.reinstall_is_pending);
 }
 
 // -----------------------------------------------------------------------------

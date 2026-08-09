@@ -70,23 +70,20 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
   PackageRow pkg = selected.row;
 
   // Resolve the package ID to queue before adding an install or upgrade action.
-  const bool exact_installonly_actions =
-      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection_with_pending(pkg,
-                                                                 selected.upgrade_target(),
-                                                                 selected.upgrade_generation(),
-                                                                 exact_installonly_actions,
-                                                                 widgets->transaction_state.actions);
-  const bool allows_installed_upgrade_action =
-      displayed_package_query_allows_installed_upgrade_action(widgets->query_state.displayed_query);
-  if (!pending_transaction_selection_allows_install_button_action(pkg, action_rows, allows_installed_upgrade_action)) {
+  PendingTransactionSelectionActions actions =
+      pending_transaction_actions_for_selection(pkg,
+                                                selected.upgrade_target(),
+                                                selected.upgrade_generation(),
+                                                widgets->query_state.displayed_query,
+                                                widgets->transaction_state.actions);
+  const PendingTransactionActionRows &action_rows = actions.rows;
+  if (!actions.has_install_action) {
     ui_helpers_set_status(
         widgets->query.status_label, _("No install, upgrade, or downgrade action is available."), "gray");
     return;
   }
 
-  if (pending_transaction_install_action_blocked_by_self_protection(action_rows, action_rows.self_protected)) {
+  if (actions.install_blocked_by_self_protection) {
     ui_helpers_set_status(
         widgets->query.status_label, self_protected_transaction_message(action_rows.installed_row).c_str(), "red");
     return;
@@ -124,11 +121,10 @@ pending_transaction_on_install_button_clicked(GtkButton *, gpointer user_data)
     ui_helpers_set_status(widgets->query.status_label, (std::string(message) + pkg.name).c_str(), "blue");
   }
 
-  const std::string installed_nevra = action_rows.has_installed_row ? action_rows.installed_row.nevra : pkg.nevra;
   pending_transaction_update_action_button_labels_for_selection(widgets,
-                                                                action_rows.install_row.nevra,
-                                                                installed_nevra,
-                                                                installed_nevra,
+                                                                actions.install_action_nevra,
+                                                                actions.installed_action_nevra,
+                                                                actions.installed_action_nevra,
                                                                 action_rows.install_is_upgrade,
                                                                 action_rows.install_is_downgrade);
   pending_transaction_invalidate_service_preview(widgets);
@@ -157,23 +153,20 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
   }
   PackageRow pkg = selected.row;
 
-  const bool exact_installonly_actions =
-      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection_with_pending(pkg,
-                                                                 selected.upgrade_target(),
-                                                                 selected.upgrade_generation(),
-                                                                 exact_installonly_actions,
-                                                                 widgets->transaction_state.actions);
+  PendingTransactionSelectionActions actions =
+      pending_transaction_actions_for_selection(pkg,
+                                                selected.upgrade_target(),
+                                                selected.upgrade_generation(),
+                                                widgets->query_state.displayed_query,
+                                                widgets->transaction_state.actions);
+  const PendingTransactionActionRows &action_rows = actions.rows;
 
-  const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
-
-  if (!pending_transaction_selection_allows_installed_action(pkg, action_rows, compact_view)) {
+  if (!actions.has_installed_action) {
     ui_helpers_set_status(widgets->query.status_label, _("Package is not installed."), "gray");
     return;
   }
 
-  if (action_rows.self_protected) {
+  if (actions.installed_action_blocked_by_self_protection) {
     ui_helpers_set_status(
         widgets->query.status_label, self_protected_transaction_message(action_rows.installed_row).c_str(), "red");
     return;
@@ -194,11 +187,10 @@ pending_transaction_on_remove_button_clicked(GtkButton *, gpointer user_data)
         widgets->query.status_label, (std::string(_("Marked for removal: ")) + pkg.name).c_str(), "blue");
   }
 
-  const std::string install_nevra = action_rows.has_install_row ? action_rows.install_row.nevra : pkg.nevra;
   pending_transaction_update_action_button_labels_for_selection(widgets,
-                                                                install_nevra,
-                                                                action_rows.installed_row.nevra,
-                                                                action_rows.installed_row.nevra,
+                                                                actions.install_action_nevra,
+                                                                actions.installed_action_nevra,
+                                                                actions.installed_action_nevra,
                                                                 action_rows.install_is_upgrade,
                                                                 action_rows.install_is_downgrade);
   pending_transaction_invalidate_service_preview(widgets);
@@ -226,23 +218,20 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
   }
   PackageRow pkg = selected.row;
 
-  const bool exact_installonly_actions =
-      displayed_package_query_uses_exact_installonly_actions(widgets->query_state.displayed_query);
-  PendingTransactionActionRows action_rows =
-      pending_transaction_action_rows_for_selection_with_pending(pkg,
-                                                                 selected.upgrade_target(),
-                                                                 selected.upgrade_generation(),
-                                                                 exact_installonly_actions,
-                                                                 widgets->transaction_state.actions);
+  PendingTransactionSelectionActions actions =
+      pending_transaction_actions_for_selection(pkg,
+                                                selected.upgrade_target(),
+                                                selected.upgrade_generation(),
+                                                widgets->query_state.displayed_query,
+                                                widgets->transaction_state.actions);
+  const PendingTransactionActionRows &action_rows = actions.rows;
 
-  const bool compact_view = displayed_package_query_uses_compact_rows(widgets->query_state.displayed_query);
-
-  if (!pending_transaction_selection_allows_installed_action(pkg, action_rows, compact_view)) {
+  if (!actions.has_installed_action) {
     ui_helpers_set_status(widgets->query.status_label, _("Package is not installed."), "gray");
     return;
   }
 
-  if (action_rows.self_protected) {
+  if (actions.installed_action_blocked_by_self_protection) {
     ui_helpers_set_status(
         widgets->query.status_label, self_protected_transaction_message(action_rows.installed_row).c_str(), "red");
     return;
@@ -268,11 +257,10 @@ pending_transaction_on_reinstall_button_clicked(GtkButton *, gpointer user_data)
         widgets->query.status_label, (std::string(_("Marked for reinstall: ")) + pkg.name).c_str(), "blue");
   }
 
-  const std::string install_nevra = action_rows.has_install_row ? action_rows.install_row.nevra : pkg.nevra;
   pending_transaction_update_action_button_labels_for_selection(widgets,
-                                                                install_nevra,
-                                                                action_rows.installed_row.nevra,
-                                                                action_rows.installed_row.nevra,
+                                                                actions.install_action_nevra,
+                                                                actions.installed_action_nevra,
+                                                                actions.installed_action_nevra,
                                                                 action_rows.install_is_upgrade,
                                                                 action_rows.install_is_downgrade);
   pending_transaction_invalidate_service_preview(widgets);

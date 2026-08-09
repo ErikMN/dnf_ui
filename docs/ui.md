@@ -287,9 +287,12 @@ Mark Listed Upgrades marks only valid upgrade candidates from the current table.
 It does not mark downgradeable rows or intermediate newer rows.
 
 [src/ui/transaction/pending_transaction_action_rows.cpp](../src/ui/transaction/pending_transaction_action_rows.cpp)
-keeps those row-selection rules in one place. This is needed because an update can be shown
-from either the installed package list or the upgradable package list. The helper
-must not run libdnf queries because it is called while updating GTK controls.
+keeps those row-selection rules in one place. It also resolves which package
+actions are available for the selected row, so details buttons, context menus,
+and row activation use the same answer. This is needed because an update can be
+shown from either the installed package list or the upgradable package list. The
+helper must not run libdnf queries because it is called while updating GTK
+controls.
 
 ### Transaction progress
 
