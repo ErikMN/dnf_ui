@@ -152,7 +152,7 @@ package_query_show_duration_label(MainWindowUiState *widgets, const char *title,
 bool
 package_query_has_active_package_list_request(const MainWindowUiState *widgets)
 {
-  return widgets && widgets->query_state.package_list_cancellable;
+  return widgets && widgets->query_state.active_request.cancellable;
 }
 
 // -----------------------------------------------------------------------------
@@ -261,13 +261,13 @@ package_query_begin_package_list_request(MainWindowUiState *widgets,
     return;
   }
 
-  if (widgets->query_state.package_list_cancellable) {
-    g_object_unref(widgets->query_state.package_list_cancellable);
+  if (widgets->query_state.active_request.cancellable) {
+    g_object_unref(widgets->query_state.active_request.cancellable);
   }
 
-  widgets->query_state.package_list_cancellable = G_CANCELLABLE(g_object_ref(c));
-  widgets->query_state.current_package_list_request_id = request_id;
-  widgets->query_state.current_package_list_request_kind = kind;
+  widgets->query_state.active_request.cancellable = G_CANCELLABLE(g_object_ref(c));
+  widgets->query_state.active_request.id = request_id;
+  widgets->query_state.active_request.kind = kind;
   GtkButton *stop_button = package_list_stop_button(widgets, kind);
 
   package_query_clear_duration_label(widgets);
@@ -312,20 +312,18 @@ restore_package_list_controls(MainWindowUiState *widgets)
 void
 package_query_end_package_list_request(MainWindowUiState *widgets, uint64_t request_id, PackageListRequestKind kind)
 {
-  if (!widgets || widgets->query_state.current_package_list_request_id != request_id ||
-      widgets->query_state.current_package_list_request_kind != kind) {
+  if (!widgets || widgets->query_state.active_request.id != request_id ||
+      widgets->query_state.active_request.kind != kind) {
     return;
   }
 
-  bool request_cancelled = widgets->query_state.package_list_cancellable &&
-      g_cancellable_is_cancelled(widgets->query_state.package_list_cancellable);
+  bool request_cancelled = widgets->query_state.active_request.cancellable &&
+      g_cancellable_is_cancelled(widgets->query_state.active_request.cancellable);
 
-  if (widgets->query_state.package_list_cancellable) {
-    g_object_unref(widgets->query_state.package_list_cancellable);
-    widgets->query_state.package_list_cancellable = nullptr;
+  if (widgets->query_state.active_request.cancellable) {
+    g_object_unref(widgets->query_state.active_request.cancellable);
   }
-  widgets->query_state.current_package_list_request_id = 0;
-  widgets->query_state.current_package_list_request_kind = PackageListRequestKind::NONE;
+  widgets->query_state.active_request = {};
   restore_package_list_controls(widgets);
 
   if (request_cancelled) {
@@ -340,12 +338,12 @@ package_query_end_package_list_request(MainWindowUiState *widgets, uint64_t requ
 void
 package_query_cancel_active_package_list_request(MainWindowUiState *widgets)
 {
-  if (!widgets || !widgets->query_state.package_list_cancellable) {
+  if (!widgets || !widgets->query_state.active_request.cancellable) {
     return;
   }
 
-  PackageListRequestKind kind = widgets->query_state.current_package_list_request_kind;
-  GCancellable *c = widgets->query_state.package_list_cancellable;
+  PackageListRequestKind kind = widgets->query_state.active_request.kind;
+  GCancellable *c = widgets->query_state.active_request.cancellable;
   if (g_cancellable_is_cancelled(c)) {
     ui_helpers_set_status(widgets->query.status_label, package_list_stopping_status(kind), "gray");
     return;

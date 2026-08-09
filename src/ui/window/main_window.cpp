@@ -634,10 +634,10 @@ connect_cleanup(GtkWidget *window, std::shared_ptr<MainWindowUiState> widgets, G
                        g_object_unref(widgets->window_state.backend_warmup_cancellable);
                        widgets->window_state.backend_warmup_cancellable = nullptr;
                      }
-                     if (widgets->query_state.package_list_cancellable) {
-                       g_cancellable_cancel(widgets->query_state.package_list_cancellable);
-                       g_object_unref(widgets->query_state.package_list_cancellable);
-                       widgets->query_state.package_list_cancellable = nullptr;
+                     if (widgets->query_state.active_request.cancellable) {
+                       g_cancellable_cancel(widgets->query_state.active_request.cancellable);
+                       g_object_unref(widgets->query_state.active_request.cancellable);
+                       widgets->query_state.active_request = {};
                      }
                      repository_refresh_cancel_active();
                      package_details_cancel_active_load(widgets);

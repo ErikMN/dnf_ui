@@ -18,6 +18,15 @@
 // -----------------------------------------------------------------------------
 enum class PackageListRequestKind { NONE, SEARCH, LIST_INSTALLED, LIST_PACKAGES, LIST_UPGRADEABLE, EXACT_RELOAD };
 
+struct ActivePackageListRequest {
+  // Active cancellable for the current background package-list request, if any.
+  GCancellable *cancellable = nullptr;
+  // Request id owned by the active package-list button UI state.
+  uint64_t id = 0;
+  // Identifies which query button owns the active Stop state.
+  PackageListRequestKind kind = PackageListRequestKind::NONE;
+};
+
 // -----------------------------------------------------------------------------
 // Last query-backed package view shown in the main table.
 // This intentionally tracks only views that can be reproduced through the main query controls.
@@ -112,14 +121,9 @@ displayed_package_query_uses_exact_installonly_actions(const DisplayedPackageQue
 // Runtime state for the active background package query flow
 // -----------------------------------------------------------------------------
 struct PackageQueryState {
-  // Active cancellable for the current background package-list request, if any.
-  GCancellable *package_list_cancellable = nullptr;
+  ActivePackageListRequest active_request;
   // Next package-list request id used to distinguish overlapping background tasks.
   uint64_t next_package_list_request_id = 1;
-  // Current package-list request id owned by the active package-list button UI state.
-  uint64_t current_package_list_request_id = 0;
-  // Identifies which query button owns the active Stop state.
-  PackageListRequestKind current_package_list_request_kind = PackageListRequestKind::NONE;
   // Remembers the last query-backed result view.
   // Rebuilds can repopulate the visible table instead of leaving outdated rows on screen after a transaction.
   DisplayedPackageQueryState displayed_query;

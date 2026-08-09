@@ -128,7 +128,7 @@ package_query_on_list_button_clicked(GtkButton *, gpointer user_data)
 {
   MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
   if (package_query_has_active_package_list_request(widgets)) {
-    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::LIST_INSTALLED) {
+    if (widgets->query_state.active_request.kind == PackageListRequestKind::LIST_INSTALLED) {
       package_query_cancel_active_package_list_request(widgets);
     }
     return;
@@ -148,7 +148,7 @@ package_query_on_list_packages_button_clicked(GtkButton *, gpointer user_data)
 {
   MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
   if (package_query_has_active_package_list_request(widgets)) {
-    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::LIST_PACKAGES) {
+    if (widgets->query_state.active_request.kind == PackageListRequestKind::LIST_PACKAGES) {
       package_query_cancel_active_package_list_request(widgets);
     }
     return;
@@ -169,7 +169,7 @@ package_query_on_list_upgradeable_button_clicked(GtkButton *, gpointer user_data
 {
   MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
   if (package_query_has_active_package_list_request(widgets)) {
-    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::LIST_UPGRADEABLE) {
+    if (widgets->query_state.active_request.kind == PackageListRequestKind::LIST_UPGRADEABLE) {
       package_query_cancel_active_package_list_request(widgets);
     }
     return;
@@ -189,8 +189,8 @@ package_query_on_search_button_clicked(GtkButton *, gpointer user_data)
 {
   MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
   if (package_query_has_active_package_list_request(widgets)) {
-    if (widgets->query_state.current_package_list_request_kind == PackageListRequestKind::SEARCH ||
-        widgets->query_state.current_package_list_request_kind == PackageListRequestKind::EXACT_RELOAD) {
+    if (widgets->query_state.active_request.kind == PackageListRequestKind::SEARCH ||
+        widgets->query_state.active_request.kind == PackageListRequestKind::EXACT_RELOAD) {
       package_query_cancel_active_package_list_request(widgets);
     }
     return;

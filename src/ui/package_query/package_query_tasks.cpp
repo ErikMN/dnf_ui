@@ -115,8 +115,8 @@ package_query_finish_generation_rejected_request(MainWindowUiState *widgets,
                                                  uint64_t request_id,
                                                  PackageListRequestKind kind)
 {
-  bool request_matches = widgets->query_state.current_package_list_request_id == request_id &&
-      widgets->query_state.current_package_list_request_kind == kind;
+  bool request_matches =
+      widgets->query_state.active_request.id == request_id && widgets->query_state.active_request.kind == kind;
 
   widgets_spinner_release(widgets->query.spinner);
   package_query_end_package_list_request(widgets, request_id, kind);
