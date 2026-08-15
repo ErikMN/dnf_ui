@@ -7,6 +7,12 @@ backend_sources = files(
   'dnf_backend/dnf_state.cpp',
 )
 
+daemon_client_sources = files(
+  'dnf5daemon_client/transaction_service_client_dbus.cpp',
+  'dnf5daemon_client/transaction_service_client.cpp',
+  'dnf5daemon_client/transaction_service_client_wait.cpp',
+)
+
 app_sources = files(
   'app.cpp',
   'config.cpp',
@@ -37,9 +43,6 @@ app_sources = files(
   'ui/refresh/repository_refresh_controller.cpp',
   'ui/transaction/transaction_progress.cpp',
   'ui/transaction/transaction_dialogs.cpp',
-  'dnf5daemon_client/transaction_service_client_dbus.cpp',
-  'dnf5daemon_client/transaction_service_client.cpp',
-  'dnf5daemon_client/transaction_service_client_wait.cpp',
   'upgrade/daemon_upgrade_state.cpp',
   'ui/common/ui_helpers.cpp',
   'ui/common/widgets.cpp',
@@ -47,7 +50,7 @@ app_sources = files(
 
 dnfui_app = executable(
   'dnfui',
-  backend_sources + app_sources,
+  backend_sources + daemon_client_sources + app_sources,
   include_directories: src_inc,
   dependencies: [
     libdnf5_dep,
@@ -55,4 +58,21 @@ dnfui_app = executable(
   ],
   install: true,
   install_tag: 'runtime',
+)
+
+gio_dep = dependency('gio-2.0')
+
+dnfui_backend_cli = executable(
+  'dnfui-backend-cli',
+  backend_sources + daemon_client_sources + files(
+    'cli/backend_cli.cpp',
+    'i18n.cpp',
+  ),
+  include_directories: src_inc,
+  dependencies: [
+    libdnf5_dep,
+    gio_dep,
+  ],
+  build_by_default: false,
+  install: false,
 )

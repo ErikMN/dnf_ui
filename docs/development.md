@@ -50,6 +50,49 @@ meson compile -C build/debug
 ./build/debug/src/dnfui
 ```
 
+## Backend CLI probe
+
+The source tree includes a small developer CLI for testing the backend without
+starting the GTK application. It is not installed by the RPM.
+
+Build it natively:
+
+```sh
+make dnfui-backend-cli
+./dnfui-backend-cli search bash
+```
+
+Open a Docker shell with the CLI built and ready:
+
+```sh
+make dockercli
+```
+
+The Docker CLI target builds under `/tmp/dnfui-build`, starts a container system
+bus for dnf5daemon commands, and opens a shell with `dnfui-backend-cli` available.
+
+Read-only libdnf commands:
+
+```sh
+dnfui-backend-cli search bash
+dnfui-backend-cli list-installed bash
+dnfui-backend-cli list-packages --all-versions
+NEVRA="$(dnfui-backend-cli search --exact bash | awk 'NR == 1 { print $1 }')"
+dnfui-backend-cli details "$NEVRA"
+```
+
+Daemon-backed probes:
+
+```sh
+dnfui-backend-cli list-upgrades
+dnfui-backend-cli preview install cowsay
+dnfui-backend-cli preview-upgrade-all
+```
+
+The CLI only previews transactions. It does not apply package changes.
+The GUI self-protection check is process-specific, so the development CLI does
+not represent the GUI rule that blocks DNF UI from removing or replacing itself.
+
 ## Native transaction testing
 
 For native Polkit testing from the source tree, build the app and run it as a

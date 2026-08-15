@@ -7,6 +7,7 @@ CONTAINER_RUNTIME ?= docker
 export CONTAINER_RUNTIME
 
 APP_BIN_NAME = dnfui
+BACKEND_CLI_BIN_NAME = dnfui-backend-cli
 TEST_BIN_NAME = dnfui-tests
 MEMCHECK ?= ./utils/run_memcheck.sh
 MEMCHECK_APP_ARGS ?=
@@ -58,6 +59,7 @@ MESON_SETUP_ARGS = \
 	-Db_sanitize=$(MESON_SANITIZE)
 
 APP_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/src/$(APP_BIN_NAME)
+BACKEND_CLI_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/src/$(BACKEND_CLI_BIN_NAME)
 TEST_BUILD_PATH = $(CURDIR)/$(MESON_BUILD_DIR)/test/$(TEST_BIN_NAME)
 
 # -----------------------------------------------------------------------------
@@ -79,6 +81,7 @@ help:
 	@printf '%-36s %s\n' 'all' 'Build the desktop app.'
 	@printf '%-36s %s\n' 'meson-setup' 'Configure or reconfigure the active Meson build directory.'
 	@printf '%-36s %s\n' 'dnfui' 'Build the desktop app binary.'
+	@printf '%-36s %s\n' 'dnfui-backend-cli' 'Build the developer backend CLI probe.'
 	@printf '%-36s %s\n' 'dnfui-tests' 'Build the test binary.'
 	@printf '%-36s %s\n' 'run' 'Build and run the desktop app locally.'
 	@printf '%-36s %s\n' 'test' 'Build and run the local test suite.'
@@ -93,6 +96,7 @@ help:
 	@printf '%s\n' '----------------------------------------'
 	@printf '%-36s %s\n' 'dockersetup' 'Build the Docker development image.'
 	@printf '%-36s %s\n' 'dockerlogin' 'Open a shell in the Docker development container.'
+	@printf '%-36s %s\n' 'dockercli' 'Open a Docker shell with the backend CLI probe ready.'
 	@printf '%-36s %s\n' 'dockerrun' 'Run the desktop app in Docker.'
 	@printf '%-36s %s\n' 'dockertest' 'Run the backend test suite in Docker.'
 	@printf '%-36s %s\n' 'dockerrunoffline' 'Run the desktop app in Docker without networking.'
@@ -142,6 +146,12 @@ meson-setup:
 dnfui: meson-setup
 	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnfui
 	ln -sfn "$(APP_BUILD_PATH)" "$(APP_BIN_NAME)"
+
+# Build the developer backend CLI probe and update the local convenience symlink:
+.PHONY: dnfui-backend-cli
+dnfui-backend-cli: meson-setup
+	$(MESON) compile -C "$(MESON_BUILD_DIR)" dnfui-backend-cli
+	ln -sfn "$(BACKEND_CLI_BUILD_PATH)" "$(BACKEND_CLI_BIN_NAME)"
 
 # Build the backend test binary and update the local symlink:
 .PHONY: dnfui-tests
@@ -210,6 +220,11 @@ dockersetup:
 .PHONY: dockerlogin
 dockerlogin:
 	@./docker/docker_login.sh
+
+# Open a Docker shell with the backend CLI probe ready:
+.PHONY: dockercli
+dockercli:
+	@DEBUG_TRACE="$(DEBUG_TRACE)" ./docker/docker_backend_cli.sh
 
 # Run the app in Docker:
 .PHONY: dockerrun
