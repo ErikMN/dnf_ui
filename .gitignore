@@ -1,5 +1,6 @@
 dnfui
 dnfui-tests
+dnfui-backend-cli
 .history
 build/
 rpmbuild/
