@@ -61,19 +61,42 @@ The Base has a generation counter. When the Base is rebuilt, the generation is
 incremented. UI tasks use that value to reject outdated results after refreshes
 and transactions.
 
-The package search cache also keeps its own cache epoch. That epoch advances
-when the UI explicitly clears cached search rows, even if the backend Base
-generation has not changed yet. This keeps older search workers from storing
-old rows back into a cache state the UI already invalidated. Search cache
-validity depends on the Base generation and this cache epoch.
+## Base lifetime and search cache
 
-Search cache entries are lightweight snapshots of completed searches. They do
-not own libdnf5 objects and may survive shared Base destruction. Explicit
-repository refresh, installed-state refresh, transaction completion, and Clear
-Cache invalidate them. Backend operations that need current package data resolve
-that data through the current Base instead of treating cached rows as
-authoritative libdnf5 state. All-version searches bypass this cache because
-they can contain many more rows than the compact Latest only view.
+The shared Base is heavyweight libdnf5 state. Normal package-query workers drop
+it when they finish so repository metadata does not stay resident just because
+the user ran one query. Search, List Installed, List Packages, List Upgradable,
+and exact selected-package reload workers use this policy. If a worker was
+cancelled, it skips the drop so Stop does not block again while trying to
+release cached metadata.
+
+Dropping the shared Base is a memory policy. It does not mean that repository
+metadata was refreshed, and it does not increment the Base generation. The next
+normal query rebuilds the Base on demand and continues using the current
+generation unless a real rebuild publishes a replacement Base.
+
+Search cache entries are lightweight snapshots of completed Search results.
+They store copied `PackageRow` values, not libdnf5 package objects. They can
+therefore survive shared Base destruction. Base object lifetime is not the
+search cache lifetime.
+
+Search cache validity depends on two values:
+
+- the Base generation recorded when the rows were produced
+- the search-cache epoch recorded when the rows were produced
+
+The Base generation changes when a repository refresh or transaction follow-up
+publishes a rebuilt Base. The search-cache epoch changes when the UI explicitly
+clears cached search rows. Repository refresh, transaction completion, periodic
+installed-state refresh, and Clear Cache all clear the search cache and advance
+that epoch.
+
+The cache epoch exists because the UI can invalidate cached rows without a Base
+generation change. It also prevents an older search worker from storing rows
+back into the cache after the UI has already cleared it.
+
+All-version searches bypass the search cache because they can contain many more
+rows than the compact Latest only view.
 
 ## Repository refresh
 
