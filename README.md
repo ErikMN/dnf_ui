@@ -19,7 +19,7 @@ DNF UI targets systems using modern **DNF5** and **dnf5daemon**. It is developed
 
 ## Status
 
-DNF UI is under active development and is stable enough for regular use. \
+DNF UI is under active development and is stable for regular use. \
 New features and improvements are still being added, so some interfaces and
 behavior may change between releases.
 
@@ -53,7 +53,7 @@ explicit transaction review, and applying DNF package transactions through Polki
 
 DNF UI does **NOT** aim to manage Flatpaks, firmware updates, ratings, featured
 applications, or software-center discovery workflows.
-There are other applications for this like [GNOME Software](https://apps.gnome.org/Software/).
+Applications such as [GNOME Software](https://apps.gnome.org/Software/) cover those workflows.
 
 ## Current features
 
@@ -72,12 +72,11 @@ There are other applications for this like [GNOME Software](https://apps.gnome.o
 
 ## Why?
 
-As a long-time user of Synaptic I wanted a similar tool for DNF5.
-I want a package manager frontend which is native, fast, reliable, and easy to use.
+As a long-time user of Synaptic, I wanted a similar tool for DNF5:
+a native package manager frontend that is fast, reliable, and easy to use.
 
-This project is also a practical way for me to learn more about how to build a
-stable and maintainable desktop application.
-The goal is not to experiment for its own sake, but to also build something genuinely useful for me and others.
+This project is also a practical way for me to learn more about building a stable and maintainable desktop application.
+The goal is not experimentation for its own sake, but to build something genuinely useful for me and others.
 
 Other graphical package managers with a longer history include:
 
