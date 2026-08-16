@@ -9,8 +9,8 @@ For source-backed libdnf5 assumptions, see
 
 The UI uses [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/dnf_backend.hpp).
 
-That header is the app-facing contract. It keeps libdnf5 types out of the GTK
-controller layer by exposing small value types:
+That header is the app-facing package-data contract. It keeps libdnf5 package
+types out of the GTK controller layer by exposing small value types:
 
 - `PackageRow`
 - `PackageInstallReason`
@@ -24,9 +24,17 @@ controller layer by exposing small value types:
 - `TransactionHistoryFilter`
 - `TransactionHistoryPage`
 
-Controller code should use this public API instead of calling libdnf5 directly.
-RPM comparison helpers also go through this facade so table sorting does not
-include libdnf5 headers.
+Controller code should use this public API for package rows, package details,
+installed-state answers, transaction history, and RPM comparisons. Table
+sorting also goes through this facade so UI code does not include libdnf5
+headers.
+
+`BaseManager` is the separate backend lifecycle coordinator. Async controllers
+use it directly when they need Base generation checks, startup warmup,
+repository rebuilds, or memory release after package queries. That is an
+intentional boundary: controllers may coordinate Base lifetime through
+`BaseManager`, but package data and RPM rules still go through
+`dnf_backend.hpp`.
 
 ## BaseManager
 

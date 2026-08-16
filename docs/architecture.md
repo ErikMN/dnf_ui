@@ -156,6 +156,8 @@ The public backend API is [src/dnf_backend/dnf_backend.hpp](../src/dnf_backend/d
 It exposes small value types such as `PackageRow` and `PackageInstallState`.
 Resolved transaction previews are shared through
 [src/transaction/transaction_preview.hpp](../src/transaction/transaction_preview.hpp).
+Async controllers use `BaseManager` directly for backend lifecycle work such as
+generation checks, warmup, rebuilds, and memory release.
 
 The backend implementation is split by responsibility:
 

@@ -1,11 +1,11 @@
 // src/dnf_backend/dnf_backend.hpp
 // Public libdnf5 backend facade
 //
-// This header is the app-facing contract for the libdnf5 integration.
-// It keeps libdnf5 types out of the GTK controller layer by exposing value models.
-// The implementation owns Base access, rpmdb and repo queries, EVR comparison, cache updates, and package details.
+// This header is the app-facing package-data contract for the libdnf5 integration.
+// It keeps libdnf5 package types out of the GTK controller layer by exposing value models.
+// The implementation owns rpmdb and repo queries, EVR comparison, installed-state answers, and package details.
 //
-// Callers should depend only on the types and functions declared here.
+// UI callers use BaseManager separately when they need backend lifecycle coordination.
 // Helpers under the internal backend header are private implementation details for backend files.
 #pragma once
 
