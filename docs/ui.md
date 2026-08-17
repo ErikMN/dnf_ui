@@ -120,7 +120,8 @@ can be much larger than the normal compact result.
 [src/ui/refresh/repository_refresh_controller.cpp](../src/ui/refresh/repository_refresh_controller.cpp)
 owns the Refresh Repositories button workflow. It refreshes dnf5daemon metadata,
 rebuilds the libdnf5 Base, updates the lower-right progress text, and clears
-stale upgradable rows after repository metadata changes.
+stale upgradable rows after repository metadata changes. The same workflow can
+be started with F5.
 
 ### Package details controller
 

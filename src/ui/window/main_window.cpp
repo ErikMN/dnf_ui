@@ -31,7 +31,7 @@ struct MainWindowCleanupData {
 // -----------------------------------------------------------------------------
 static GtkWidget *create_window(GtkApplication *app);
 static gboolean toggle_stateful_window_action(GtkWidget *widget, const char *action_name);
-static void setup_shortcuts(GtkWidget *window, GtkWidget *entry);
+static void setup_shortcuts(GtkWidget *window, GtkWidget *entry, MainWindowUiState *widgets);
 static std::shared_ptr<MainWindowUiState> create_main_window_ui_state(const AppWidgets *ui);
 static void setup_css(MainWindowUiState *widgets);
 static void initialize_ui_state(MainWindowUiState *widgets);
@@ -85,9 +85,9 @@ toggle_stateful_window_action(GtkWidget *widget, const char *action_name)
 // Setup window keyboard shortcuts
 // -----------------------------------------------------------------------------
 static void
-setup_shortcuts(GtkWidget *window, GtkWidget *entry)
+setup_shortcuts(GtkWidget *window, GtkWidget *entry, MainWindowUiState *widgets)
 {
-  // Keyboard shortcuts for closing the window and focusing search.
+  // Keyboard shortcuts for closing the window and common package browsing actions.
   GtkEventController *shortcuts = GTK_EVENT_CONTROLLER(gtk_shortcut_controller_new());
   gtk_widget_add_controller(window, shortcuts);
 
@@ -169,6 +169,18 @@ setup_shortcuts(GtkWidget *window, GtkWidget *entry)
           NULL,
           NULL));
   gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), transaction_history);
+
+  // Refresh repositories with F5.
+  GtkShortcut *refresh_repositories =
+      gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_F5, static_cast<GdkModifierType>(0)),
+                       gtk_callback_action_new(
+                           +[](GtkWidget *, GVariant *, gpointer user_data) -> gboolean {
+                             repository_refresh_on_button_clicked(nullptr, user_data);
+                             return TRUE;
+                           },
+                           widgets,
+                           NULL));
+  gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), refresh_repositories);
 }
 
 // -----------------------------------------------------------------------------
@@ -665,7 +677,7 @@ main_window_create(GtkApplication *app)
   std::shared_ptr<MainWindowUiState> widgets = create_main_window_ui_state(&ui);
   GCancellable *startup_cancellable = g_cancellable_new();
 
-  setup_shortcuts(ui.window, ui.entry);
+  setup_shortcuts(ui.window, ui.entry, widgets.get());
   setup_css(widgets.get());
   initialize_ui_state(widgets.get());
   connect_signals(&ui, widgets.get());
