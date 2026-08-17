@@ -45,6 +45,18 @@ create_scrolled_text_view(const char *text, GtkWrapMode wrap_mode, GtkTextBuffer
   return scrolled;
 }
 
+static void
+append_button_group_separator(GtkWidget *box)
+{
+  GtkWidget *separator = gtk_separator_new(GTK_ORIENTATION_VERTICAL);
+  gtk_widget_add_css_class(separator, "button-group-separator");
+  gtk_widget_set_valign(separator, GTK_ALIGN_CENTER);
+  gtk_widget_set_size_request(separator, 1, 24);
+  gtk_widget_set_margin_start(separator, 6);
+  gtk_widget_set_margin_end(separator, 6);
+  gtk_box_append(GTK_BOX(box), separator);
+}
+
 // -----------------------------------------------------------------------------
 // Build all GTK widgets and main application layout.
 // -----------------------------------------------------------------------------
@@ -141,11 +153,14 @@ main_window_build_layout(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_buttons), list_upgradeable_button);
   ui->list_upgradeable_button = list_upgradeable_button;
 
+  append_button_group_separator(hbox_buttons);
+
   GtkWidget *upgrade_all_button = ui_helpers_create_icon_button("view-refresh-symbolic", _("Upgrade All"));
   gtk_box_append(GTK_BOX(hbox_buttons), upgrade_all_button);
   ui->upgrade_all_button = upgrade_all_button;
 
   // Starts repository refresh on a background task.
+  append_button_group_separator(hbox_buttons);
   GtkWidget *refresh_button = ui_helpers_create_icon_button("view-refresh-symbolic", _("Refresh Repositories"));
   gtk_box_append(GTK_BOX(hbox_buttons), refresh_button);
   ui->refresh_button = refresh_button;
@@ -171,6 +186,8 @@ main_window_build_layout(AppWidgets *ui)
       ui_helpers_create_icon_button("object-select-symbolic", _("Mark Listed Upgrades"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), mark_listed_upgrades_button);
   ui->mark_listed_upgrades_button = mark_listed_upgrades_button;
+
+  append_button_group_separator(hbox_tx_buttons);
 
   GtkWidget *apply_button = ui_helpers_create_icon_button("object-select-symbolic", _("Apply Transactions"));
   gtk_widget_add_css_class(apply_button, "suggested-action");
