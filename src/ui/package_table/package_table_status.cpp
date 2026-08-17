@@ -230,7 +230,7 @@ pending_icon_name(PendingAction::Type action_type, PackageInstallState)
   case PendingAction::INSTALL:
     return "list-add-symbolic";
   case PendingAction::UPGRADE:
-    return "software-update-available-symbolic";
+    return "view-refresh-symbolic";
   case PendingAction::DOWNGRADE:
     return "document-revert-symbolic";
   case PendingAction::REINSTALL:
@@ -254,7 +254,7 @@ status_icon_name(PackageInstallState state)
   case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
     return "drive-harddisk-system-symbolic";
   case PackageInstallState::UPGRADEABLE:
-    return "software-update-available-symbolic";
+    return "view-refresh-symbolic";
   case PackageInstallState::DOWNGRADEABLE:
     return "document-revert-symbolic";
   case PackageInstallState::AVAILABLE:

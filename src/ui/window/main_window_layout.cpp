@@ -149,14 +149,15 @@ main_window_build_layout(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_buttons), list_packages_button);
   ui->list_packages_button = list_packages_button;
 
-  GtkWidget *list_upgradeable_button =
-      ui_helpers_create_icon_button("software-update-available-symbolic", _("List Upgradable"));
+  GtkWidget *list_upgradeable_button = ui_helpers_create_icon_button_with_fallback(
+      "software-update-available-symbolic", "view-list-symbolic", _("List Upgradable"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_upgradeable_button);
   ui->list_upgradeable_button = list_upgradeable_button;
 
   append_button_group_separator(hbox_buttons);
 
-  GtkWidget *upgrade_all_button = ui_helpers_create_icon_button("software-update-urgent-symbolic", _("Upgrade All"));
+  GtkWidget *upgrade_all_button = ui_helpers_create_icon_button_with_fallback(
+      "software-update-urgent-symbolic", "view-refresh-symbolic", _("Upgrade All"));
   gtk_box_append(GTK_BOX(hbox_buttons), upgrade_all_button);
   ui->upgrade_all_button = upgrade_all_button;
 
@@ -183,8 +184,8 @@ main_window_build_layout(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
   ui->remove_button = remove_button;
 
-  GtkWidget *mark_listed_upgrades_button =
-      ui_helpers_create_icon_button("software-update-available-symbolic", _("Mark Listed Upgrades"));
+  GtkWidget *mark_listed_upgrades_button = ui_helpers_create_icon_button_with_fallback(
+      "software-update-available-symbolic", "object-select-symbolic", _("Mark Listed Upgrades"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), mark_listed_upgrades_button);
   ui->mark_listed_upgrades_button = mark_listed_upgrades_button;
 

@@ -12,7 +12,44 @@ namespace {
 constexpr const char *ICON_BUTTON_IMAGE_KEY = "dnfui-icon-button-image";
 constexpr const char *ICON_BUTTON_LABEL_KEY = "dnfui-icon-button-label";
 
+static bool
+icon_theme_has_icon(const char *icon_name)
+{
+  if (!icon_name || icon_name[0] == '\0') {
+    return false;
+  }
+
+  GdkDisplay *display = gdk_display_get_default();
+  if (!display) {
+    return true;
+  }
+
+  GtkIconTheme *theme = gtk_icon_theme_get_for_display(display);
+  if (!theme) {
+    return true;
+  }
+
+  return gtk_icon_theme_has_icon(theme, icon_name);
+}
+
 } // namespace
+
+// -----------------------------------------------------------------------------
+// Resolve an icon name against the current GTK icon theme.
+// -----------------------------------------------------------------------------
+const char *
+ui_helpers_icon_name_with_fallback(const char *icon_name, const char *fallback_icon_name)
+{
+  if (icon_theme_has_icon(icon_name)) {
+    return icon_name;
+  }
+
+  if (fallback_icon_name && fallback_icon_name[0] != '\0') {
+    return fallback_icon_name;
+  }
+
+  return icon_name;
+}
 
 // -----------------------------------------------------------------------------
 // Create a button containing an icon and label.
@@ -24,6 +61,15 @@ ui_helpers_create_icon_button(const char *icon_name, const char *label)
   ui_helpers_set_icon_button(GTK_BUTTON(button), icon_name, label);
 
   return button;
+}
+
+// -----------------------------------------------------------------------------
+// Create a button with an icon fallback for themes that miss the preferred icon.
+// -----------------------------------------------------------------------------
+GtkWidget *
+ui_helpers_create_icon_button_with_fallback(const char *icon_name, const char *fallback_icon_name, const char *label)
+{
+  return ui_helpers_create_icon_button(ui_helpers_icon_name_with_fallback(icon_name, fallback_icon_name), label);
 }
 
 // -----------------------------------------------------------------------------
@@ -61,6 +107,18 @@ ui_helpers_set_icon_button(GtkButton *button, const char *icon_name, const char 
   gtk_image_set_from_icon_name(GTK_IMAGE(image), has_icon ? icon_name : nullptr);
   gtk_widget_set_visible(image, has_icon);
   gtk_label_set_text(GTK_LABEL(label_widget), label ? label : "");
+}
+
+// -----------------------------------------------------------------------------
+// Update the icon and label with a fallback icon.
+// -----------------------------------------------------------------------------
+void
+ui_helpers_set_icon_button_with_fallback(GtkButton *button,
+                                         const char *icon_name,
+                                         const char *fallback_icon_name,
+                                         const char *label)
+{
+  ui_helpers_set_icon_button(button, ui_helpers_icon_name_with_fallback(icon_name, fallback_icon_name), label);
 }
 
 // -----------------------------------------------------------------------------

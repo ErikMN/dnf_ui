@@ -43,7 +43,7 @@ install_context_menu_icon(const PendingTransactionSelectionActions &actions)
   }
 
   if (actions.rows.install_is_upgrade) {
-    return "software-update-available-symbolic";
+    return ui_helpers_icon_name_with_fallback("software-update-available-symbolic", "view-refresh-symbolic");
   }
 
   if (actions.rows.install_is_downgrade) {
