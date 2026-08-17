@@ -63,7 +63,7 @@ update_apply_button(MainWindowUiState *widgets)
     apply_label += " (" + std::to_string(pending_count) + ")";
   }
 
-  ui_helpers_set_icon_button(widgets->transaction_widgets.apply_button, "object-select-symbolic", apply_label.c_str());
+  ui_helpers_set_icon_button(widgets->transaction_widgets.apply_button, "system-run-symbolic", apply_label.c_str());
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.apply_button), has_pending);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.clear_pending_button), has_pending);
 }
@@ -194,26 +194,26 @@ pending_transaction_update_action_button_labels_for_selection(MainWindowUiState 
   if (pending_install || pending_upgrade || pending_downgrade) {
     ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "edit-clear-symbolic", unmark_install);
     ui_helpers_set_icon_button(
-        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
+        widgets->transaction_widgets.remove_button, "user-trash-symbolic", _("Mark for Removal"));
     ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
+        widgets->transaction_widgets.reinstall_button, "document-revert-symbolic", _("Mark for Reinstall"));
   } else if (pending_reinstall) {
     ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
     ui_helpers_set_icon_button(
-        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
+        widgets->transaction_widgets.remove_button, "user-trash-symbolic", _("Mark for Removal"));
     ui_helpers_set_icon_button(
         widgets->transaction_widgets.reinstall_button, "edit-clear-symbolic", _("Unmark Reinstall"));
   } else if (pending_remove) {
     ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
     ui_helpers_set_icon_button(widgets->transaction_widgets.remove_button, "edit-clear-symbolic", _("Unmark Removal"));
     ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
+        widgets->transaction_widgets.reinstall_button, "document-revert-symbolic", _("Mark for Reinstall"));
   } else {
     ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
     ui_helpers_set_icon_button(
-        widgets->transaction_widgets.remove_button, "list-remove-symbolic", _("Mark for Removal"));
+        widgets->transaction_widgets.remove_button, "user-trash-symbolic", _("Mark for Removal"));
     ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "view-refresh-symbolic", _("Mark for Reinstall"));
+        widgets->transaction_widgets.reinstall_button, "document-revert-symbolic", _("Mark for Reinstall"));
   }
 }
 

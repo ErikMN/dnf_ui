@@ -227,7 +227,7 @@ set_preview_request_busy_state(MainWindowUiState *widgets, bool busy)
 
   if (busy) {
     ui_helpers_set_icon_button(
-        widgets->transaction_widgets.apply_button, "object-select-symbolic", _("Preparing Preview..."));
+        widgets->transaction_widgets.apply_button, "system-run-symbolic", _("Preparing Preview..."));
     return;
   }
 }

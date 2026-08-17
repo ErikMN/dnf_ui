@@ -8,6 +8,7 @@
 #include "i18n.hpp"
 #include "ui/transaction/pending_transaction_action_rows.hpp"
 #include "ui/transaction/pending_transaction_controller.hpp"
+#include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
 
 // -----------------------------------------------------------------------------
@@ -16,15 +17,40 @@
 static void
 append_context_menu_action(GtkBox *box,
                            const char *label,
+                           const char *icon_name,
                            gboolean sensitive,
                            GCallback callback,
                            MainWindowUiState *widgets)
 {
-  GtkWidget *button = gtk_button_new_with_label(label);
+  GtkWidget *button = ui_helpers_create_icon_button(icon_name, label);
   gtk_widget_set_halign(button, GTK_ALIGN_FILL);
+  if (GtkWidget *child = gtk_button_get_child(GTK_BUTTON(button))) {
+    gtk_widget_set_halign(child, GTK_ALIGN_START);
+  }
   gtk_widget_set_sensitive(button, sensitive);
   g_signal_connect(button, "clicked", callback, widgets);
   gtk_box_append(box, button);
+}
+
+// -----------------------------------------------------------------------------
+// Return the icon for the install-side context-menu action.
+// -----------------------------------------------------------------------------
+static const char *
+install_context_menu_icon(const PendingTransactionSelectionActions &actions)
+{
+  if (actions.install_is_pending) {
+    return "edit-clear-symbolic";
+  }
+
+  if (actions.rows.install_is_upgrade) {
+    return "software-update-available-symbolic";
+  }
+
+  if (actions.rows.install_is_downgrade) {
+    return "document-revert-symbolic";
+  }
+
+  return "list-add-symbolic";
 }
 
 // -----------------------------------------------------------------------------
@@ -95,6 +121,7 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              install_label,
+                             install_context_menu_icon(actions),
                              actions.can_install,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
@@ -106,6 +133,7 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              remove_label,
+                             actions.remove_is_pending ? "edit-clear-symbolic" : "user-trash-symbolic",
                              actions.can_remove,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {
@@ -117,6 +145,7 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              reinstall_label,
+                             actions.reinstall_is_pending ? "edit-clear-symbolic" : "document-revert-symbolic",
                              actions.can_reinstall,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {

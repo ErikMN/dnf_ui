@@ -272,10 +272,11 @@ package_query_begin_package_list_request(MainWindowUiState *widgets,
 
   package_query_clear_duration_label(widgets);
 
-  ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", _("Search"));
-  ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", _("List Installed"));
-  ui_helpers_set_icon_button(widgets->query.list_packages_button, "view-list-symbolic", _("List Packages"));
-  ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", _("List Upgradable"));
+  ui_helpers_set_icon_button(widgets->query.search_button, "edit-find-symbolic", _("Search"));
+  ui_helpers_set_icon_button(widgets->query.list_button, "drive-harddisk-system-symbolic", _("List Installed"));
+  ui_helpers_set_icon_button(widgets->query.list_packages_button, "package-x-generic-symbolic", _("List Packages"));
+  ui_helpers_set_icon_button(
+      widgets->query.list_upgradeable_button, "software-update-available-symbolic", _("List Upgradable"));
   ui_helpers_set_icon_button(stop_button, "process-stop-symbolic", _("Stop"));
   package_query_set_idle_controls_sensitive(widgets, false);
   if (widgets->transaction_widgets.mark_listed_upgrades_button) {
@@ -294,10 +295,11 @@ restore_package_list_controls(MainWindowUiState *widgets)
     return;
   }
 
-  ui_helpers_set_icon_button(widgets->query.search_button, "system-search-symbolic", _("Search"));
-  ui_helpers_set_icon_button(widgets->query.list_button, "view-list-symbolic", _("List Installed"));
-  ui_helpers_set_icon_button(widgets->query.list_packages_button, "view-list-symbolic", _("List Packages"));
-  ui_helpers_set_icon_button(widgets->query.list_upgradeable_button, "view-list-symbolic", _("List Upgradable"));
+  ui_helpers_set_icon_button(widgets->query.search_button, "edit-find-symbolic", _("Search"));
+  ui_helpers_set_icon_button(widgets->query.list_button, "drive-harddisk-system-symbolic", _("List Installed"));
+  ui_helpers_set_icon_button(widgets->query.list_packages_button, "package-x-generic-symbolic", _("List Packages"));
+  ui_helpers_set_icon_button(
+      widgets->query.list_upgradeable_button, "software-update-available-symbolic", _("List Upgradable"));
   package_query_set_idle_controls_sensitive(widgets, true);
   if (widgets->transaction_widgets.mark_listed_upgrades_button) {
     bool transaction_busy =

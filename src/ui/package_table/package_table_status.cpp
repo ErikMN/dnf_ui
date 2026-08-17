@@ -230,13 +230,13 @@ pending_icon_name(PendingAction::Type action_type, PackageInstallState)
   case PendingAction::INSTALL:
     return "list-add-symbolic";
   case PendingAction::UPGRADE:
-    return "view-refresh-symbolic";
+    return "software-update-available-symbolic";
   case PendingAction::DOWNGRADE:
-    return "view-refresh-symbolic";
+    return "document-revert-symbolic";
   case PendingAction::REINSTALL:
-    return "view-refresh-symbolic";
+    return "document-revert-symbolic";
   case PendingAction::REMOVE:
-    return "list-remove-symbolic";
+    return "user-trash-symbolic";
   }
 
   return nullptr;
@@ -252,11 +252,11 @@ status_icon_name(PackageInstallState state)
   case PackageInstallState::INSTALLED:
   case PackageInstallState::LOCAL_ONLY:
   case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
-    return "object-select-symbolic";
+    return "drive-harddisk-system-symbolic";
   case PackageInstallState::UPGRADEABLE:
-    return "view-refresh-symbolic";
+    return "software-update-available-symbolic";
   case PackageInstallState::DOWNGRADEABLE:
-    return "view-refresh-symbolic";
+    return "document-revert-symbolic";
   case PackageInstallState::AVAILABLE:
   default:
     return "list-add-symbolic";

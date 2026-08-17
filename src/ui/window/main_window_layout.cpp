@@ -114,7 +114,7 @@ main_window_build_layout(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_search), entry);
   ui->entry = entry;
 
-  GtkWidget *search_button = ui_helpers_create_icon_button("system-search-symbolic", _("Search"));
+  GtkWidget *search_button = ui_helpers_create_icon_button("edit-find-symbolic", _("Search"));
   gtk_box_append(GTK_BOX(hbox_search), search_button);
   ui->search_button = search_button;
 
@@ -141,21 +141,22 @@ main_window_build_layout(AppWidgets *ui)
   gtk_widget_add_css_class(hbox_buttons, "control-row");
   gtk_box_append(GTK_BOX(controls_box), hbox_buttons);
 
-  GtkWidget *list_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Installed"));
+  GtkWidget *list_button = ui_helpers_create_icon_button("drive-harddisk-system-symbolic", _("List Installed"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_button);
   ui->list_button = list_button;
 
-  GtkWidget *list_packages_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Packages"));
+  GtkWidget *list_packages_button = ui_helpers_create_icon_button("package-x-generic-symbolic", _("List Packages"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_packages_button);
   ui->list_packages_button = list_packages_button;
 
-  GtkWidget *list_upgradeable_button = ui_helpers_create_icon_button("view-list-symbolic", _("List Upgradable"));
+  GtkWidget *list_upgradeable_button =
+      ui_helpers_create_icon_button("software-update-available-symbolic", _("List Upgradable"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_upgradeable_button);
   ui->list_upgradeable_button = list_upgradeable_button;
 
   append_button_group_separator(hbox_buttons);
 
-  GtkWidget *upgrade_all_button = ui_helpers_create_icon_button("view-refresh-symbolic", _("Upgrade All"));
+  GtkWidget *upgrade_all_button = ui_helpers_create_icon_button("software-update-urgent-symbolic", _("Upgrade All"));
   gtk_box_append(GTK_BOX(hbox_buttons), upgrade_all_button);
   ui->upgrade_all_button = upgrade_all_button;
 
@@ -174,22 +175,22 @@ main_window_build_layout(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_tx_buttons), install_button);
   ui->install_button = install_button;
 
-  GtkWidget *reinstall_button = ui_helpers_create_icon_button("view-refresh-symbolic", _("Mark for Reinstall"));
+  GtkWidget *reinstall_button = ui_helpers_create_icon_button("document-revert-symbolic", _("Mark for Reinstall"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), reinstall_button);
   ui->reinstall_button = reinstall_button;
 
-  GtkWidget *remove_button = ui_helpers_create_icon_button("list-remove-symbolic", _("Mark for Removal"));
+  GtkWidget *remove_button = ui_helpers_create_icon_button("user-trash-symbolic", _("Mark for Removal"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), remove_button);
   ui->remove_button = remove_button;
 
   GtkWidget *mark_listed_upgrades_button =
-      ui_helpers_create_icon_button("object-select-symbolic", _("Mark Listed Upgrades"));
+      ui_helpers_create_icon_button("software-update-available-symbolic", _("Mark Listed Upgrades"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), mark_listed_upgrades_button);
   ui->mark_listed_upgrades_button = mark_listed_upgrades_button;
 
   append_button_group_separator(hbox_tx_buttons);
 
-  GtkWidget *apply_button = ui_helpers_create_icon_button("object-select-symbolic", _("Apply Transactions"));
+  GtkWidget *apply_button = ui_helpers_create_icon_button("system-run-symbolic", _("Apply Transactions"));
   gtk_widget_add_css_class(apply_button, "suggested-action");
   gtk_box_append(GTK_BOX(hbox_tx_buttons), apply_button);
   ui->apply_button = apply_button;
