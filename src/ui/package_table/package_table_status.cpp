@@ -252,7 +252,7 @@ status_icon_name(PackageInstallState state)
   case PackageInstallState::INSTALLED:
   case PackageInstallState::LOCAL_ONLY:
   case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
-    return "object-select-symbolic";
+    return "drive-harddisk-system-symbolic";
   case PackageInstallState::UPGRADEABLE:
     return "view-refresh-symbolic";
   case PackageInstallState::DOWNGRADEABLE:
@@ -261,6 +261,46 @@ status_icon_name(PackageInstallState state)
   default:
     return "list-add-symbolic";
   }
+}
+
+// -----------------------------------------------------------------------------
+// Return the fallback icon name for a package install state.
+// -----------------------------------------------------------------------------
+static const char *
+status_icon_fallback_name(PackageInstallState state)
+{
+  switch (state) {
+  case PackageInstallState::INSTALLED:
+  case PackageInstallState::LOCAL_ONLY:
+  case PackageInstallState::INSTALLED_NEWER_THAN_REPO:
+    return "object-select-symbolic";
+  case PackageInstallState::UPGRADEABLE:
+  case PackageInstallState::DOWNGRADEABLE:
+  case PackageInstallState::AVAILABLE:
+  default:
+    return nullptr;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Set a status icon with a fallback icon name.
+// -----------------------------------------------------------------------------
+static void
+status_image_set_icon(GtkImage *image, const char *icon_name, const char *fallback_icon_name)
+{
+  if (!image) {
+    return;
+  }
+
+  if (icon_name && icon_name[0] != '\0' && fallback_icon_name && fallback_icon_name[0] != '\0') {
+    GIcon *gicon = g_themed_icon_new(icon_name);
+    g_themed_icon_append_name(G_THEMED_ICON(gicon), fallback_icon_name);
+    gtk_image_set_from_gicon(image, gicon);
+    g_object_unref(gicon);
+    return;
+  }
+
+  gtk_image_set_from_icon_name(image, icon_name);
 }
 
 // -----------------------------------------------------------------------------
@@ -321,7 +361,8 @@ package_table_update_resolved_status_label(GtkWidget *cell,
   package_table_clear_status_css(cell);
 
   if (GtkWidget *icon = status_cell_icon(cell)) {
-    gtk_image_set_from_icon_name(GTK_IMAGE(icon), icon_name);
+    const char *fallback_icon_name = has_pending_action ? nullptr : status_icon_fallback_name(install_state);
+    status_image_set_icon(GTK_IMAGE(icon), icon_name, fallback_icon_name);
     gtk_widget_set_visible(icon, icon_name != nullptr);
   }
 
