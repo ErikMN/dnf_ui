@@ -141,11 +141,13 @@ main_window_build_layout(AppWidgets *ui)
   gtk_widget_add_css_class(hbox_buttons, "control-row");
   gtk_box_append(GTK_BOX(controls_box), hbox_buttons);
 
-  GtkWidget *list_button = ui_helpers_create_icon_button("drive-harddisk-system-symbolic", _("List Installed"));
+  GtkWidget *list_button = ui_helpers_create_icon_button_with_fallback(
+      "drive-harddisk-system-symbolic", "view-list-symbolic", _("List Installed"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_button);
   ui->list_button = list_button;
 
-  GtkWidget *list_packages_button = ui_helpers_create_icon_button("package-x-generic-symbolic", _("List Packages"));
+  GtkWidget *list_packages_button = ui_helpers_create_icon_button_with_fallback(
+      "package-x-generic-symbolic", "view-list-symbolic", _("List Packages"));
   gtk_box_append(GTK_BOX(hbox_buttons), list_packages_button);
   ui->list_packages_button = list_packages_button;
 
@@ -176,7 +178,8 @@ main_window_build_layout(AppWidgets *ui)
   gtk_box_append(GTK_BOX(hbox_tx_buttons), install_button);
   ui->install_button = install_button;
 
-  GtkWidget *reinstall_button = ui_helpers_create_icon_button("document-revert-symbolic", _("Mark for Reinstall"));
+  GtkWidget *reinstall_button = ui_helpers_create_icon_button_with_fallback(
+      "document-revert-symbolic", "view-refresh-symbolic", _("Mark for Reinstall"));
   gtk_box_append(GTK_BOX(hbox_tx_buttons), reinstall_button);
   ui->reinstall_button = reinstall_button;
 

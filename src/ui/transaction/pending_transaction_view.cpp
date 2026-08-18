@@ -195,8 +195,10 @@ pending_transaction_update_action_button_labels_for_selection(MainWindowUiState 
     ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "edit-clear-symbolic", unmark_install);
     ui_helpers_set_icon_button(
         widgets->transaction_widgets.remove_button, "user-trash-symbolic", _("Mark for Removal"));
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "document-revert-symbolic", _("Mark for Reinstall"));
+    ui_helpers_set_icon_button_with_fallback(widgets->transaction_widgets.reinstall_button,
+                                             "document-revert-symbolic",
+                                             "view-refresh-symbolic",
+                                             _("Mark for Reinstall"));
   } else if (pending_reinstall) {
     ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
     ui_helpers_set_icon_button(
@@ -206,14 +208,18 @@ pending_transaction_update_action_button_labels_for_selection(MainWindowUiState 
   } else if (pending_remove) {
     ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
     ui_helpers_set_icon_button(widgets->transaction_widgets.remove_button, "edit-clear-symbolic", _("Unmark Removal"));
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "document-revert-symbolic", _("Mark for Reinstall"));
+    ui_helpers_set_icon_button_with_fallback(widgets->transaction_widgets.reinstall_button,
+                                             "document-revert-symbolic",
+                                             "view-refresh-symbolic",
+                                             _("Mark for Reinstall"));
   } else {
     ui_helpers_set_icon_button(widgets->transaction_widgets.install_button, "list-add-symbolic", mark_install);
     ui_helpers_set_icon_button(
         widgets->transaction_widgets.remove_button, "user-trash-symbolic", _("Mark for Removal"));
-    ui_helpers_set_icon_button(
-        widgets->transaction_widgets.reinstall_button, "document-revert-symbolic", _("Mark for Reinstall"));
+    ui_helpers_set_icon_button_with_fallback(widgets->transaction_widgets.reinstall_button,
+                                             "document-revert-symbolic",
+                                             "view-refresh-symbolic",
+                                             _("Mark for Reinstall"));
   }
 }
 

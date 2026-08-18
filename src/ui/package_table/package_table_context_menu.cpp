@@ -47,7 +47,7 @@ install_context_menu_icon(const PendingTransactionSelectionActions &actions)
   }
 
   if (actions.rows.install_is_downgrade) {
-    return "document-revert-symbolic";
+    return ui_helpers_icon_name_with_fallback("document-revert-symbolic", "view-refresh-symbolic");
   }
 
   return "list-add-symbolic";
@@ -145,7 +145,9 @@ package_table_show_context_menu(GtkWidget *anchor,
 
   append_context_menu_action(GTK_BOX(box),
                              reinstall_label,
-                             actions.reinstall_is_pending ? "edit-clear-symbolic" : "document-revert-symbolic",
+                             actions.reinstall_is_pending ? "edit-clear-symbolic"
+                                                          : ui_helpers_icon_name_with_fallback(
+                                                                "document-revert-symbolic", "view-refresh-symbolic"),
                              actions.can_reinstall,
                              G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
                                if (GtkWidget *popover = gtk_widget_get_ancestor(GTK_WIDGET(button), GTK_TYPE_POPOVER)) {

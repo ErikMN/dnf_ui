@@ -273,8 +273,10 @@ package_query_begin_package_list_request(MainWindowUiState *widgets,
   package_query_clear_duration_label(widgets);
 
   ui_helpers_set_icon_button(widgets->query.search_button, "edit-find-symbolic", _("Search"));
-  ui_helpers_set_icon_button(widgets->query.list_button, "drive-harddisk-system-symbolic", _("List Installed"));
-  ui_helpers_set_icon_button(widgets->query.list_packages_button, "package-x-generic-symbolic", _("List Packages"));
+  ui_helpers_set_icon_button_with_fallback(
+      widgets->query.list_button, "drive-harddisk-system-symbolic", "view-list-symbolic", _("List Installed"));
+  ui_helpers_set_icon_button_with_fallback(
+      widgets->query.list_packages_button, "package-x-generic-symbolic", "view-list-symbolic", _("List Packages"));
   ui_helpers_set_icon_button_with_fallback(widgets->query.list_upgradeable_button,
                                            "software-update-available-symbolic",
                                            "view-list-symbolic",
@@ -298,8 +300,10 @@ restore_package_list_controls(MainWindowUiState *widgets)
   }
 
   ui_helpers_set_icon_button(widgets->query.search_button, "edit-find-symbolic", _("Search"));
-  ui_helpers_set_icon_button(widgets->query.list_button, "drive-harddisk-system-symbolic", _("List Installed"));
-  ui_helpers_set_icon_button(widgets->query.list_packages_button, "package-x-generic-symbolic", _("List Packages"));
+  ui_helpers_set_icon_button_with_fallback(
+      widgets->query.list_button, "drive-harddisk-system-symbolic", "view-list-symbolic", _("List Installed"));
+  ui_helpers_set_icon_button_with_fallback(
+      widgets->query.list_packages_button, "package-x-generic-symbolic", "view-list-symbolic", _("List Packages"));
   ui_helpers_set_icon_button_with_fallback(widgets->query.list_upgradeable_button,
                                            "software-update-available-symbolic",
                                            "view-list-symbolic",
