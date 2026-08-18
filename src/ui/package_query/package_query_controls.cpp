@@ -281,7 +281,8 @@ package_query_begin_package_list_request(MainWindowUiState *widgets,
                                            "software-update-available-symbolic",
                                            "view-list-symbolic",
                                            _("List Upgradable"));
-  ui_helpers_set_icon_button(stop_button, "process-stop-symbolic", _("Stop"));
+  ui_helpers_set_icon_button_with_fallback(
+      stop_button, "process-stop-symbolic", "media-playback-stop-symbolic", _("Stop"));
   package_query_set_idle_controls_sensitive(widgets, false);
   if (widgets->transaction_widgets.mark_listed_upgrades_button) {
     gtk_widget_set_sensitive(GTK_WIDGET(widgets->transaction_widgets.mark_listed_upgrades_button), FALSE);

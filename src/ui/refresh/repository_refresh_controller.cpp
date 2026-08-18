@@ -188,7 +188,8 @@ repository_refresh_set_button_stop(MainWindowUiState *widgets)
     return;
   }
 
-  ui_helpers_set_icon_button(widgets->query.refresh_button, "process-stop-symbolic", _("Stop"));
+  ui_helpers_set_icon_button_with_fallback(
+      widgets->query.refresh_button, "process-stop-symbolic", "media-playback-stop-symbolic", _("Stop"));
 }
 
 // -----------------------------------------------------------------------------
