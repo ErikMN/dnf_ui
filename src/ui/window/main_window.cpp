@@ -139,6 +139,20 @@ setup_shortcuts(GtkWidget *window, GtkWidget *entry, MainWindowUiState *widgets)
                            NULL));
   gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), export_package_list);
 
+  // Apply pending transactions from the keyboard.
+  auto apply_transactions_callback = +[](GtkWidget *widget, GVariant *, gpointer) -> gboolean {
+    return gtk_widget_activate_action(widget, "win.apply-transactions", NULL);
+  };
+  GtkShortcut *apply_transactions_return =
+      gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_Return, GDK_CONTROL_MASK),
+                       gtk_callback_action_new(apply_transactions_callback, NULL, NULL));
+  gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), apply_transactions_return);
+
+  GtkShortcut *apply_transactions_keypad =
+      gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_KP_Enter, GDK_CONTROL_MASK),
+                       gtk_callback_action_new(apply_transactions_callback, NULL, NULL));
+  gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), apply_transactions_keypad);
+
   // Toggle Package Info Panel with Ctrl+I.
   GtkShortcut *toggle_info = gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_i, GDK_CONTROL_MASK),
                                               gtk_callback_action_new(

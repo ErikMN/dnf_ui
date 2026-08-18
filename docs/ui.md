@@ -252,6 +252,8 @@ It is responsible for:
 - clearing pending actions after a successful apply
 - refreshing package state after apply
 
+Ctrl+Enter starts the same pending-transaction preview as the Apply button.
+
 The pending action data model is this header:
 [src/ui/transaction/pending_transaction_state.hpp](../src/ui/transaction/pending_transaction_state.hpp).
 Conversion from pending actions to a shared `TransactionRequest` lives in

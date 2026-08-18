@@ -11,6 +11,7 @@
 #include "ui/package_table/package_table_columns.hpp"
 #include "ui/package_table/package_table_export.hpp"
 #include "ui/package_table/package_table_view.hpp"
+#include "ui/transaction/pending_transaction_controller.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
 
@@ -106,6 +107,20 @@ on_menu_export_package_list(GSimpleAction *, GVariant *, gpointer user_data)
   }
 
   package_table_export_visible_rows_to_csv(data->widgets, GTK_WINDOW(data->window));
+}
+
+// -----------------------------------------------------------------------------
+// Apply pending package actions.
+// -----------------------------------------------------------------------------
+static void
+on_menu_apply_transactions(GSimpleAction *, GVariant *, gpointer user_data)
+{
+  MainMenuActionData *data = static_cast<MainMenuActionData *>(user_data);
+  if (!data || !data->widgets) {
+    return;
+  }
+
+  pending_transaction_on_apply_button_clicked(nullptr, data->widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -337,7 +352,7 @@ main_menu_connect_actions(const MainMenuWidgets &menu_widgets, MainWindowUiState
         delete static_cast<MainMenuActionData *>(p);
       });
 
-  GActionEntry entries[9] = {};
+  GActionEntry entries[10] = {};
   entries[0].name = "quit";
   entries[0].activate = on_menu_quit;
   entries[1].name = "clear-list";
@@ -358,6 +373,8 @@ main_menu_connect_actions(const MainMenuWidgets &menu_widgets, MainWindowUiState
   entries[7].activate = on_menu_export_package_list;
   entries[8].name = "transaction-history";
   entries[8].activate = on_menu_transaction_history;
+  entries[9].name = "apply-transactions";
+  entries[9].activate = on_menu_apply_transactions;
 
   GSimpleActionGroup *actions = g_simple_action_group_new();
   g_action_map_add_action_entries(G_ACTION_MAP(actions), entries, G_N_ELEMENTS(entries), data);
