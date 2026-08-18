@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.5.5
+Version:        0.5.6
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Tue Aug 18 2026 ErikMN <dnfui@proton.me> - 0.5.6-1
+- Add keyboard shortcuts for refreshing repositories and applying pending changes
+- Improve toolbar grouping and package action icons
+- Improve icon compatibility across GTK icon themes
+
 * Wed Aug 05 2026 ErikMN <dnfui@proton.me> - 0.5.5-1
 - Allow remove-only transactions in cold offline mode
 - Show clearer repository and package download errors
