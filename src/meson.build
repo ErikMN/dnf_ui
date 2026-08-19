@@ -68,7 +68,7 @@ gio_dep = dependency('gio-2.0')
 
 dnfui_backend_cli = executable(
   'dnfui-backend-cli',
-  backend_sources + daemon_client_sources + files(
+  backend_sources + daemon_client_sources + repository_client_sources + files(
     'cli/backend_cli.cpp',
     'i18n.cpp',
   ),
