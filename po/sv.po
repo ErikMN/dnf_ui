@@ -179,6 +179,24 @@ msgstr "Kunde inte markera uppgradera alla i dnf5daemon."
 msgid "Could not list upgrade targets from dnf5daemon."
 msgstr "Kunde inte lista uppgraderingsmål från dnf5daemon."
 
+msgid "dnf5daemon returned a repository without an ID."
+msgstr "dnf5daemon returnerade ett förråd utan ID."
+
+msgid "dnf5daemon returned a repository without a valid enabled state."
+msgstr "dnf5daemon returnerade ett förråd utan ett giltigt aktiverat läge."
+
+msgid "dnf5daemon returned an invalid repository list."
+msgstr "dnf5daemon returnerade en ogiltig förrådslista."
+
+msgid "dnf5daemon returned duplicate repository IDs."
+msgstr "dnf5daemon returnerade dubbla förråds-ID:n."
+
+msgid "dnf5daemon repository change failed."
+msgstr "dnf5daemon-förrådsändring misslyckades."
+
+msgid "Could not list repositories from dnf5daemon."
+msgstr "Kunde inte lista förråd från dnf5daemon."
+
 msgid "dnf5daemon transaction session is not available."
 msgstr "dnf5daemon-transaktionssessionen är inte tillgänglig."
 

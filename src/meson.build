@@ -13,6 +13,10 @@ daemon_client_sources = files(
   'dnf5daemon_client/transaction_service_client_wait.cpp',
 )
 
+repository_client_sources = files(
+  'dnf5daemon_client/repository_service_client.cpp',
+)
+
 app_sources = files(
   'app.cpp',
   'config.cpp',
@@ -50,7 +54,7 @@ app_sources = files(
 
 dnfui_app = executable(
   'dnfui',
-  backend_sources + daemon_client_sources + app_sources,
+  backend_sources + daemon_client_sources + repository_client_sources + app_sources,
   include_directories: src_inc,
   dependencies: [
     libdnf5_dep,

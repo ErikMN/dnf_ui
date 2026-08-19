@@ -13,6 +13,8 @@ TEST_BIN="$BUILD_DIR/test/dnfui-tests"
 STARTED_SYSTEM_BUS_PID=""
 INSTALL_SPEC="${DNFUI_TEST_DNF5DAEMON_INSTALL_SPEC:-cowsay}"
 INSTALL_NAME="${DNFUI_TEST_DNF5DAEMON_INSTALL_NAME:-$INSTALL_SPEC}"
+REPOSITORY_CLIENT_TEST_REPO_ID="${DNFUI_TEST_REPOSITORY_CLIENT_REPO_ID:-dnfui-repository-client-test}"
+REPOSITORY_CLIENT_TEST_REPO_FILE="/etc/yum.repos.d/${REPOSITORY_CLIENT_TEST_REPO_ID}.repo"
 
 start_system_bus() {
   mkdir -p /run/dbus
@@ -41,6 +43,21 @@ install_test_package() {
   rpm -q "$INSTALL_NAME" >/dev/null
 }
 
+setup_repository_client_test_repo() {
+  mkdir -p /tmp/dnfui-repository-client-test
+  cat >"$REPOSITORY_CLIENT_TEST_REPO_FILE" <<EOF
+[$REPOSITORY_CLIENT_TEST_REPO_ID]
+name=DNF UI Repository Client Test
+baseurl=file:///tmp/dnfui-repository-client-test
+enabled=0
+gpgcheck=0
+EOF
+}
+
+remove_repository_client_test_repo() {
+  rm -f "$REPOSITORY_CLIENT_TEST_REPO_FILE"
+}
+
 run_daemon_test() {
   local test_name="$1"
 
@@ -58,7 +75,7 @@ fi
 
 echo "*** Starting system bus for dnf5daemon tests ***"
 start_system_bus
-trap stop_system_bus EXIT
+trap 'remove_repository_client_test_repo; stop_system_bus' EXIT
 
 echo "*** Checking dnf5daemon D-Bus activation ***"
 gdbus introspect --system --dest org.rpm.dnf.v0 --object-path /org/rpm/dnf/v0 >/dev/null
@@ -66,6 +83,7 @@ gdbus introspect --system --dest org.rpm.dnf.v0 --object-path /org/rpm/dnf/v0 >/
 echo "*** Preparing package metadata ***"
 dnf5 makecache >/dev/null
 remove_test_package
+setup_repository_client_test_repo
 
 run_daemon_test "dnf5daemon client previews install requests"
 remove_test_package
@@ -82,6 +100,9 @@ run_daemon_test "dnf5daemon client lists upgrade targets"
 remove_test_package
 
 run_daemon_test "dnf5daemon client refreshes repositories"
+remove_test_package
+
+DNFUI_TEST_REPOSITORY_CLIENT=1 run_daemon_test "Repository client applies changes through fresh daemon sessions"
 remove_test_package
 
 run_daemon_test "dnf5daemon client releases preview sessions"

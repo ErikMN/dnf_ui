@@ -37,6 +37,7 @@ Key files:
 - [test/unit/test_package_table_sort.cpp](../test/unit/test_package_table_sort.cpp)
 - [test/unit/test_package_table_status.cpp](../test/unit/test_package_table_status.cpp)
 - [test/unit/test_pending_transaction_request.cpp](../test/unit/test_pending_transaction_request.cpp)
+- [test/unit/test_repository_service_client.cpp](../test/unit/test_repository_service_client.cpp)
 - [test/unit/test_search.cpp](../test/unit/test_search.cpp)
 - [test/unit/test_transaction_history.cpp](../test/unit/test_transaction_history.cpp)
 - [test/unit/test_transaction_request.cpp](../test/unit/test_transaction_request.cpp)
@@ -52,6 +53,7 @@ These tests protect:
 - package table CSV export formatting
 - package table column text and sorting behavior
 - dnf5daemon transaction preview parsing, upgrade-target parsing, and failure handling
+- dnf5daemon repository list parsing and repository enable or disable calls
 - daemon upgrade snapshot ownership, stale-state invalidation, and current-target validation
 - transaction history row formatting, action labels, and page cursor behavior
 - transaction request validation
@@ -61,7 +63,7 @@ These tests protect:
 
 The app now talks to DNF5 dnf5daemon for privileged transactions.
 Use Docker and native Fedora testing to verify upgrade-target listing, preview,
-apply, cancel, failure, and session cleanup behavior.
+apply, cancel, failure, session cleanup, and repository enable or disable behavior.
 
 ## Common commands
 
@@ -82,6 +84,11 @@ Run the dnf5daemon transaction client tests in Docker:
 ```sh
 make dockerdnf5daemontest
 ```
+
+That Docker target also creates a disposable disabled repository and verifies
+that the repository client can enable it and disable it again through fresh
+dnf5daemon sessions. The test repository does not need package metadata because
+repository listing and enabled-state changes do not load available package data.
 
 Run the dnf5daemon transaction client tests on native Fedora:
 

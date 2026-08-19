@@ -44,6 +44,7 @@ The application is split into five main areas:
 - libdnf5 backend
 - Shared transaction models
 - dnf5daemon transaction client
+- dnf5daemon repository client
 
 ```mermaid
 flowchart TD
@@ -65,10 +66,11 @@ process, and gives the app the package details needed for the table, search,
 installed packages, files, dependencies, changelog text, and read-only
 transaction history.
 
-dnf5daemon is used for transaction decisions and package changes. It is the
-service that resolves previews, applies transactions, handles Polkit
-authorization, and deals with repository signing keys. Anything that can change
-the system must go through dnf5daemon.
+dnf5daemon is used for transaction decisions, package changes, and privileged
+repository configuration. It is the service that resolves previews, applies
+transactions, handles Polkit authorization, persists repository enabled state,
+and deals with repository signing keys. Anything that can change the system
+must go through dnf5daemon.
 
 The daemon upgrade snapshot in [src/upgrade/daemon_upgrade_state.cpp](../src/upgrade/daemon_upgrade_state.cpp)
 stores the latest complete read-only upgrade-target result reported by dnf5daemon.
