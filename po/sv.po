@@ -751,6 +751,36 @@ msgstr "Fel vid listning av uppgraderbara paket."
 msgid "Error or no results."
 msgstr "Fel eller inga resultat."
 
+msgid "Enabled"
+msgstr "Aktiverat"
+
+msgid "Disabled"
+msgstr "Inaktiverat"
+
+msgid "Repository ID"
+msgstr "Förråds-ID"
+
+msgid "Repository load was cancelled."
+msgstr "Inläsning av förråd avbröts."
+
+msgid "Failed to load repositories."
+msgstr "Kunde inte läsa in förråd."
+
+#, c-format
+msgid "Showing %zu repository."
+msgid_plural "Showing %zu repositories."
+msgstr[0] "Visar %zu förråd."
+msgstr[1] "Visar %zu förråd."
+
+msgid "Repositories"
+msgstr "Förråd"
+
+msgid "Loading repositories..."
+msgstr "Läser in förråd..."
+
+msgid "Configured repositories"
+msgstr "Konfigurerade förråd"
+
 msgid "Refresh"
 msgstr "Uppdatera"
 
@@ -1256,6 +1286,9 @@ msgstr "Historikpanel"
 
 msgid "Package Info Panel"
 msgstr "Paketinfopanel"
+
+msgid "Repositories..."
+msgstr "Förråd..."
 
 msgid "Restore Default Columns"
 msgstr "Återställ standardkolumner"

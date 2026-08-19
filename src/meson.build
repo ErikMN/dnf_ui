@@ -40,6 +40,7 @@ app_sources = files(
   'ui/package_table/package_table_sort.cpp',
   'ui/package_table/package_table_status.cpp',
   'ui/package_table/package_table_view.cpp',
+  'ui/repository/repository_view.cpp',
   'ui/transaction/pending_transaction_apply.cpp',
   'ui/transaction/pending_transaction_controller.cpp',
   'ui/transaction/pending_transaction_request.cpp',

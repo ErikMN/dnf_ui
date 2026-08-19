@@ -13,6 +13,7 @@
 #include "ui/details/package_details_controller.hpp"
 #include "ui/package_query/package_query_controller.hpp"
 #include "ui/package_table/package_table_view.hpp"
+#include "ui/repository/repository_view.hpp"
 #include "ui/transaction/pending_transaction_controller.hpp"
 #include "ui/refresh/repository_refresh_controller.hpp"
 #include "dnf5daemon_client/transaction_service_client.hpp"
@@ -658,6 +659,7 @@ connect_cleanup(GtkWidget *window, std::shared_ptr<MainWindowUiState> widgets, G
                      }
                      widgets->window_state.destroyed = true;
                      transaction_history_close_window();
+                     repository_view_close_window();
                      if (widgets->window_state.backend_warmup_cancellable) {
                        g_cancellable_cancel(widgets->window_state.backend_warmup_cancellable);
                        g_object_unref(widgets->window_state.backend_warmup_cancellable);
