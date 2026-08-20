@@ -852,6 +852,7 @@ repository_view_add_review_section(GtkBox *box, const char *title, const std::ve
     GtkWidget *label = gtk_label_new(repo_id.c_str());
     gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
     gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+    gtk_widget_set_focusable(label, FALSE);
     gtk_box_append(box, label);
   }
 }
