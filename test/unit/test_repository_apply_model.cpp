@@ -82,5 +82,43 @@ TEST_CASE("Repository apply backend sync classification preserves Base state")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that daemon write outcome remains separate from later checks.
+// -----------------------------------------------------------------------------
+TEST_CASE("Repository apply write outcome keeps partial writes distinct")
+{
+  RepositoryWriteResult not_attempted;
+  not_attempted.enable_succeeded = false;
+  not_attempted.disable_succeeded = false;
+  REQUIRE(repository_apply_write_outcome(not_attempted) == RepositoryWriteOutcome::NOT_ATTEMPTED);
+
+  RepositoryWriteResult enable_failed;
+  enable_failed.enable_attempted = true;
+  enable_failed.enable_succeeded = false;
+  REQUIRE(repository_apply_write_outcome(enable_failed) == RepositoryWriteOutcome::FAILED);
+
+  RepositoryWriteResult disable_failed;
+  disable_failed.enable_attempted = true;
+  disable_failed.enable_succeeded = true;
+  disable_failed.disable_attempted = true;
+  disable_failed.disable_succeeded = false;
+  REQUIRE(repository_apply_write_outcome(disable_failed) == RepositoryWriteOutcome::PARTIAL);
+
+  RepositoryWriteResult succeeded;
+  succeeded.disable_attempted = true;
+  succeeded.disable_succeeded = true;
+  REQUIRE(repository_apply_write_outcome(succeeded) == RepositoryWriteOutcome::SUCCEEDED);
+}
+
+// -----------------------------------------------------------------------------
+// Verify final-state verification does not replace the daemon write result.
+// -----------------------------------------------------------------------------
+TEST_CASE("Repository apply verification outcome is classified separately")
+{
+  REQUIRE(repository_apply_verification_outcome(false, false) == RepositoryVerificationOutcome::UNAVAILABLE);
+  REQUIRE(repository_apply_verification_outcome(true, false) == RepositoryVerificationOutcome::MISMATCH);
+  REQUIRE(repository_apply_verification_outcome(true, true) == RepositoryVerificationOutcome::CONFIRMED);
+}
+
+// -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

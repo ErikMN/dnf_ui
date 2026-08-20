@@ -24,6 +24,20 @@ enum class RepositoryBackendSyncResult {
   FAILED,
 };
 
+enum class RepositoryWriteOutcome {
+  NOT_ATTEMPTED,
+  SUCCEEDED,
+  PARTIAL,
+  FAILED,
+};
+
+enum class RepositoryVerificationOutcome {
+  NOT_RUN,
+  CONFIRMED,
+  MISMATCH,
+  UNAVAILABLE,
+};
+
 // -----------------------------------------------------------------------------
 // Compare requested repository states with a fresh daemon list before writing.
 // -----------------------------------------------------------------------------
@@ -49,6 +63,16 @@ bool repository_apply_requested_states_match(const std::vector<RepositoryInfo> &
 // Convert the BaseManager rebuild result into the repository Apply result model.
 // -----------------------------------------------------------------------------
 RepositoryBackendSyncResult repository_apply_backend_sync_result(bool backend_rebuilt, BaseRepoState repo_state);
+
+// -----------------------------------------------------------------------------
+// Classify the daemon repository write result without using later verification.
+// -----------------------------------------------------------------------------
+RepositoryWriteOutcome repository_apply_write_outcome(const RepositoryWriteResult &write_result);
+
+// -----------------------------------------------------------------------------
+// Classify the final repository-state verification result.
+// -----------------------------------------------------------------------------
+RepositoryVerificationOutcome repository_apply_verification_outcome(bool state_loaded, bool requested_state_matches);
 
 // -----------------------------------------------------------------------------
 // EOF

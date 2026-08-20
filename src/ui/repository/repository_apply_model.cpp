@@ -103,6 +103,37 @@ repository_apply_backend_sync_result(bool backend_rebuilt, BaseRepoState repo_st
   return RepositoryBackendSyncResult::FAILED;
 }
 
+RepositoryWriteOutcome
+repository_apply_write_outcome(const RepositoryWriteResult &write_result)
+{
+  if (!write_result.enable_attempted && !write_result.disable_attempted) {
+    return RepositoryWriteOutcome::NOT_ATTEMPTED;
+  }
+
+  if (write_result.enable_attempted && !write_result.enable_succeeded) {
+    return RepositoryWriteOutcome::FAILED;
+  }
+
+  if (write_result.disable_attempted && !write_result.disable_succeeded) {
+    if (write_result.enable_attempted && write_result.enable_succeeded) {
+      return RepositoryWriteOutcome::PARTIAL;
+    }
+    return RepositoryWriteOutcome::FAILED;
+  }
+
+  return RepositoryWriteOutcome::SUCCEEDED;
+}
+
+RepositoryVerificationOutcome
+repository_apply_verification_outcome(bool state_loaded, bool requested_state_matches)
+{
+  if (!state_loaded) {
+    return RepositoryVerificationOutcome::UNAVAILABLE;
+  }
+
+  return requested_state_matches ? RepositoryVerificationOutcome::CONFIRMED : RepositoryVerificationOutcome::MISMATCH;
+}
+
 // -----------------------------------------------------------------------------
 // EOF
 // -----------------------------------------------------------------------------

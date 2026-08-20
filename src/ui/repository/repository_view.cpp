@@ -76,10 +76,10 @@ struct RepositoryApplyTaskData {
 
 struct RepositoryApplyTaskResult {
   bool sync_needed = false;
-  bool write_attempted = false;
   bool no_write_needed = false;
-  bool write_succeeded = false;
   bool clear_pending = false;
+  RepositoryWriteOutcome write_outcome = RepositoryWriteOutcome::NOT_ATTEMPTED;
+  RepositoryVerificationOutcome verification_outcome = RepositoryVerificationOutcome::NOT_RUN;
   RepositoryBackendSyncResult backend_sync_result = RepositoryBackendSyncResult::FAILED;
   bool repository_state_loaded = false;
   std::vector<RepositoryInfo> repositories;
@@ -255,12 +255,138 @@ repository_view_incomplete_main_status_for_backend_sync(RepositoryBackendSyncRes
 }
 
 // -----------------------------------------------------------------------------
+// Return true once a daemon write call reached dnf5daemon.
+// -----------------------------------------------------------------------------
+bool
+repository_view_write_was_attempted(RepositoryWriteOutcome outcome)
+{
+  return outcome != RepositoryWriteOutcome::NOT_ATTEMPTED;
+}
+
+// -----------------------------------------------------------------------------
+// Return true when the daemon write changed or may have changed repository state.
+// -----------------------------------------------------------------------------
+bool
+repository_view_write_may_have_changed_state(RepositoryWriteOutcome outcome)
+{
+  return outcome == RepositoryWriteOutcome::SUCCEEDED || outcome == RepositoryWriteOutcome::PARTIAL;
+}
+
+// -----------------------------------------------------------------------------
+// Return true when package data was rebuilt well enough to keep browsing.
+// -----------------------------------------------------------------------------
+bool
+repository_view_backend_is_available(RepositoryBackendSyncResult sync_result)
+{
+  return sync_result != RepositoryBackendSyncResult::FAILED;
+}
+
+// -----------------------------------------------------------------------------
+// Return the repository-window status for the completed Apply result.
+// -----------------------------------------------------------------------------
+const char *
+repository_view_window_status_for_result(const RepositoryApplyTaskResult &result)
+{
+  if (result.no_write_needed) {
+    if (repository_view_backend_is_available(result.backend_sync_result)) {
+      return repository_view_window_status_for_backend_sync(result.backend_sync_result, true);
+    }
+    return _("Repository state already matched the requested changes, but package data could not be reloaded.");
+  }
+
+  if (result.write_outcome == RepositoryWriteOutcome::NOT_ATTEMPTED ||
+      result.write_outcome == RepositoryWriteOutcome::FAILED) {
+    return _("Failed to apply repository changes.");
+  }
+
+  if (result.write_outcome == RepositoryWriteOutcome::PARTIAL) {
+    if (result.verification_outcome == RepositoryVerificationOutcome::UNAVAILABLE) {
+      return _("Some repository changes were applied, but final state could not be verified.");
+    }
+    return _("Some repository changes were applied.");
+  }
+
+  if (result.verification_outcome == RepositoryVerificationOutcome::UNAVAILABLE) {
+    return _("Repository changes were sent, but final state could not be verified.");
+  }
+
+  if (result.verification_outcome == RepositoryVerificationOutcome::MISMATCH) {
+    return _("Repository changes were sent, but final state did not match the request.");
+  }
+
+  if (!repository_view_backend_is_available(result.backend_sync_result)) {
+    return _("Repository changes applied, but package data could not be reloaded.");
+  }
+
+  return repository_view_window_status_for_backend_sync(result.backend_sync_result, false);
+}
+
+// -----------------------------------------------------------------------------
+// Return the main-window status for the completed Apply result.
+// -----------------------------------------------------------------------------
+const char *
+repository_view_main_status_for_result(const RepositoryApplyTaskResult &result)
+{
+  if (result.no_write_needed) {
+    if (repository_view_backend_is_available(result.backend_sync_result)) {
+      return repository_view_main_status_for_backend_sync(result.backend_sync_result, true);
+    }
+    return _("Repository state already matched the requested changes. Reload packages before continuing.");
+  }
+
+  if (!repository_view_write_may_have_changed_state(result.write_outcome)) {
+    return repository_view_incomplete_main_status_for_backend_sync(result.backend_sync_result);
+  }
+
+  if (result.verification_outcome == RepositoryVerificationOutcome::CONFIRMED &&
+      repository_view_backend_is_available(result.backend_sync_result)) {
+    return repository_view_main_status_for_backend_sync(result.backend_sync_result, false);
+  }
+
+  if (result.write_outcome == RepositoryWriteOutcome::SUCCEEDED &&
+      result.verification_outcome == RepositoryVerificationOutcome::CONFIRMED &&
+      !repository_view_backend_is_available(result.backend_sync_result)) {
+    return _("Repository changes applied. Reload packages before continuing.");
+  }
+
+  return repository_view_incomplete_main_status_for_backend_sync(result.backend_sync_result);
+}
+
+// -----------------------------------------------------------------------------
+// Return the main-window status color for the completed Apply result.
+// -----------------------------------------------------------------------------
+const char *
+repository_view_main_status_color_for_result(const RepositoryApplyTaskResult &result)
+{
+  if (result.write_outcome == RepositoryWriteOutcome::SUCCEEDED &&
+      result.verification_outcome == RepositoryVerificationOutcome::CONFIRMED &&
+      result.backend_sync_result == RepositoryBackendSyncResult::LIVE_METADATA) {
+    return "green";
+  }
+
+  if (result.no_write_needed && result.backend_sync_result == RepositoryBackendSyncResult::LIVE_METADATA) {
+    return "green";
+  }
+
+  if (result.no_write_needed && repository_view_backend_is_available(result.backend_sync_result)) {
+    return "blue";
+  }
+
+  if (result.write_outcome == RepositoryWriteOutcome::SUCCEEDED &&
+      result.verification_outcome == RepositoryVerificationOutcome::CONFIRMED &&
+      repository_view_backend_is_available(result.backend_sync_result)) {
+    return "blue";
+  }
+
+  return "red";
+}
+
+// -----------------------------------------------------------------------------
 // Update the main package view after repository configuration may have changed.
 // -----------------------------------------------------------------------------
 void
 repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState> &widgets,
-                                         RepositoryBackendSyncResult sync_result,
-                                         bool no_write_needed)
+                                         const RepositoryApplyTaskResult &result)
 {
   if (!widgets || widgets->window_state.destroyed) {
     return;
@@ -269,11 +395,10 @@ repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState
   package_query_clear_search_cache();
   DaemonUpgradeState::instance().mark_stale();
 
-  if (sync_result == RepositoryBackendSyncResult::FAILED) {
+  if (result.backend_sync_result == RepositoryBackendSyncResult::FAILED) {
     BaseManager::instance().drop_cached_base();
     package_query_on_clear_button_clicked(nullptr, widgets.get());
-    ui_helpers_set_status(
-        widgets->query.status_label, repository_view_main_status_for_backend_sync(sync_result, no_write_needed), "red");
+    ui_helpers_set_status(widgets->query.status_label, repository_view_main_status_for_result(result), "red");
     return;
   }
 
@@ -281,9 +406,9 @@ repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState
   if (!cleared_upgradeable_table) {
     package_query_reload_current_view(widgets.get());
   }
-  const char *color = sync_result == RepositoryBackendSyncResult::LIVE_METADATA ? "green" : "blue";
-  ui_helpers_set_status(
-      widgets->query.status_label, repository_view_main_status_for_backend_sync(sync_result, no_write_needed), color);
+  ui_helpers_set_status(widgets->query.status_label,
+                        repository_view_main_status_for_result(result),
+                        repository_view_main_status_color_for_result(result));
 }
 
 // -----------------------------------------------------------------------------
@@ -634,7 +759,6 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
   if (!plan.valid) {
     apply_result->error = plan.error;
     apply_result->clear_pending = true;
-    apply_result->write_succeeded = false;
     g_task_return_pointer(task, apply_result, [](gpointer p) { delete static_cast<RepositoryApplyTaskResult *>(p); });
     return;
   }
@@ -642,7 +766,6 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
   if (plan.enable_ids.empty() && plan.disable_ids.empty()) {
     apply_result->sync_needed = true;
     apply_result->no_write_needed = true;
-    apply_result->write_succeeded = true;
     apply_result->clear_pending = true;
     try {
       BaseRepoState repo_state = BaseManager::instance().rebuild(BaseRefreshMode::NORMAL);
@@ -656,14 +779,14 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
   }
 
   RepositoryWriteResult write_result = repository_service_client_apply_changes(plan.enable_ids, plan.disable_ids);
-  apply_result->write_attempted = write_result.enable_attempted || write_result.disable_attempted;
-  apply_result->sync_needed = apply_result->write_attempted;
-  apply_result->write_succeeded = write_result.enable_succeeded && write_result.disable_succeeded;
-  if (!apply_result->write_succeeded) {
+  apply_result->write_outcome = repository_apply_write_outcome(write_result);
+  apply_result->sync_needed = repository_view_write_was_attempted(apply_result->write_outcome);
+  if (apply_result->write_outcome == RepositoryWriteOutcome::FAILED ||
+      apply_result->write_outcome == RepositoryWriteOutcome::PARTIAL) {
     apply_result->error = write_result.error.empty() ? _("Repository change failed.") : write_result.error;
   }
 
-  if (apply_result->write_attempted) {
+  if (repository_view_write_was_attempted(apply_result->write_outcome)) {
     apply_result->clear_pending = true;
     try {
       BaseRepoState repo_state = BaseManager::instance().rebuild(BaseRefreshMode::NORMAL);
@@ -681,9 +804,10 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
     if (repository_service_client_list(repositories, list_error, nullptr)) {
       apply_result->repository_state_loaded = true;
       apply_result->repositories = std::move(repositories);
-      if (!repository_apply_requested_states_match(
-              apply_result->repositories, desired_enable_ids, desired_disable_ids)) {
-        apply_result->write_succeeded = false;
+      bool requested_states_match =
+          repository_apply_requested_states_match(apply_result->repositories, desired_enable_ids, desired_disable_ids);
+      apply_result->verification_outcome = repository_apply_verification_outcome(true, requested_states_match);
+      if (apply_result->verification_outcome == RepositoryVerificationOutcome::MISMATCH) {
         if (!apply_result->error.empty()) {
           apply_result->error += " ";
         }
@@ -691,6 +815,7 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
       }
     } else {
       apply_result->repository_state_loaded = false;
+      apply_result->verification_outcome = repository_apply_verification_outcome(false, false);
       if (!apply_result->error.empty()) {
         apply_result->error += " ";
       }
@@ -745,15 +870,14 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
   }
 
   if (apply_result->sync_needed) {
-    repository_view_refresh_main_after_apply(
-        main_widgets, apply_result->backend_sync_result, apply_result->no_write_needed);
+    repository_view_refresh_main_after_apply(main_widgets, *apply_result);
   }
 
   if (apply_result->clear_pending && apply_result->repository_state_loaded) {
     state->pending_enabled.clear();
     state->needs_reload = false;
     repository_view_render_repositories(state, apply_result->repositories);
-  } else if (apply_result->clear_pending && apply_result->write_attempted) {
+  } else if (apply_result->clear_pending && repository_view_write_was_attempted(apply_result->write_outcome)) {
     state->pending_enabled.clear();
     state->needs_reload = true;
   }
@@ -765,45 +889,12 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
 
   repository_view_set_loading(state, false);
 
-  if (apply_result->no_write_needed) {
-    if (apply_result->backend_sync_result != RepositoryBackendSyncResult::FAILED) {
-      const char *message = repository_view_window_status_for_backend_sync(apply_result->backend_sync_result,
-                                                                           apply_result->no_write_needed);
-      gtk_label_set_text(state->status_label, message);
-    } else {
-      std::string message = _("Failed to apply repository changes.");
-      if (!apply_result->error.empty()) {
-        message += " ";
-        message += apply_result->error;
-      }
-      gtk_label_set_text(state->status_label, message.c_str());
-    }
-    delete apply_result;
-    return;
+  std::string message = repository_view_window_status_for_result(*apply_result);
+  if (!apply_result->error.empty()) {
+    message += " ";
+    message += apply_result->error;
   }
-
-  const bool backend_synchronized = apply_result->backend_sync_result != RepositoryBackendSyncResult::FAILED;
-  const bool apply_complete =
-      apply_result->write_succeeded && backend_synchronized && apply_result->repository_state_loaded;
-  if (!apply_complete) {
-    std::string message = _("Failed to apply repository changes.");
-    if (!apply_result->error.empty()) {
-      message += " ";
-      message += apply_result->error;
-    }
-    gtk_label_set_text(state->status_label, message.c_str());
-    if (main_widgets && !main_widgets->window_state.destroyed && backend_synchronized) {
-      ui_helpers_set_status(main_widgets->query.status_label,
-                            repository_view_incomplete_main_status_for_backend_sync(apply_result->backend_sync_result),
-                            "red");
-    }
-    delete apply_result;
-    return;
-  }
-
-  gtk_label_set_text(
-      state->status_label,
-      repository_view_window_status_for_backend_sync(apply_result->backend_sync_result, apply_result->no_write_needed));
+  gtk_label_set_text(state->status_label, message.c_str());
   delete apply_result;
 }
 

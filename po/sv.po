@@ -817,6 +817,30 @@ msgstr "Förrådsändringar kan ha ändrat paketdata. Läs om paketen innan du f
 msgid "Repository changes applied. Package data refreshed."
 msgstr "Förrådsändringar verkställdes. Paketdata uppdaterades."
 
+msgid "Repository changes applied. Reload packages before continuing."
+msgstr "Förrådsändringar verkställdes. Läs om paketen innan du fortsätter."
+
+msgid "Repository state already matched the requested changes, but package data could not be reloaded."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna, men paketdata kunde inte läsas om."
+
+msgid "Some repository changes were applied, but final state could not be verified."
+msgstr "Vissa förrådsändringar verkställdes, men slutstatus kunde inte verifieras."
+
+msgid "Some repository changes were applied."
+msgstr "Vissa förrådsändringar verkställdes."
+
+msgid "Repository changes were sent, but final state could not be verified."
+msgstr "Förrådsändringar skickades, men slutstatus kunde inte verifieras."
+
+msgid "Repository changes were sent, but final state did not match the request."
+msgstr "Förrådsändringar skickades, men slutstatus matchade inte begäran."
+
+msgid "Repository changes applied, but package data could not be reloaded."
+msgstr "Förrådsändringar verkställdes, men paketdata kunde inte läsas om."
+
+msgid "Repository state already matched the requested changes. Reload packages before continuing."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna. Läs om paketen innan du fortsätter."
+
 msgid "Repository changes may be incomplete. Package data refreshed."
 msgstr "Förrådsändringar kan vara ofullständiga. Paketdata uppdaterades."
 
