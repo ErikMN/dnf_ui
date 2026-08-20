@@ -618,6 +618,11 @@ on_main_window_close_request(GtkWindow *window, gpointer user_data)
     return TRUE;
   }
 
+  if (repository_view_is_applying_changes()) {
+    ui_helpers_set_status(widgets->query.status_label, _("Repository changes are still being applied."), "blue");
+    return TRUE;
+  }
+
   if (widgets->window_state.allow_close_with_pending || widgets->transaction_state.actions.empty()) {
     config_save_window_geometry(window);
     if (widgets->results.inner_paned) {

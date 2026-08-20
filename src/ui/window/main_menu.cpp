@@ -174,11 +174,11 @@ static void
 on_menu_repositories(GSimpleAction *, GVariant *, gpointer user_data)
 {
   MainMenuActionData *data = static_cast<MainMenuActionData *>(user_data);
-  if (!data || !data->window) {
+  if (!data || !data->widgets || !data->window) {
     return;
   }
 
-  repository_view_show_window(GTK_WINDOW(data->window));
+  repository_view_show_window(GTK_WINDOW(data->window), data->widgets->shared_from_this());
 }
 
 // -----------------------------------------------------------------------------

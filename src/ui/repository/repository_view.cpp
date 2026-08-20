@@ -4,12 +4,21 @@
 // -----------------------------------------------------------------------------
 #include "ui/repository/repository_view.hpp"
 
+#include "dnf_backend/base_manager.hpp"
 #include "dnf5daemon_client/repository_service_client.hpp"
 #include "i18n.hpp"
+#include "ui/details/package_details_controller.hpp"
+#include "ui/package_query/package_query_controller.hpp"
+#include "ui/package_query/package_query_controller_internal.hpp"
+#include "ui/refresh/repository_refresh_controller.hpp"
+#include "ui/transaction/pending_transaction_apply.hpp"
 #include "ui/common/ui_helpers.hpp"
+#include "ui/common/widgets.hpp"
+#include "upgrade/daemon_upgrade_state.hpp"
 
 #include <gio/gio.h>
 
+#include <exception>
 #include <map>
 #include <memory>
 #include <string>
@@ -24,7 +33,10 @@ constexpr int kRepositoryStateWidthPx = 90;
 constexpr int kRepositoryNameWidthChars = 48;
 constexpr int kRepositoryNameMaxWidthChars = 80;
 
+struct RepositoryWindowState;
+
 GtkWindow *g_repository_window = nullptr;
+std::weak_ptr<RepositoryWindowState> g_repository_window_state;
 
 struct RepositoryWindowState {
   GtkWindow *window = nullptr;
@@ -34,6 +46,7 @@ struct RepositoryWindowState {
   GtkButton *refresh_button = nullptr;
   GtkButton *apply_button = nullptr;
   GCancellable *cancellable = nullptr;
+  std::weak_ptr<MainWindowUiState> main_widgets;
   std::map<std::string, bool> pending_enabled;
   uint64_t load_id = 0;
   bool loading = false;
@@ -59,6 +72,13 @@ struct RepositoryApplyTaskData {
   std::vector<std::string> disable_ids;
 };
 
+struct RepositoryApplyTaskResult {
+  bool write_attempted = false;
+  bool write_succeeded = false;
+  bool backend_synced = false;
+  std::string error;
+};
+
 struct RepositoryReviewDialogData {
   std::shared_ptr<RepositoryWindowState> state;
   std::vector<std::string> enable_ids;
@@ -66,6 +86,109 @@ struct RepositoryReviewDialogData {
 };
 
 void repository_view_start_load(const std::shared_ptr<RepositoryWindowState> &state);
+
+// -----------------------------------------------------------------------------
+// Return the main application state if it is still alive.
+// -----------------------------------------------------------------------------
+std::shared_ptr<MainWindowUiState>
+repository_view_main_widgets(const std::shared_ptr<RepositoryWindowState> &state)
+{
+  return state ? state->main_widgets.lock() : nullptr;
+}
+
+// -----------------------------------------------------------------------------
+// Return the main window widget from the shared main UI state.
+// -----------------------------------------------------------------------------
+GtkWidget *
+repository_view_main_window_widget(const std::shared_ptr<MainWindowUiState> &widgets)
+{
+  if (!widgets || !widgets->query.entry) {
+    return nullptr;
+  }
+
+  GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(widgets->query.entry));
+  return root && GTK_IS_WIDGET(root) ? GTK_WIDGET(root) : nullptr;
+}
+
+// -----------------------------------------------------------------------------
+// Enable or disable the main window while repository changes are applying.
+// -----------------------------------------------------------------------------
+void
+repository_view_set_main_window_sensitive(const std::shared_ptr<RepositoryWindowState> &state, bool sensitive)
+{
+  std::shared_ptr<MainWindowUiState> widgets = repository_view_main_widgets(state);
+  GtkWidget *window = repository_view_main_window_widget(widgets);
+  if (window) {
+    gtk_widget_set_sensitive(window, sensitive);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Show why repository changes cannot be applied right now.
+// -----------------------------------------------------------------------------
+bool
+repository_view_check_apply_preconditions(const std::shared_ptr<RepositoryWindowState> &state)
+{
+  std::shared_ptr<MainWindowUiState> widgets = repository_view_main_widgets(state);
+  if (!state || !widgets || widgets->window_state.destroyed) {
+    if (state && state->status_label) {
+      gtk_label_set_text(state->status_label, _("The main window is not available."));
+    }
+    return false;
+  }
+
+  const char *message = nullptr;
+  if (package_query_has_active_package_list_request(widgets.get())) {
+    message = _("Wait for the current package query to finish.");
+  } else if (repository_refresh_is_running()) {
+    message = _("Wait for repository refresh to finish.");
+  } else if (pending_transaction_preview_is_busy(widgets.get())) {
+    message = pending_transaction_preview_busy_message();
+  } else if (pending_transaction_apply_is_busy(widgets.get())) {
+    message = pending_transaction_apply_busy_message();
+  } else if (!widgets->transaction_state.preview_transaction_path.empty()) {
+    message = _("Close the transaction preview before changing repositories.");
+  }
+
+  if (!message) {
+    return true;
+  }
+
+  if (state->status_label) {
+    gtk_label_set_text(state->status_label, message);
+  }
+  ui_helpers_set_status(widgets->query.status_label, message, "blue");
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Update the main package view after repository configuration may have changed.
+// -----------------------------------------------------------------------------
+void
+repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState> &widgets, bool backend_synced)
+{
+  if (!widgets || widgets->window_state.destroyed) {
+    return;
+  }
+
+  package_query_clear_search_cache();
+  DaemonUpgradeState::instance().mark_stale();
+
+  if (!backend_synced) {
+    BaseManager::instance().drop_cached_base();
+    package_query_on_clear_button_clicked(nullptr, widgets.get());
+    ui_helpers_set_status(widgets->query.status_label,
+                          _("Repository changes may have changed package data. Reload packages before continuing."),
+                          "red");
+    return;
+  }
+
+  bool cleared_upgradeable_table = package_query_clear_displayed_upgradeable_table(widgets.get());
+  if (!cleared_upgradeable_table) {
+    package_query_reload_current_view(widgets.get());
+  }
+  ui_helpers_set_status(widgets->query.status_label, _("Repository changes applied. Package data refreshed."), "green");
+}
 
 // -----------------------------------------------------------------------------
 // Update the Apply button from the current pending repository changes.
@@ -225,6 +348,25 @@ repository_view_append_row(GtkListBox *list_box,
 }
 
 // -----------------------------------------------------------------------------
+// Replace the visible repository rows with one daemon list result.
+// -----------------------------------------------------------------------------
+void
+repository_view_render_repositories(const std::shared_ptr<RepositoryWindowState> &state,
+                                    const std::vector<RepositoryInfo> &repositories)
+{
+  if (!state || !state->list_box) {
+    return;
+  }
+
+  repository_view_clear_list(state->list_box);
+  for (const auto &repository : repositories) {
+    repository_view_append_row(state->list_box, repository, state);
+  }
+
+  repository_view_update_apply_button(state);
+}
+
+// -----------------------------------------------------------------------------
 // Add the static table header.
 // -----------------------------------------------------------------------------
 GtkWidget *
@@ -314,13 +456,8 @@ on_repository_load_finished(GObject *, GAsyncResult *result, gpointer)
     return;
   }
 
-  repository_view_clear_list(state->list_box);
-  for (const auto &repository : *repositories) {
-    repository_view_append_row(state->list_box, repository, state);
-  }
-
   state->pending_enabled.clear();
-  repository_view_update_apply_button(state);
+  repository_view_render_repositories(state, *repositories);
 
   std::string message =
       dnfui_i18n_format_count(repositories->size(), "Showing %zu repository.", "Showing %zu repositories.");
@@ -372,14 +509,28 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
   const std::vector<std::string> enable_ids = task_data ? task_data->enable_ids : std::vector<std::string> {};
   const std::vector<std::string> disable_ids = task_data ? task_data->disable_ids : std::vector<std::string> {};
 
-  RepositoryWriteResult result = repository_service_client_apply_changes(enable_ids, disable_ids);
-  if (!result.enable_succeeded || !result.disable_succeeded) {
-    const std::string error = result.error.empty() ? _("Repository change failed.") : result.error;
-    g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, error.c_str()));
-    return;
+  auto *apply_result = new RepositoryApplyTaskResult;
+  RepositoryWriteResult write_result = repository_service_client_apply_changes(enable_ids, disable_ids);
+  apply_result->write_attempted = write_result.enable_attempted || write_result.disable_attempted;
+  apply_result->write_succeeded = write_result.enable_succeeded && write_result.disable_succeeded;
+  if (!apply_result->write_succeeded) {
+    apply_result->error = write_result.error.empty() ? _("Repository change failed.") : write_result.error;
   }
 
-  g_task_return_boolean(task, TRUE);
+  if (apply_result->write_attempted) {
+    try {
+      BaseManager::instance().rebuild(BaseRefreshMode::NORMAL);
+      apply_result->backend_synced = true;
+    } catch (const std::exception &e) {
+      apply_result->backend_synced = false;
+      if (!apply_result->error.empty()) {
+        apply_result->error += " ";
+      }
+      apply_result->error += e.what();
+    }
+  }
+
+  g_task_return_pointer(task, apply_result, [](gpointer p) { delete static_cast<RepositoryApplyTaskResult *>(p); });
 }
 
 // -----------------------------------------------------------------------------
@@ -393,16 +544,26 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
   std::shared_ptr<RepositoryWindowState> state = task_data ? task_data->state : nullptr;
   uint64_t load_id = task_data ? task_data->load_id : 0;
 
-  if (!state || state->destroyed || load_id != state->load_id) {
+  if (!state || load_id != state->load_id) {
     return;
   }
 
+  std::shared_ptr<MainWindowUiState> main_widgets = repository_view_main_widgets(state);
+  repository_view_set_main_window_sensitive(state, true);
+
   state->applying = false;
-  repository_view_set_loading(state, false);
 
   GError *error = nullptr;
-  gboolean ok = g_task_propagate_boolean(task, &error);
-  if (!ok) {
+  auto *apply_result = static_cast<RepositoryApplyTaskResult *>(g_task_propagate_pointer(task, &error));
+  if (!apply_result) {
+    if (state->destroyed) {
+      if (error) {
+        g_error_free(error);
+      }
+      return;
+    }
+
+    repository_view_set_loading(state, false);
     std::string message = _("Failed to apply repository changes.");
     if (error && error->message) {
       message += " ";
@@ -415,7 +576,30 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
     return;
   }
 
+  if (apply_result->write_attempted) {
+    repository_view_refresh_main_after_apply(main_widgets, apply_result->backend_synced);
+  }
+
+  if (state->destroyed) {
+    delete apply_result;
+    return;
+  }
+
+  repository_view_set_loading(state, false);
+
+  if (!apply_result->write_succeeded || !apply_result->backend_synced) {
+    std::string message = _("Failed to apply repository changes.");
+    if (!apply_result->error.empty()) {
+      message += " ";
+      message += apply_result->error;
+    }
+    gtk_label_set_text(state->status_label, message.c_str());
+    delete apply_result;
+    return;
+  }
+
   gtk_label_set_text(state->status_label, _("Repository changes applied."));
+  delete apply_result;
   repository_view_start_load(state);
 }
 
@@ -431,8 +615,15 @@ repository_view_start_apply_changes(const std::shared_ptr<RepositoryWindowState>
     return;
   }
 
+  if (!repository_view_check_apply_preconditions(state)) {
+    return;
+  }
+
+  std::shared_ptr<MainWindowUiState> main_widgets = repository_view_main_widgets(state);
   state->applying = true;
   ++state->load_id;
+  package_details_cancel_active_load(main_widgets.get());
+  repository_view_set_main_window_sensitive(state, false);
   repository_view_set_loading(state, false);
   gtk_label_set_text(state->status_label, _("Applying repository changes..."));
 
@@ -622,10 +813,20 @@ repository_view_close_window()
 }
 
 // -----------------------------------------------------------------------------
+// Return true while repository changes are being applied.
+// -----------------------------------------------------------------------------
+bool
+repository_view_is_applying_changes()
+{
+  std::shared_ptr<RepositoryWindowState> state = g_repository_window_state.lock();
+  return state && state->applying;
+}
+
+// -----------------------------------------------------------------------------
 // Open the repository list window.
 // -----------------------------------------------------------------------------
 void
-repository_view_show_window(GtkWindow *parent)
+repository_view_show_window(GtkWindow *parent, const std::shared_ptr<MainWindowUiState> &main_widgets)
 {
   if (g_repository_window) {
     gtk_window_present(g_repository_window);
@@ -636,7 +837,9 @@ repository_view_show_window(GtkWindow *parent)
 
   GtkWindow *window = GTK_WINDOW(gtk_window_new());
   state->window = window;
+  state->main_widgets = main_widgets;
   g_repository_window = window;
+  g_repository_window_state = state;
   gtk_window_set_title(window, _("Repositories"));
   gtk_window_set_default_size(window, 720, 520);
   if (parent) {

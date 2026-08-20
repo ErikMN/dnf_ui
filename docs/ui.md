@@ -132,7 +132,10 @@ the window does not block the main UI. Checkbox changes are kept pending until
 the user presses Apply. Before changing repository state, the window shows a
 short review dialog with the repositories that will be enabled or disabled.
 The window applies repository enable and disable changes through dnf5daemon,
-then reloads the repository list through a fresh daemon session.
+rebuilds the main package backend with the new repository configuration, and
+then reloads the repository list through a fresh daemon session. Apply waits
+for package queries, repository refresh, and transaction preview or apply work
+to finish before changing repository state.
 
 ### Package details controller
 

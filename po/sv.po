@@ -796,6 +796,24 @@ msgstr "Förrådsändringar verkställdes."
 msgid "Applying repository changes..."
 msgstr "Verkställer förrådsändringar..."
 
+msgid "The main window is not available."
+msgstr "Huvudfönstret är inte tillgängligt."
+
+msgid "Wait for repository refresh to finish."
+msgstr "Vänta tills förrådsuppdateringen är klar."
+
+msgid "Close the transaction preview before changing repositories."
+msgstr "Stäng transaktionsförhandsgranskningen innan du ändrar förråd."
+
+msgid "Repository changes may have changed package data. Reload packages before continuing."
+msgstr "Förrådsändringar kan ha ändrat paketdata. Läs om paketen innan du fortsätter."
+
+msgid "Repository changes applied. Package data refreshed."
+msgstr "Förrådsändringar verkställdes. Paketdata uppdaterades."
+
+msgid "Repository changes are still being applied."
+msgstr "Förrådsändringar verkställs fortfarande."
+
 msgid "Apply Repository Changes"
 msgstr "Verkställ förrådsändringar"
 
