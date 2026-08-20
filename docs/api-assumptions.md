@@ -188,6 +188,7 @@ Assumptions:
   `load_available_repos=false`.
 - Repository enable and disable calls use daemon-owned Polkit authorization.
 - Repository enable and disable calls persist the repository enabled state.
+- DNF UI checks staged repository IDs against a fresh daemon list before writes.
 - DNF UI verifies repository state through a fresh daemon session after writes.
 - DNF UI does not depend on which file or override mechanism dnf5daemon uses to
   persist the setting.

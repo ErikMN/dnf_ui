@@ -75,7 +75,9 @@ struct RepositoryApplyTaskData {
 };
 
 struct RepositoryApplyTaskResult {
+  bool sync_needed = false;
   bool write_attempted = false;
+  bool no_write_needed = false;
   bool write_succeeded = false;
   bool backend_synced = false;
   bool repository_state_loaded = false;
@@ -224,6 +226,58 @@ repository_view_requested_states_match(const std::vector<RepositoryInfo> &reposi
 {
   return repository_view_requested_state_matches(repositories, enable_ids, true) &&
       repository_view_requested_state_matches(repositories, disable_ids, false);
+}
+
+// -----------------------------------------------------------------------------
+// Find one repository in a daemon list by ID.
+// -----------------------------------------------------------------------------
+const RepositoryInfo *
+repository_view_find_repository(const std::vector<RepositoryInfo> &repositories, const std::string &repo_id)
+{
+  auto it = std::find_if(repositories.begin(), repositories.end(), [&](const RepositoryInfo &repository) {
+    return repository.id == repo_id;
+  });
+  return it == repositories.end() ? nullptr : &*it;
+}
+
+// -----------------------------------------------------------------------------
+// Compare staged repository IDs with a fresh daemon list before writing anything.
+// -----------------------------------------------------------------------------
+bool
+repository_view_collect_actual_changes(const std::vector<RepositoryInfo> &repositories,
+                                       const std::vector<std::string> &desired_enable_ids,
+                                       const std::vector<std::string> &desired_disable_ids,
+                                       std::vector<std::string> &enable_ids_out,
+                                       std::vector<std::string> &disable_ids_out,
+                                       std::string &error_out)
+{
+  enable_ids_out.clear();
+  disable_ids_out.clear();
+  error_out.clear();
+
+  for (const auto &repo_id : desired_enable_ids) {
+    const RepositoryInfo *repository = repository_view_find_repository(repositories, repo_id);
+    if (!repository) {
+      error_out = _("Repository configuration changed before Apply. Reload repositories and try again.");
+      return false;
+    }
+    if (!repository->enabled) {
+      enable_ids_out.push_back(repo_id);
+    }
+  }
+
+  for (const auto &repo_id : desired_disable_ids) {
+    const RepositoryInfo *repository = repository_view_find_repository(repositories, repo_id);
+    if (!repository) {
+      error_out = _("Repository configuration changed before Apply. Reload repositories and try again.");
+      return false;
+    }
+    if (repository->enabled) {
+      disable_ids_out.push_back(repo_id);
+    }
+  }
+
+  return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -543,12 +597,52 @@ void
 on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
 {
   const auto *task_data = static_cast<const RepositoryApplyTaskData *>(g_task_get_task_data(task));
-  const std::vector<std::string> enable_ids = task_data ? task_data->enable_ids : std::vector<std::string> {};
-  const std::vector<std::string> disable_ids = task_data ? task_data->disable_ids : std::vector<std::string> {};
+  const std::vector<std::string> desired_enable_ids = task_data ? task_data->enable_ids : std::vector<std::string> {};
+  const std::vector<std::string> desired_disable_ids = task_data ? task_data->disable_ids : std::vector<std::string> {};
 
   auto *apply_result = new RepositoryApplyTaskResult;
+  std::vector<RepositoryInfo> preflight_repositories;
+  std::string preflight_error;
+  if (!repository_service_client_list(preflight_repositories, preflight_error, nullptr)) {
+    apply_result->error = preflight_error.empty() ? _("Repository state could not be reloaded.") : preflight_error;
+    g_task_return_pointer(task, apply_result, [](gpointer p) { delete static_cast<RepositoryApplyTaskResult *>(p); });
+    return;
+  }
+
+  apply_result->repository_state_loaded = true;
+  apply_result->repositories = preflight_repositories;
+
+  std::vector<std::string> enable_ids;
+  std::vector<std::string> disable_ids;
+  if (!repository_view_collect_actual_changes(preflight_repositories,
+                                              desired_enable_ids,
+                                              desired_disable_ids,
+                                              enable_ids,
+                                              disable_ids,
+                                              apply_result->error)) {
+    apply_result->write_succeeded = false;
+    g_task_return_pointer(task, apply_result, [](gpointer p) { delete static_cast<RepositoryApplyTaskResult *>(p); });
+    return;
+  }
+
+  if (enable_ids.empty() && disable_ids.empty()) {
+    apply_result->sync_needed = true;
+    apply_result->no_write_needed = true;
+    apply_result->write_succeeded = true;
+    try {
+      BaseManager::instance().rebuild(BaseRefreshMode::NORMAL);
+      apply_result->backend_synced = true;
+    } catch (const std::exception &e) {
+      apply_result->backend_synced = false;
+      apply_result->error = e.what();
+    }
+    g_task_return_pointer(task, apply_result, [](gpointer p) { delete static_cast<RepositoryApplyTaskResult *>(p); });
+    return;
+  }
+
   RepositoryWriteResult write_result = repository_service_client_apply_changes(enable_ids, disable_ids);
   apply_result->write_attempted = write_result.enable_attempted || write_result.disable_attempted;
+  apply_result->sync_needed = apply_result->write_attempted;
   apply_result->write_succeeded = write_result.enable_succeeded && write_result.disable_succeeded;
   if (!apply_result->write_succeeded) {
     apply_result->error = write_result.error.empty() ? _("Repository change failed.") : write_result.error;
@@ -571,7 +665,8 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
     if (repository_service_client_list(repositories, list_error, nullptr)) {
       apply_result->repository_state_loaded = true;
       apply_result->repositories = std::move(repositories);
-      if (!repository_view_requested_states_match(apply_result->repositories, enable_ids, disable_ids)) {
+      if (!repository_view_requested_states_match(
+              apply_result->repositories, desired_enable_ids, desired_disable_ids)) {
         apply_result->write_succeeded = false;
         if (!apply_result->error.empty()) {
           apply_result->error += " ";
@@ -633,7 +728,7 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
     return;
   }
 
-  if (apply_result->write_attempted) {
+  if (apply_result->sync_needed) {
     repository_view_refresh_main_after_apply(main_widgets, apply_result->backend_synced);
   }
 
@@ -652,6 +747,25 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
   }
 
   repository_view_set_loading(state, false);
+
+  if (apply_result->no_write_needed) {
+    if (apply_result->backend_synced) {
+      gtk_label_set_text(state->status_label, _("Repository state already matched the requested changes."));
+      if (main_widgets && !main_widgets->window_state.destroyed) {
+        ui_helpers_set_status(
+            main_widgets->query.status_label, _("Repository state already matched the requested changes."), "green");
+      }
+    } else {
+      std::string message = _("Failed to apply repository changes.");
+      if (!apply_result->error.empty()) {
+        message += " ";
+        message += apply_result->error;
+      }
+      gtk_label_set_text(state->status_label, message.c_str());
+    }
+    delete apply_result;
+    return;
+  }
 
   const bool apply_complete =
       apply_result->write_succeeded && apply_result->backend_synced && apply_result->repository_state_loaded;

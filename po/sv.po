@@ -817,6 +817,12 @@ msgstr "Förrådsändringar kan vara ofullständiga. Paketdata uppdaterades."
 msgid "Repository changes are still being applied."
 msgstr "Förrådsändringar verkställs fortfarande."
 
+msgid "Repository configuration changed before Apply. Reload repositories and try again."
+msgstr "Förrådskonfigurationen ändrades före Verkställ. Läs om förråden och försök igen."
+
+msgid "Repository state already matched the requested changes."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna."
+
 msgid "Some repository changes were not confirmed by dnf5daemon."
 msgstr "Vissa förrådsändringar bekräftades inte av dnf5daemon."
 
