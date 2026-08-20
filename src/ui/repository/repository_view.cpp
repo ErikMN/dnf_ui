@@ -59,6 +59,12 @@ struct RepositoryApplyTaskData {
   std::vector<std::string> disable_ids;
 };
 
+struct RepositoryReviewDialogData {
+  std::shared_ptr<RepositoryWindowState> state;
+  std::vector<std::string> enable_ids;
+  std::vector<std::string> disable_ids;
+};
+
 void repository_view_start_load(const std::shared_ptr<RepositoryWindowState> &state);
 
 // -----------------------------------------------------------------------------
@@ -414,23 +420,15 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
 }
 
 // -----------------------------------------------------------------------------
-// Apply the repository changes marked in the window.
+// Start applying repository changes after the user has reviewed them.
 // -----------------------------------------------------------------------------
 void
-repository_view_apply_changes(const std::shared_ptr<RepositoryWindowState> &state)
+repository_view_start_apply_changes(const std::shared_ptr<RepositoryWindowState> &state,
+                                    std::vector<std::string> enable_ids,
+                                    std::vector<std::string> disable_ids)
 {
-  if (!state || state->destroyed || state->loading || state->applying || state->pending_enabled.empty()) {
+  if (!state || state->destroyed || state->loading || state->applying || (enable_ids.empty() && disable_ids.empty())) {
     return;
-  }
-
-  std::vector<std::string> enable_ids;
-  std::vector<std::string> disable_ids;
-  for (const auto &[repo_id, enabled] : state->pending_enabled) {
-    if (enabled) {
-      enable_ids.push_back(repo_id);
-    } else {
-      disable_ids.push_back(repo_id);
-    }
   }
 
   state->applying = true;
@@ -448,6 +446,143 @@ repository_view_apply_changes(const std::shared_ptr<RepositoryWindowState> &stat
   g_task_set_task_data(task, task_data, [](gpointer p) { delete static_cast<RepositoryApplyTaskData *>(p); });
   g_task_run_in_thread(task, on_repository_apply_task);
   g_object_unref(task);
+}
+
+// -----------------------------------------------------------------------------
+// Add one repository review section to the confirmation dialog.
+// -----------------------------------------------------------------------------
+void
+repository_view_add_review_section(GtkBox *box, const char *title, const std::vector<std::string> &repo_ids)
+{
+  if (!box || repo_ids.empty()) {
+    return;
+  }
+
+  GtkWidget *heading = gtk_label_new(title);
+  gtk_label_set_xalign(GTK_LABEL(heading), 0.0f);
+  gtk_widget_add_css_class(heading, "heading");
+  gtk_box_append(box, heading);
+
+  for (const auto &repo_id : repo_ids) {
+    GtkWidget *label = gtk_label_new(repo_id.c_str());
+    gtk_label_set_xalign(GTK_LABEL(label), 0.0f);
+    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+    gtk_box_append(box, label);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Show a review dialog before applying repository changes.
+// -----------------------------------------------------------------------------
+void
+repository_view_confirm_apply_changes(const std::shared_ptr<RepositoryWindowState> &state)
+{
+  if (!state || state->destroyed || state->loading || state->applying || state->pending_enabled.empty()) {
+    return;
+  }
+
+  std::vector<std::string> enable_ids;
+  std::vector<std::string> disable_ids;
+  for (const auto &[repo_id, enabled] : state->pending_enabled) {
+    if (enabled) {
+      enable_ids.push_back(repo_id);
+    } else {
+      disable_ids.push_back(repo_id);
+    }
+  }
+
+  GtkWindow *dialog = GTK_WINDOW(gtk_window_new());
+  gtk_window_set_title(dialog, _("Apply Repository Changes"));
+  gtk_window_set_modal(dialog, TRUE);
+  gtk_window_set_transient_for(dialog, state->window);
+  gtk_window_set_destroy_with_parent(dialog, TRUE);
+  gtk_window_set_default_size(dialog, 460, 360);
+
+  GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+  gtk_widget_set_margin_start(outer, 12);
+  gtk_widget_set_margin_end(outer, 12);
+  gtk_widget_set_margin_top(outer, 12);
+  gtk_widget_set_margin_bottom(outer, 12);
+  gtk_window_set_child(dialog, outer);
+
+  GtkWidget *question = gtk_label_new(_("Apply the following repository changes?"));
+  gtk_label_set_xalign(GTK_LABEL(question), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(question), TRUE);
+  gtk_box_append(GTK_BOX(outer), question);
+
+  GtkWidget *scroller = gtk_scrolled_window_new();
+  gtk_widget_set_hexpand(scroller, TRUE);
+  gtk_widget_set_vexpand(scroller, TRUE);
+  gtk_box_append(GTK_BOX(outer), scroller);
+
+  GtkWidget *contents = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+  gtk_widget_set_margin_start(contents, 6);
+  gtk_widget_set_margin_end(contents, 6);
+  gtk_widget_set_margin_top(contents, 6);
+  gtk_widget_set_margin_bottom(contents, 6);
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scroller), contents);
+
+  repository_view_add_review_section(GTK_BOX(contents), _("To be enabled"), enable_ids);
+  repository_view_add_review_section(GTK_BOX(contents), _("To be disabled"), disable_ids);
+
+  GtkWidget *summary = gtk_label_new(nullptr);
+  std::string summary_text = dnfui_i18n_format_count(enable_ids.size() + disable_ids.size(),
+                                                     "%zu repository change will be applied.",
+                                                     "%zu repository changes will be applied.");
+  gtk_label_set_text(GTK_LABEL(summary), summary_text.c_str());
+  gtk_label_set_xalign(GTK_LABEL(summary), 0.0f);
+  gtk_label_set_wrap(GTK_LABEL(summary), TRUE);
+  gtk_box_append(GTK_BOX(outer), summary);
+
+  GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(button_box, GTK_ALIGN_END);
+  gtk_box_append(GTK_BOX(outer), button_box);
+
+  GtkWidget *cancel_button = gtk_button_new_with_label(_("Cancel"));
+  gtk_box_append(GTK_BOX(button_box), cancel_button);
+
+  GtkWidget *apply_button = gtk_button_new_with_label(_("Apply"));
+  gtk_widget_add_css_class(apply_button, "suggested-action");
+  gtk_box_append(GTK_BOX(button_box), apply_button);
+
+  auto *dialog_data = new RepositoryReviewDialogData {
+    state,
+    std::move(enable_ids),
+    std::move(disable_ids),
+  };
+  g_object_set_data_full(G_OBJECT(dialog), "dnfui-repository-review-data", dialog_data, [](gpointer p) {
+    delete static_cast<RepositoryReviewDialogData *>(p);
+  });
+
+  g_signal_connect(cancel_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer) {
+                     GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(button));
+                     if (root && GTK_IS_WINDOW(root)) {
+                       gtk_window_destroy(GTK_WINDOW(root));
+                     }
+                   }),
+                   nullptr);
+
+  g_signal_connect(apply_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *button, gpointer user_data) {
+                     auto *dialog_data = static_cast<RepositoryReviewDialogData *>(user_data);
+                     GtkRoot *root = gtk_widget_get_root(GTK_WIDGET(button));
+                     std::shared_ptr<RepositoryWindowState> state = dialog_data ? dialog_data->state : nullptr;
+                     std::vector<std::string> enable_ids =
+                         dialog_data ? dialog_data->enable_ids : std::vector<std::string> {};
+                     std::vector<std::string> disable_ids =
+                         dialog_data ? dialog_data->disable_ids : std::vector<std::string> {};
+
+                     if (root && GTK_IS_WINDOW(root)) {
+                       gtk_window_destroy(GTK_WINDOW(root));
+                     }
+                     repository_view_start_apply_changes(state, std::move(enable_ids), std::move(disable_ids));
+                   }),
+                   dialog_data);
+
+  gtk_window_present(dialog);
 }
 
 // -----------------------------------------------------------------------------
@@ -584,7 +719,7 @@ repository_view_show_window(GtkWindow *parent)
                    G_CALLBACK(+[](GtkButton *, gpointer user_data) {
                      auto *state_holder = static_cast<std::shared_ptr<RepositoryWindowState> *>(user_data);
                      if (state_holder) {
-                       repository_view_apply_changes(*state_holder);
+                       repository_view_confirm_apply_changes(*state_holder);
                      }
                    }),
                    state_holder);

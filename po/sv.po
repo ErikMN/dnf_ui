@@ -796,6 +796,24 @@ msgstr "Förrådsändringar verkställdes."
 msgid "Applying repository changes..."
 msgstr "Verkställer förrådsändringar..."
 
+msgid "Apply Repository Changes"
+msgstr "Verkställ förrådsändringar"
+
+msgid "Apply the following repository changes?"
+msgstr "Verkställ följande förrådsändringar?"
+
+msgid "To be enabled"
+msgstr "Kommer att aktiveras"
+
+msgid "To be disabled"
+msgstr "Kommer att inaktiveras"
+
+#, c-format
+msgid "%zu repository change will be applied."
+msgid_plural "%zu repository changes will be applied."
+msgstr[0] "%zu förrådsändring kommer att verkställas."
+msgstr[1] "%zu förrådsändringar kommer att verkställas."
+
 msgid "Refresh"
 msgstr "Uppdatera"
 
