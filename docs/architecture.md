@@ -37,13 +37,14 @@ and Polkit behavior.
 
 ## Main parts
 
-The application is split into five main areas:
+The application is split into these main areas:
 
 - Startup and main window setup
 - UI controllers
 - libdnf5 backend
 - Shared transaction models
 - dnf5daemon transaction client
+- dnf5daemon repository client
 
 ```mermaid
 flowchart TD
@@ -65,10 +66,11 @@ process, and gives the app the package details needed for the table, search,
 installed packages, files, dependencies, changelog text, and read-only
 transaction history.
 
-dnf5daemon is used for transaction decisions and package changes. It is the
-service that resolves previews, applies transactions, handles Polkit
-authorization, and deals with repository signing keys. Anything that can change
-the system must go through dnf5daemon.
+dnf5daemon is used for transaction decisions, package changes, and privileged
+repository configuration. It is the service that resolves previews, applies
+transactions, handles Polkit authorization, persists repository enabled state,
+and deals with repository signing keys. Anything that can change the system
+must go through dnf5daemon.
 
 The daemon upgrade snapshot in [src/upgrade/daemon_upgrade_state.cpp](../src/upgrade/daemon_upgrade_state.cpp)
 stores the latest complete read-only upgrade-target result reported by dnf5daemon.
@@ -113,13 +115,16 @@ flowchart TD
 
 The main window is built once and the controller files own behavior.
 The `src/ui` directory is split by UI concern: `window`, `package_query`,
-`package_table`, `details`, `transaction`, `refresh`, and `common`.
+`package_table`, `details`, `transaction`, `refresh`, `repository`, and
+`common`.
 
 - [src/ui/window/main_window.cpp](../src/ui/window/main_window.cpp) creates shared widget state and connects signals.
 - [src/ui/window/main_window_layout.cpp](../src/ui/window/main_window_layout.cpp) builds the main window widget tree.
 - [src/ui/common/widgets.hpp](../src/ui/common/widgets.hpp) groups the widget pointers and shared UI state.
 - [src/ui/common/widgets.cpp](../src/ui/common/widgets.cpp) handles task helpers shared by controllers.
 - [src/ui/refresh/repository_refresh_controller.cpp](../src/ui/refresh/repository_refresh_controller.cpp) handles manual repository refresh.
+- [src/ui/repository/repository_view.cpp](../src/ui/repository/repository_view.cpp)
+  shows repositories and applies enabled-state changes.
 - [src/ui/window/main_menu.cpp](../src/ui/window/main_menu.cpp) handles top menu actions.
 - [src/ui/history/transaction_history_view.cpp](../src/ui/history/transaction_history_view.cpp) shows read-only transaction history.
 - [src/ui/package_query/package_query_controller.cpp](../src/ui/package_query/package_query_controller.cpp) handles the public search, list, history, clear, and reload callbacks.

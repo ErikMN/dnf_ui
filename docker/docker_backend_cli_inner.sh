@@ -48,6 +48,7 @@ echo 'Backend CLI ready.'
 echo 'Examples:'
 echo '  dnfui-backend-cli search bash'
 echo '  dnfui-backend-cli list-upgrades'
+echo '  dnfui-backend-cli repos list'
 echo '  dnfui-backend-cli preview install cowsay'
 EOF
 

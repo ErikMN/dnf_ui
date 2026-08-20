@@ -171,6 +171,59 @@ Maintenance check:
 - If dnf5daemon package-list fields or scope names change, update the target parser and rerun the dnf5daemon client tests in Docker.
 - If the upgrade-target query starts requesting many more fields or returns a much larger package set, consider switching from `Rpm.list()` to `Rpm.list_fd()` so the result is not limited by one D-Bus reply size.
 
+## dnf5daemon repository configuration
+
+Code:
+
+- [src/dnf5daemon_client/repository_service_client.cpp](../src/dnf5daemon_client/repository_service_client.cpp)
+
+Assumptions:
+
+- dnf5daemon exposes `org.rpm.dnf.v0.rpm.Repo.list`,
+  `org.rpm.dnf.v0.rpm.Repo.enable_with_options`, and
+  `org.rpm.dnf.v0.rpm.Repo.disable_with_options`.
+- `Repo.list` supports `repo_attrs=["id", "name", "enabled"]` and
+  `enable_disable="all"` so enabled and disabled repositories are returned.
+- Repository listing can use a session opened with `load_system_repo=false` and
+  `load_available_repos=false`.
+- Repository enable and disable calls use daemon-owned Polkit authorization.
+- Repository enable and disable calls persist the repository enabled state.
+- DNF UI checks staged repository IDs against a fresh daemon list before writes.
+- DNF UI verifies repository state through a fresh daemon session after writes.
+- DNF UI treats the Base rebuild result after repository Apply as a user-visible
+  outcome, not a simple success flag.
+- DNF UI does not depend on which file or override mechanism dnf5daemon uses to
+  persist the setting.
+
+Source:
+
+- DNF5 dnf5daemon D-Bus API
+- `/usr/share/dbus-1/interfaces/org.rpm.dnf.v0.rpm.Repo.xml` in the Fedora test image
+- `/usr/share/dbus-1/interfaces/org.rpm.dnf.v0.SessionManager.xml` in the Fedora test image
+
+Why this matters:
+
+- Repository configuration is privileged system state and must go through dnf5daemon.
+- Listing repositories should not load package metadata or refresh repository data.
+- Enable and disable operations are separate daemon calls, not one transaction.
+  DNF UI enables repositories before disabling repositories because that is the
+  safer failure order when both directions are requested.
+- The client sorts repository IDs after parsing so UI callers do not depend on
+  daemon presentation order.
+- Missing repository IDs, missing enabled state, wrong enabled types, and duplicate
+  repository IDs are rejected because the repository ID and enabled flag are the
+  write identity and requested state.
+
+Tests:
+
+- repository service client parser tests
+- `Repository client applies changes through fresh daemon sessions`
+
+Maintenance check:
+
+- If dnf5daemon repository list fields or write methods change, update the repository client.
+  Rerun the Docker daemon tests.
+
 ## Shared libdnf5 Base access
 
 Code:

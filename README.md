@@ -65,6 +65,7 @@ Applications such as [GNOME Software](https://apps.gnome.org/Software/) cover th
 - Select which available updates to apply or upgrade everything
 - Review all package changes before applying a transaction
 - Apply package changes through dnf5daemon with Polkit authorization
+- Enable and disable configured repositories through dnf5daemon
 - Cancel long-running package queries
 - Search previous queries
 - Export the visible package list as CSV

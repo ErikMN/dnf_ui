@@ -11,6 +11,7 @@
 #include "ui/package_table/package_table_columns.hpp"
 #include "ui/package_table/package_table_export.hpp"
 #include "ui/package_table/package_table_view.hpp"
+#include "ui/repository/repository_view.hpp"
 #include "ui/transaction/pending_transaction_controller.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
@@ -167,6 +168,20 @@ on_menu_transaction_history(GSimpleAction *, GVariant *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
+// Show the repository list window.
+// -----------------------------------------------------------------------------
+static void
+on_menu_repositories(GSimpleAction *, GVariant *, gpointer user_data)
+{
+  MainMenuActionData *data = static_cast<MainMenuActionData *>(user_data);
+  if (!data || !data->widgets || !data->window) {
+    return;
+  }
+
+  repository_view_show_window(GTK_WINDOW(data->window), data->widgets->shared_from_this());
+}
+
+// -----------------------------------------------------------------------------
 // Show the application About dialog.
 // -----------------------------------------------------------------------------
 static void
@@ -306,6 +321,7 @@ main_menu_create()
   GMenu *view_menu = g_menu_new();
   g_menu_append(view_menu, _("History Panel"), "win.show-history");
   g_menu_append(view_menu, _("Package Info Panel"), "win.show-info");
+  g_menu_append(view_menu, _("Repositories..."), "win.repositories");
   GMenu *columns_menu = g_menu_new();
   for (const auto &column : package_table_column_definitions()) {
     std::string detailed_action = "win.";
@@ -352,7 +368,7 @@ main_menu_connect_actions(const MainMenuWidgets &menu_widgets, MainWindowUiState
         delete static_cast<MainMenuActionData *>(p);
       });
 
-  GActionEntry entries[10] = {};
+  GActionEntry entries[11] = {};
   entries[0].name = "quit";
   entries[0].activate = on_menu_quit;
   entries[1].name = "clear-list";
@@ -375,6 +391,8 @@ main_menu_connect_actions(const MainMenuWidgets &menu_widgets, MainWindowUiState
   entries[8].activate = on_menu_transaction_history;
   entries[9].name = "apply-transactions";
   entries[9].activate = on_menu_apply_transactions;
+  entries[10].name = "repositories";
+  entries[10].activate = on_menu_repositories;
 
   GSimpleActionGroup *actions = g_simple_action_group_new();
   g_action_map_add_action_entries(G_ACTION_MAP(actions), entries, G_N_ELEMENTS(entries), data);

@@ -3,6 +3,7 @@
 // Minimal backend probe for developer testing
 // -----------------------------------------------------------------------------
 #include "dnf5daemon_client/transaction_service_client.hpp"
+#include "dnf5daemon_client/repository_service_client.hpp"
 #include "dnf_backend/dnf_backend.hpp"
 #include "i18n.hpp"
 #include "transaction/transaction_preview.hpp"
@@ -44,6 +45,9 @@ print_usage(const char *program_name)
             << "  " << program_name << " list-installed [FILTER]\n"
             << "  " << program_name << " list-packages [--all-versions]\n"
             << "  " << program_name << " list-upgrades\n"
+            << "  " << program_name << " repos list\n"
+            << "  " << program_name << " repos enable REPO_ID\n"
+            << "  " << program_name << " repos disable REPO_ID\n"
             << "  " << program_name << " details NEVRA\n"
             << "  " << program_name << " preview ACTION SPEC\n"
             << "  " << program_name << " preview-upgrade-all\n\n"
@@ -242,6 +246,63 @@ run_list_upgrades(int argc)
 }
 
 int
+run_repos(int argc, char *argv[])
+{
+  if (argc < 3) {
+    std::cerr << "Invalid repos arguments.\n";
+    return 1;
+  }
+
+  const std::string action = argv[2];
+  if (action == "list") {
+    if (argc != 3) {
+      std::cerr << "Invalid repos list arguments.\n";
+      return 1;
+    }
+
+    std::vector<RepositoryInfo> repositories;
+    std::string error;
+    if (!repository_service_client_list(repositories, error)) {
+      std::cerr << error << '\n';
+      return 1;
+    }
+
+    for (const auto &repository : repositories) {
+      std::cout << repository.id << '\t' << (repository.enabled ? "enabled" : "disabled") << '\t' << repository.name
+                << '\n';
+    }
+    std::cout << "Rows: " << repositories.size() << '\n';
+    return 0;
+  }
+
+  if (action == "enable" || action == "disable") {
+    if (argc != 4) {
+      std::cerr << "Invalid repos " << action << " arguments.\n";
+      return 1;
+    }
+
+    const std::string repo_id = argv[3];
+    RepositoryWriteResult result;
+    if (action == "enable") {
+      result = repository_service_client_apply_changes({ repo_id }, {});
+    } else {
+      result = repository_service_client_apply_changes({}, { repo_id });
+    }
+
+    if (!result.enable_succeeded || !result.disable_succeeded) {
+      std::cerr << result.error << '\n';
+      return 1;
+    }
+
+    std::cout << "Repository " << repo_id << ' ' << (action == "enable" ? "enabled" : "disabled") << ".\n";
+    return 0;
+  }
+
+  std::cerr << "Unknown repos action.\n";
+  return 1;
+}
+
+int
 run_details(int argc, char *argv[])
 {
   if (argc != 3) {
@@ -337,6 +398,9 @@ main(int argc, char *argv[])
     }
     if (command == "list-upgrades" || command == "list-upgradable") {
       return run_list_upgrades(argc);
+    }
+    if (command == "repos") {
+      return run_repos(argc, argv);
     }
     if (command == "details") {
       return run_details(argc, argv);

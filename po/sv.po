@@ -179,6 +179,24 @@ msgstr "Kunde inte markera uppgradera alla i dnf5daemon."
 msgid "Could not list upgrade targets from dnf5daemon."
 msgstr "Kunde inte lista uppgraderingsmål från dnf5daemon."
 
+msgid "dnf5daemon returned a repository without an ID."
+msgstr "dnf5daemon returnerade ett förråd utan ID."
+
+msgid "dnf5daemon returned a repository without a valid enabled state."
+msgstr "dnf5daemon returnerade ett förråd utan ett giltigt aktiverat läge."
+
+msgid "dnf5daemon returned an invalid repository list."
+msgstr "dnf5daemon returnerade en ogiltig förrådslista."
+
+msgid "dnf5daemon returned duplicate repository IDs."
+msgstr "dnf5daemon returnerade dubbla förråds-ID:n."
+
+msgid "dnf5daemon repository change failed."
+msgstr "dnf5daemon-förrådsändring misslyckades."
+
+msgid "Could not list repositories from dnf5daemon."
+msgstr "Kunde inte lista förråd från dnf5daemon."
+
 msgid "dnf5daemon transaction session is not available."
 msgstr "dnf5daemon-transaktionssessionen är inte tillgänglig."
 
@@ -733,6 +751,147 @@ msgstr "Fel vid listning av uppgraderbara paket."
 msgid "Error or no results."
 msgstr "Fel eller inga resultat."
 
+msgid "Enabled"
+msgstr "Aktiverat"
+
+msgid "Repository ID"
+msgstr "Förråds-ID"
+
+msgid "Repository load was cancelled."
+msgstr "Inläsning av förråd avbröts."
+
+msgid "Failed to load repositories."
+msgstr "Kunde inte läsa in förråd."
+
+#, c-format
+msgid "%zu repository change is pending."
+msgid_plural "%zu repository changes are pending."
+msgstr[0] "%zu förrådsändring väntar."
+msgstr[1] "%zu förrådsändringar väntar."
+
+#, c-format
+msgid "Showing %zu repository."
+msgid_plural "Showing %zu repositories."
+msgstr[0] "Visar %zu förråd."
+msgstr[1] "Visar %zu förråd."
+
+msgid "Repositories"
+msgstr "Förråd"
+
+msgid "Loading repositories..."
+msgstr "Läser in förråd..."
+
+msgid "Configured repositories"
+msgstr "Konfigurerade förråd"
+
+msgid "Repository change failed."
+msgstr "Förrådsändring misslyckades."
+
+msgid "Failed to apply repository changes."
+msgstr "Kunde inte verkställa förrådsändringar."
+
+msgid "Repository changes applied."
+msgstr "Förrådsändringar verkställdes."
+
+msgid "Repository changes applied. Using cached repository metadata."
+msgstr "Förrådsändringar verkställdes. Använder cachad förrådsmetadata."
+
+msgid "Repository changes applied. Showing installed packages only."
+msgstr "Förrådsändringar verkställdes. Visar endast installerade paket."
+
+msgid "Applying repository changes..."
+msgstr "Verkställer förrådsändringar..."
+
+msgid "The main window is not available."
+msgstr "Huvudfönstret är inte tillgängligt."
+
+msgid "Wait for repository refresh to finish."
+msgstr "Vänta tills förrådsuppdateringen är klar."
+
+msgid "Close the transaction preview before changing repositories."
+msgstr "Stäng transaktionsförhandsgranskningen innan du ändrar förråd."
+
+msgid "Repository changes may have changed package data. Reload packages before continuing."
+msgstr "Förrådsändringar kan ha ändrat paketdata. Läs om paketen innan du fortsätter."
+
+msgid "Repository changes applied. Package data refreshed."
+msgstr "Förrådsändringar verkställdes. Paketdata uppdaterades."
+
+msgid "Repository changes applied. Reload packages before continuing."
+msgstr "Förrådsändringar verkställdes. Läs om paketen innan du fortsätter."
+
+msgid "Repository state already matched the requested changes, but package data could not be reloaded."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna, men paketdata kunde inte läsas om."
+
+msgid "Some repository changes were applied, but final state could not be verified."
+msgstr "Vissa förrådsändringar verkställdes, men slutstatus kunde inte verifieras."
+
+msgid "Some repository changes were applied."
+msgstr "Vissa förrådsändringar verkställdes."
+
+msgid "Repository changes were sent, but final state could not be verified."
+msgstr "Förrådsändringar skickades, men slutstatus kunde inte verifieras."
+
+msgid "Repository changes were sent, but final state did not match the request."
+msgstr "Förrådsändringar skickades, men slutstatus matchade inte begäran."
+
+msgid "Repository changes applied, but package data could not be reloaded."
+msgstr "Förrådsändringar verkställdes, men paketdata kunde inte läsas om."
+
+msgid "Repository state already matched the requested changes. Reload packages before continuing."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna. Läs om paketen innan du fortsätter."
+
+msgid "Repository changes may be incomplete. Package data refreshed."
+msgstr "Förrådsändringar kan vara ofullständiga. Paketdata uppdaterades."
+
+msgid "Repository changes may be incomplete. Using cached repository metadata."
+msgstr "Förrådsändringar kan vara ofullständiga. Använder cachad förrådsmetadata."
+
+msgid "Repository changes may be incomplete. Showing installed packages only."
+msgstr "Förrådsändringar kan vara ofullständiga. Visar endast installerade paket."
+
+msgid "Repository changes are still being applied."
+msgstr "Förrådsändringar verkställs fortfarande."
+
+msgid "Repository configuration changed before Apply. Reload repositories and try again."
+msgstr "Förrådskonfigurationen ändrades före Verkställ. Läs om förråden och försök igen."
+
+msgid "Repository state already matched the requested changes."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna."
+
+msgid "Repository state already matched the requested changes. Using cached repository metadata."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna. Använder cachad förrådsmetadata."
+
+msgid "Repository state already matched the requested changes. Showing installed packages only."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna. Visar endast installerade paket."
+
+msgid "No repository changes pending."
+msgstr "Inga förrådsändringar väntar."
+
+msgid "Some repository changes were not confirmed by dnf5daemon."
+msgstr "Vissa förrådsändringar bekräftades inte av dnf5daemon."
+
+msgid "Repository state could not be reloaded."
+msgstr "Förrådsstatus kunde inte läsas om."
+
+msgid "Apply Repository Changes"
+msgstr "Verkställ förrådsändringar"
+
+msgid "Apply the following repository changes?"
+msgstr "Verkställ följande förrådsändringar?"
+
+msgid "To be enabled"
+msgstr "Kommer att aktiveras"
+
+msgid "To be disabled"
+msgstr "Kommer att inaktiveras"
+
+#, c-format
+msgid "%zu repository change will be applied."
+msgid_plural "%zu repository changes will be applied."
+msgstr[0] "%zu förrådsändring kommer att verkställas."
+msgstr[1] "%zu förrådsändringar kommer att verkställas."
+
 msgid "Refresh"
 msgstr "Uppdatera"
 
@@ -822,6 +981,7 @@ msgid ""
 "Ctrl+H: Toggle history panel\n"
 "Ctrl+I: Toggle package info panel\n"
 "Ctrl+Shift+H: Open transaction history\n"
+"Ctrl+Shift+R: Open repositories\n"
 "Ctrl+Q or Ctrl+W: Quit"
 msgstr ""
 "Snabbtangenter\n"
@@ -833,6 +993,7 @@ msgstr ""
 "Ctrl+H: Växla historikpanel\n"
 "Ctrl+I: Växla paketinfopanel\n"
 "Ctrl+Skift+H: Öppna transaktionshistorik\n"
+"Ctrl+Skift+R: Öppna förråd\n"
 "Ctrl+Q eller Ctrl+W: Avsluta"
 
 #. Update count label
@@ -1238,6 +1399,9 @@ msgstr "Historikpanel"
 
 msgid "Package Info Panel"
 msgstr "Paketinfopanel"
+
+msgid "Repositories..."
+msgstr "Förråd..."
 
 msgid "Restore Default Columns"
 msgstr "Återställ standardkolumner"

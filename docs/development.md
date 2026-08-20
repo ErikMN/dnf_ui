@@ -85,11 +85,16 @@ Daemon-backed probes:
 
 ```sh
 dnfui-backend-cli list-upgrades
+dnfui-backend-cli repos list
+dnfui-backend-cli repos enable REPO_ID
+dnfui-backend-cli repos disable REPO_ID
 dnfui-backend-cli preview install cowsay
 dnfui-backend-cli preview-upgrade-all
 ```
 
 The CLI only previews transactions. It does not apply package changes.
+Repository enable and disable commands do change system repository configuration
+through dnf5daemon.
 The GUI self-protection check is process-specific, so the development CLI does
 not represent the GUI rule that blocks DNF UI from removing or replacing itself.
 

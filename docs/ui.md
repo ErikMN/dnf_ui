@@ -26,6 +26,7 @@ The UI source tree is grouped by the part of the window it owns:
 - `src/ui/details` for the package details panel
 - `src/ui/transaction` for marked actions, preview, apply, review dialogs, and progress
 - `src/ui/refresh` for manual repository refresh
+- `src/ui/repository` for the repository list and enabled-state changes
 - `src/ui/common` for shared widget state and small GTK helpers
 
 ## Window construction
@@ -122,6 +123,24 @@ owns the Refresh Repositories button workflow. It refreshes dnf5daemon metadata,
 rebuilds the libdnf5 Base, updates the lower-right progress text, and clears
 stale upgradable rows after repository metadata changes. The same workflow can
 be started with F5.
+
+`View -> Repositories...` or Ctrl+Shift+R opens a repository list window backed by dnf5daemon.
+The implementation lives in
+[src/ui/repository/repository_view.cpp](../src/ui/repository/repository_view.cpp).
+It lists repository ID, name, and enabled state on a worker thread so opening
+the window does not block the main UI. Checkbox changes are kept pending until
+the user presses Apply. Reload is disabled while repository changes are pending,
+so staged changes are not discarded silently. Before changing repository state,
+the window shows a short review dialog with the repositories that will be enabled or disabled.
+The window applies repository enable and disable changes through dnf5daemon,
+rebuilds the main package backend with the new repository configuration, and
+then reads the final repository state through a fresh daemon session. Apply is
+not cancellable once it starts, and the repository window stays open until it
+finishes. Before writing, Apply checks the current daemon repository state and
+sends only changes that are still needed. Apply waits for package queries,
+repository refresh, and transaction preview or apply work to finish before
+changing repository state. After Apply, the UI reports whether package data was
+reloaded from live metadata, cached metadata, or installed packages only.
 
 ### Package details controller
 

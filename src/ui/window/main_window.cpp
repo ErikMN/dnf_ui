@@ -13,6 +13,7 @@
 #include "ui/details/package_details_controller.hpp"
 #include "ui/package_query/package_query_controller.hpp"
 #include "ui/package_table/package_table_view.hpp"
+#include "ui/repository/repository_view.hpp"
 #include "ui/transaction/pending_transaction_controller.hpp"
 #include "ui/refresh/repository_refresh_controller.hpp"
 #include "dnf5daemon_client/transaction_service_client.hpp"
@@ -183,6 +184,17 @@ setup_shortcuts(GtkWidget *window, GtkWidget *entry, MainWindowUiState *widgets)
           NULL,
           NULL));
   gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), transaction_history);
+
+  // Open Repositories with Ctrl+Shift+R.
+  GtkShortcut *repositories = gtk_shortcut_new(
+      gtk_keyval_trigger_new(GDK_KEY_R, static_cast<GdkModifierType>(GDK_CONTROL_MASK | GDK_SHIFT_MASK)),
+      gtk_callback_action_new(
+          +[](GtkWidget *widget, GVariant *, gpointer) -> gboolean {
+            return gtk_widget_activate_action(widget, "win.repositories", NULL);
+          },
+          NULL,
+          NULL));
+  gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), repositories);
 
   // Refresh repositories with F5.
   GtkShortcut *refresh_repositories =
@@ -617,6 +629,11 @@ on_main_window_close_request(GtkWindow *window, gpointer user_data)
     return TRUE;
   }
 
+  if (repository_view_is_applying_changes()) {
+    ui_helpers_set_status(widgets->query.status_label, _("Repository changes are still being applied."), "blue");
+    return TRUE;
+  }
+
   if (widgets->window_state.allow_close_with_pending || widgets->transaction_state.actions.empty()) {
     config_save_window_geometry(window);
     if (widgets->results.inner_paned) {
@@ -658,6 +675,7 @@ connect_cleanup(GtkWidget *window, std::shared_ptr<MainWindowUiState> widgets, G
                      }
                      widgets->window_state.destroyed = true;
                      transaction_history_close_window();
+                     repository_view_close_window();
                      if (widgets->window_state.backend_warmup_cancellable) {
                        g_cancellable_cancel(widgets->window_state.backend_warmup_cancellable);
                        g_object_unref(widgets->window_state.backend_warmup_cancellable);

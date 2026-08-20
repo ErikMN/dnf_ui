@@ -4,6 +4,7 @@ src/app.cpp
 src/config.cpp
 src/dnf5daemon_client/transaction_service_client.cpp
 src/dnf5daemon_client/transaction_service_client_dbus.cpp
+src/dnf5daemon_client/repository_service_client.cpp
 src/dnf5daemon_client/transaction_service_client_wait.cpp
 src/dnf_backend/base_manager.cpp
 src/dnf_backend/dnf_common.cpp
@@ -31,6 +32,8 @@ src/ui/package_table/package_table_sort.cpp
 src/ui/package_table/package_table_status.cpp
 src/ui/package_table/package_table_view.cpp
 src/ui/refresh/repository_refresh_controller.cpp
+src/ui/repository/repository_apply_model.cpp
+src/ui/repository/repository_view.cpp
 src/ui/transaction/pending_transaction_action_rows.cpp
 src/ui/transaction/pending_transaction_apply.cpp
 src/ui/transaction/pending_transaction_controller.cpp
