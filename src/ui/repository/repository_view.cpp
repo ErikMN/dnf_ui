@@ -281,17 +281,24 @@ repository_view_collect_actual_changes(const std::vector<RepositoryInfo> &reposi
 }
 
 // -----------------------------------------------------------------------------
-// Update the Apply button from the current pending repository changes.
+// Update action buttons from the current repository window state.
 // -----------------------------------------------------------------------------
 void
-repository_view_update_apply_button(const std::shared_ptr<RepositoryWindowState> &state)
+repository_view_update_action_buttons(const std::shared_ptr<RepositoryWindowState> &state)
 {
-  if (!state || !state->apply_button) {
+  if (!state) {
     return;
   }
 
-  bool sensitive = !state->pending_enabled.empty() && !state->loading && !state->applying && !state->needs_reload;
-  gtk_widget_set_sensitive(GTK_WIDGET(state->apply_button), sensitive);
+  bool has_pending_changes = !state->pending_enabled.empty();
+  if (state->refresh_button) {
+    gtk_widget_set_sensitive(GTK_WIDGET(state->refresh_button),
+                             !state->loading && !state->applying && !has_pending_changes);
+  }
+  if (state->apply_button) {
+    bool sensitive = has_pending_changes && !state->loading && !state->applying && !state->needs_reload;
+    gtk_widget_set_sensitive(GTK_WIDGET(state->apply_button), sensitive);
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -352,13 +359,10 @@ repository_view_set_loading(const std::shared_ptr<RepositoryWindowState> &state,
   }
 
   state->loading = loading;
-  if (state->refresh_button) {
-    gtk_widget_set_sensitive(GTK_WIDGET(state->refresh_button), !state->loading && !state->applying);
-  }
   if (state->list_box) {
     gtk_widget_set_sensitive(GTK_WIDGET(state->list_box), !state->loading && !state->applying && !state->needs_reload);
   }
-  repository_view_update_apply_button(state);
+  repository_view_update_action_buttons(state);
 
   if (!state->spinner) {
     return;
@@ -426,7 +430,7 @@ repository_view_append_row(GtkListBox *list_box,
           toggle_data->state->pending_enabled[toggle_data->repository_id] = enabled;
         }
 
-        repository_view_update_apply_button(toggle_data->state);
+        repository_view_update_action_buttons(toggle_data->state);
         repository_view_show_pending_status(toggle_data->state);
       }),
       toggle_data,
@@ -453,7 +457,7 @@ repository_view_render_repositories(const std::shared_ptr<RepositoryWindowState>
     repository_view_append_row(state->list_box, repository, state);
   }
 
-  repository_view_update_apply_button(state);
+  repository_view_update_action_buttons(state);
 }
 
 // -----------------------------------------------------------------------------
@@ -564,6 +568,11 @@ void
 repository_view_start_load(const std::shared_ptr<RepositoryWindowState> &state)
 {
   if (!state || state->destroyed) {
+    return;
+  }
+
+  if (!state->pending_enabled.empty()) {
+    repository_view_show_pending_status(state);
     return;
   }
 

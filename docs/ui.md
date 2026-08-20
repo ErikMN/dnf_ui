@@ -129,8 +129,9 @@ The implementation lives in
 [src/ui/repository/repository_view.cpp](../src/ui/repository/repository_view.cpp).
 It lists repository ID, name, and enabled state on a worker thread so opening
 the window does not block the main UI. Checkbox changes are kept pending until
-the user presses Apply. Before changing repository state, the window shows a
-short review dialog with the repositories that will be enabled or disabled.
+the user presses Apply. Reload is disabled while repository changes are pending,
+so staged changes are not discarded silently. Before changing repository state,
+the window shows a short review dialog with the repositories that will be enabled or disabled.
 The window applies repository enable and disable changes through dnf5daemon,
 rebuilds the main package backend with the new repository configuration, and
 then reads the final repository state through a fresh daemon session. Apply is
