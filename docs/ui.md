@@ -133,9 +133,10 @@ the user presses Apply. Before changing repository state, the window shows a
 short review dialog with the repositories that will be enabled or disabled.
 The window applies repository enable and disable changes through dnf5daemon,
 rebuilds the main package backend with the new repository configuration, and
-then reloads the repository list through a fresh daemon session. Apply waits
-for package queries, repository refresh, and transaction preview or apply work
-to finish before changing repository state.
+then reads the final repository state through a fresh daemon session. Apply is
+not cancellable once it starts, and the repository window stays open until it
+finishes. Apply waits for package queries, repository refresh, and transaction
+preview or apply work to finish before changing repository state.
 
 ### Package details controller
 

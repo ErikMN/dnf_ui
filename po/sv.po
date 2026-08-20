@@ -811,8 +811,17 @@ msgstr "Förrådsändringar kan ha ändrat paketdata. Läs om paketen innan du f
 msgid "Repository changes applied. Package data refreshed."
 msgstr "Förrådsändringar verkställdes. Paketdata uppdaterades."
 
+msgid "Repository changes may be incomplete. Package data refreshed."
+msgstr "Förrådsändringar kan vara ofullständiga. Paketdata uppdaterades."
+
 msgid "Repository changes are still being applied."
 msgstr "Förrådsändringar verkställs fortfarande."
+
+msgid "Some repository changes were not confirmed by dnf5daemon."
+msgstr "Vissa förrådsändringar bekräftades inte av dnf5daemon."
+
+msgid "Repository state could not be reloaded."
+msgstr "Förrådsstatus kunde inte läsas om."
 
 msgid "Apply Repository Changes"
 msgstr "Verkställ förrådsändringar"
