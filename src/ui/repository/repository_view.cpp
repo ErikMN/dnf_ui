@@ -11,6 +11,7 @@
 #include "ui/package_query/package_query_controller.hpp"
 #include "ui/package_query/package_query_controller_internal.hpp"
 #include "ui/refresh/repository_refresh_controller.hpp"
+#include "ui/repository/repository_apply_model.hpp"
 #include "ui/transaction/pending_transaction_apply.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
@@ -18,7 +19,6 @@
 
 #include <gio/gio.h>
 
-#include <algorithm>
 #include <exception>
 #include <map>
 #include <memory>
@@ -79,7 +79,8 @@ struct RepositoryApplyTaskResult {
   bool write_attempted = false;
   bool no_write_needed = false;
   bool write_succeeded = false;
-  bool backend_synced = false;
+  bool clear_pending = false;
+  RepositoryBackendSyncResult backend_sync_result = RepositoryBackendSyncResult::FAILED;
   bool repository_state_loaded = false;
   std::vector<RepositoryInfo> repositories;
   std::string error;
@@ -168,10 +169,98 @@ repository_view_check_apply_preconditions(const std::shared_ptr<RepositoryWindow
 }
 
 // -----------------------------------------------------------------------------
+// Return the main-window status text for a repository Apply backend sync.
+// -----------------------------------------------------------------------------
+const char *
+repository_view_main_status_for_backend_sync(RepositoryBackendSyncResult sync_result, bool no_write_needed)
+{
+  if (no_write_needed) {
+    switch (sync_result) {
+    case RepositoryBackendSyncResult::LIVE_METADATA:
+      return _("Repository state already matched the requested changes.");
+    case RepositoryBackendSyncResult::CACHED_METADATA:
+      return _("Repository state already matched the requested changes. Using cached repository metadata.");
+    case RepositoryBackendSyncResult::INSTALLED_ONLY:
+      return _("Repository state already matched the requested changes. Showing installed packages only.");
+    case RepositoryBackendSyncResult::FAILED:
+      return _("Repository changes may have changed package data. Reload packages before continuing.");
+    }
+  }
+
+  switch (sync_result) {
+  case RepositoryBackendSyncResult::LIVE_METADATA:
+    return _("Repository changes applied. Package data refreshed.");
+  case RepositoryBackendSyncResult::CACHED_METADATA:
+    return _("Repository changes applied. Using cached repository metadata.");
+  case RepositoryBackendSyncResult::INSTALLED_ONLY:
+    return _("Repository changes applied. Showing installed packages only.");
+  case RepositoryBackendSyncResult::FAILED:
+    return _("Repository changes may have changed package data. Reload packages before continuing.");
+  }
+
+  return _("Repository changes may have changed package data. Reload packages before continuing.");
+}
+
+// -----------------------------------------------------------------------------
+// Return the repository-window status text for a completed repository Apply.
+// -----------------------------------------------------------------------------
+const char *
+repository_view_window_status_for_backend_sync(RepositoryBackendSyncResult sync_result, bool no_write_needed)
+{
+  if (no_write_needed) {
+    switch (sync_result) {
+    case RepositoryBackendSyncResult::LIVE_METADATA:
+      return _("Repository state already matched the requested changes.");
+    case RepositoryBackendSyncResult::CACHED_METADATA:
+      return _("Repository state already matched the requested changes. Using cached repository metadata.");
+    case RepositoryBackendSyncResult::INSTALLED_ONLY:
+      return _("Repository state already matched the requested changes. Showing installed packages only.");
+    case RepositoryBackendSyncResult::FAILED:
+      return _("Failed to apply repository changes.");
+    }
+  }
+
+  switch (sync_result) {
+  case RepositoryBackendSyncResult::LIVE_METADATA:
+    return _("Repository changes applied.");
+  case RepositoryBackendSyncResult::CACHED_METADATA:
+    return _("Repository changes applied. Using cached repository metadata.");
+  case RepositoryBackendSyncResult::INSTALLED_ONLY:
+    return _("Repository changes applied. Showing installed packages only.");
+  case RepositoryBackendSyncResult::FAILED:
+    return _("Failed to apply repository changes.");
+  }
+
+  return _("Failed to apply repository changes.");
+}
+
+// -----------------------------------------------------------------------------
+// Return the main-window status text for an incomplete repository Apply.
+// -----------------------------------------------------------------------------
+const char *
+repository_view_incomplete_main_status_for_backend_sync(RepositoryBackendSyncResult sync_result)
+{
+  switch (sync_result) {
+  case RepositoryBackendSyncResult::LIVE_METADATA:
+    return _("Repository changes may be incomplete. Package data refreshed.");
+  case RepositoryBackendSyncResult::CACHED_METADATA:
+    return _("Repository changes may be incomplete. Using cached repository metadata.");
+  case RepositoryBackendSyncResult::INSTALLED_ONLY:
+    return _("Repository changes may be incomplete. Showing installed packages only.");
+  case RepositoryBackendSyncResult::FAILED:
+    return _("Repository changes may have changed package data. Reload packages before continuing.");
+  }
+
+  return _("Repository changes may have changed package data. Reload packages before continuing.");
+}
+
+// -----------------------------------------------------------------------------
 // Update the main package view after repository configuration may have changed.
 // -----------------------------------------------------------------------------
 void
-repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState> &widgets, bool backend_synced)
+repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState> &widgets,
+                                         RepositoryBackendSyncResult sync_result,
+                                         bool no_write_needed)
 {
   if (!widgets || widgets->window_state.destroyed) {
     return;
@@ -180,12 +269,11 @@ repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState
   package_query_clear_search_cache();
   DaemonUpgradeState::instance().mark_stale();
 
-  if (!backend_synced) {
+  if (sync_result == RepositoryBackendSyncResult::FAILED) {
     BaseManager::instance().drop_cached_base();
     package_query_on_clear_button_clicked(nullptr, widgets.get());
-    ui_helpers_set_status(widgets->query.status_label,
-                          _("Repository changes may have changed package data. Reload packages before continuing."),
-                          "red");
+    ui_helpers_set_status(
+        widgets->query.status_label, repository_view_main_status_for_backend_sync(sync_result, no_write_needed), "red");
     return;
   }
 
@@ -193,91 +281,9 @@ repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState
   if (!cleared_upgradeable_table) {
     package_query_reload_current_view(widgets.get());
   }
-  ui_helpers_set_status(widgets->query.status_label, _("Repository changes applied. Package data refreshed."), "green");
-}
-
-// -----------------------------------------------------------------------------
-// Return true when the final daemon list confirms the requested repository state.
-// -----------------------------------------------------------------------------
-bool
-repository_view_requested_state_matches(const std::vector<RepositoryInfo> &repositories,
-                                        const std::vector<std::string> &repo_ids,
-                                        bool enabled)
-{
-  for (const auto &repo_id : repo_ids) {
-    auto it = std::find_if(repositories.begin(), repositories.end(), [&](const RepositoryInfo &repository) {
-      return repository.id == repo_id;
-    });
-    if (it == repositories.end() || it->enabled != enabled) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-// -----------------------------------------------------------------------------
-// Return true when the final daemon list confirms all requested repository states.
-// -----------------------------------------------------------------------------
-bool
-repository_view_requested_states_match(const std::vector<RepositoryInfo> &repositories,
-                                       const std::vector<std::string> &enable_ids,
-                                       const std::vector<std::string> &disable_ids)
-{
-  return repository_view_requested_state_matches(repositories, enable_ids, true) &&
-      repository_view_requested_state_matches(repositories, disable_ids, false);
-}
-
-// -----------------------------------------------------------------------------
-// Find one repository in a daemon list by ID.
-// -----------------------------------------------------------------------------
-const RepositoryInfo *
-repository_view_find_repository(const std::vector<RepositoryInfo> &repositories, const std::string &repo_id)
-{
-  auto it = std::find_if(repositories.begin(), repositories.end(), [&](const RepositoryInfo &repository) {
-    return repository.id == repo_id;
-  });
-  return it == repositories.end() ? nullptr : &*it;
-}
-
-// -----------------------------------------------------------------------------
-// Compare staged repository IDs with a fresh daemon list before writing anything.
-// -----------------------------------------------------------------------------
-bool
-repository_view_collect_actual_changes(const std::vector<RepositoryInfo> &repositories,
-                                       const std::vector<std::string> &desired_enable_ids,
-                                       const std::vector<std::string> &desired_disable_ids,
-                                       std::vector<std::string> &enable_ids_out,
-                                       std::vector<std::string> &disable_ids_out,
-                                       std::string &error_out)
-{
-  enable_ids_out.clear();
-  disable_ids_out.clear();
-  error_out.clear();
-
-  for (const auto &repo_id : desired_enable_ids) {
-    const RepositoryInfo *repository = repository_view_find_repository(repositories, repo_id);
-    if (!repository) {
-      error_out = _("Repository configuration changed before Apply. Reload repositories and try again.");
-      return false;
-    }
-    if (!repository->enabled) {
-      enable_ids_out.push_back(repo_id);
-    }
-  }
-
-  for (const auto &repo_id : desired_disable_ids) {
-    const RepositoryInfo *repository = repository_view_find_repository(repositories, repo_id);
-    if (!repository) {
-      error_out = _("Repository configuration changed before Apply. Reload repositories and try again.");
-      return false;
-    }
-    if (repository->enabled) {
-      disable_ids_out.push_back(repo_id);
-    }
-  }
-
-  return true;
+  const char *color = sync_result == RepositoryBackendSyncResult::LIVE_METADATA ? "green" : "blue";
+  ui_helpers_set_status(
+      widgets->query.status_label, repository_view_main_status_for_backend_sync(sync_result, no_write_needed), color);
 }
 
 // -----------------------------------------------------------------------------
@@ -312,6 +318,7 @@ repository_view_show_pending_status(const std::shared_ptr<RepositoryWindowState>
   }
 
   if (state->pending_enabled.empty()) {
+    gtk_label_set_text(state->status_label, _("No repository changes pending."));
     return;
   }
 
@@ -610,46 +617,45 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
   const std::vector<std::string> desired_disable_ids = task_data ? task_data->disable_ids : std::vector<std::string> {};
 
   auto *apply_result = new RepositoryApplyTaskResult;
-  std::vector<RepositoryInfo> preflight_repositories;
-  std::string preflight_error;
-  if (!repository_service_client_list(preflight_repositories, preflight_error, nullptr)) {
-    apply_result->error = preflight_error.empty() ? _("Repository state could not be reloaded.") : preflight_error;
+  std::vector<RepositoryInfo> current_repositories;
+  std::string current_list_error;
+  if (!repository_service_client_list(current_repositories, current_list_error, nullptr)) {
+    apply_result->error =
+        current_list_error.empty() ? _("Repository state could not be reloaded.") : current_list_error;
     g_task_return_pointer(task, apply_result, [](gpointer p) { delete static_cast<RepositoryApplyTaskResult *>(p); });
     return;
   }
 
   apply_result->repository_state_loaded = true;
-  apply_result->repositories = preflight_repositories;
+  apply_result->repositories = current_repositories;
 
-  std::vector<std::string> enable_ids;
-  std::vector<std::string> disable_ids;
-  if (!repository_view_collect_actual_changes(preflight_repositories,
-                                              desired_enable_ids,
-                                              desired_disable_ids,
-                                              enable_ids,
-                                              disable_ids,
-                                              apply_result->error)) {
+  RepositoryChangePlan plan =
+      repository_apply_plan_changes(current_repositories, desired_enable_ids, desired_disable_ids);
+  if (!plan.valid) {
+    apply_result->error = plan.error;
+    apply_result->clear_pending = true;
     apply_result->write_succeeded = false;
     g_task_return_pointer(task, apply_result, [](gpointer p) { delete static_cast<RepositoryApplyTaskResult *>(p); });
     return;
   }
 
-  if (enable_ids.empty() && disable_ids.empty()) {
+  if (plan.enable_ids.empty() && plan.disable_ids.empty()) {
     apply_result->sync_needed = true;
     apply_result->no_write_needed = true;
     apply_result->write_succeeded = true;
+    apply_result->clear_pending = true;
     try {
-      BaseManager::instance().rebuild(BaseRefreshMode::NORMAL);
-      apply_result->backend_synced = true;
+      BaseRepoState repo_state = BaseManager::instance().rebuild(BaseRefreshMode::NORMAL);
+      apply_result->backend_sync_result = repository_apply_backend_sync_result(true, repo_state);
     } catch (const std::exception &e) {
-      apply_result->backend_synced = false;
+      apply_result->backend_sync_result = RepositoryBackendSyncResult::FAILED;
       apply_result->error = e.what();
     }
     g_task_return_pointer(task, apply_result, [](gpointer p) { delete static_cast<RepositoryApplyTaskResult *>(p); });
     return;
   }
 
-  RepositoryWriteResult write_result = repository_service_client_apply_changes(enable_ids, disable_ids);
+  RepositoryWriteResult write_result = repository_service_client_apply_changes(plan.enable_ids, plan.disable_ids);
   apply_result->write_attempted = write_result.enable_attempted || write_result.disable_attempted;
   apply_result->sync_needed = apply_result->write_attempted;
   apply_result->write_succeeded = write_result.enable_succeeded && write_result.disable_succeeded;
@@ -658,11 +664,12 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
   }
 
   if (apply_result->write_attempted) {
+    apply_result->clear_pending = true;
     try {
-      BaseManager::instance().rebuild(BaseRefreshMode::NORMAL);
-      apply_result->backend_synced = true;
+      BaseRepoState repo_state = BaseManager::instance().rebuild(BaseRefreshMode::NORMAL);
+      apply_result->backend_sync_result = repository_apply_backend_sync_result(true, repo_state);
     } catch (const std::exception &e) {
-      apply_result->backend_synced = false;
+      apply_result->backend_sync_result = RepositoryBackendSyncResult::FAILED;
       if (!apply_result->error.empty()) {
         apply_result->error += " ";
       }
@@ -674,7 +681,7 @@ on_repository_apply_task(GTask *task, gpointer, gpointer, GCancellable *)
     if (repository_service_client_list(repositories, list_error, nullptr)) {
       apply_result->repository_state_loaded = true;
       apply_result->repositories = std::move(repositories);
-      if (!repository_view_requested_states_match(
+      if (!repository_apply_requested_states_match(
               apply_result->repositories, desired_enable_ids, desired_disable_ids)) {
         apply_result->write_succeeded = false;
         if (!apply_result->error.empty()) {
@@ -738,14 +745,15 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
   }
 
   if (apply_result->sync_needed) {
-    repository_view_refresh_main_after_apply(main_widgets, apply_result->backend_synced);
+    repository_view_refresh_main_after_apply(
+        main_widgets, apply_result->backend_sync_result, apply_result->no_write_needed);
   }
 
-  if (apply_result->repository_state_loaded) {
+  if (apply_result->clear_pending && apply_result->repository_state_loaded) {
     state->pending_enabled.clear();
     state->needs_reload = false;
     repository_view_render_repositories(state, apply_result->repositories);
-  } else if (apply_result->write_attempted) {
+  } else if (apply_result->clear_pending && apply_result->write_attempted) {
     state->pending_enabled.clear();
     state->needs_reload = true;
   }
@@ -758,12 +766,10 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
   repository_view_set_loading(state, false);
 
   if (apply_result->no_write_needed) {
-    if (apply_result->backend_synced) {
-      gtk_label_set_text(state->status_label, _("Repository state already matched the requested changes."));
-      if (main_widgets && !main_widgets->window_state.destroyed) {
-        ui_helpers_set_status(
-            main_widgets->query.status_label, _("Repository state already matched the requested changes."), "green");
-      }
+    if (apply_result->backend_sync_result != RepositoryBackendSyncResult::FAILED) {
+      const char *message = repository_view_window_status_for_backend_sync(apply_result->backend_sync_result,
+                                                                           apply_result->no_write_needed);
+      gtk_label_set_text(state->status_label, message);
     } else {
       std::string message = _("Failed to apply repository changes.");
       if (!apply_result->error.empty()) {
@@ -776,8 +782,9 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
     return;
   }
 
+  const bool backend_synchronized = apply_result->backend_sync_result != RepositoryBackendSyncResult::FAILED;
   const bool apply_complete =
-      apply_result->write_succeeded && apply_result->backend_synced && apply_result->repository_state_loaded;
+      apply_result->write_succeeded && backend_synchronized && apply_result->repository_state_loaded;
   if (!apply_complete) {
     std::string message = _("Failed to apply repository changes.");
     if (!apply_result->error.empty()) {
@@ -785,15 +792,18 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
       message += apply_result->error;
     }
     gtk_label_set_text(state->status_label, message.c_str());
-    if (main_widgets && !main_widgets->window_state.destroyed && apply_result->backend_synced) {
-      ui_helpers_set_status(
-          main_widgets->query.status_label, _("Repository changes may be incomplete. Package data refreshed."), "red");
+    if (main_widgets && !main_widgets->window_state.destroyed && backend_synchronized) {
+      ui_helpers_set_status(main_widgets->query.status_label,
+                            repository_view_incomplete_main_status_for_backend_sync(apply_result->backend_sync_result),
+                            "red");
     }
     delete apply_result;
     return;
   }
 
-  gtk_label_set_text(state->status_label, _("Repository changes applied."));
+  gtk_label_set_text(
+      state->status_label,
+      repository_view_window_status_for_backend_sync(apply_result->backend_sync_result, apply_result->no_write_needed));
   delete apply_result;
 }
 

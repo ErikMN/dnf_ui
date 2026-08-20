@@ -139,7 +139,8 @@ not cancellable once it starts, and the repository window stays open until it
 finishes. Before writing, Apply checks the current daemon repository state and
 sends only changes that are still needed. Apply waits for package queries,
 repository refresh, and transaction preview or apply work to finish before
-changing repository state.
+changing repository state. After Apply, the UI reports whether package data was
+reloaded from live metadata, cached metadata, or installed packages only.
 
 ### Package details controller
 

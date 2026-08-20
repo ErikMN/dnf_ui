@@ -793,6 +793,12 @@ msgstr "Kunde inte verkställa förrådsändringar."
 msgid "Repository changes applied."
 msgstr "Förrådsändringar verkställdes."
 
+msgid "Repository changes applied. Using cached repository metadata."
+msgstr "Förrådsändringar verkställdes. Använder cachad förrådsmetadata."
+
+msgid "Repository changes applied. Showing installed packages only."
+msgstr "Förrådsändringar verkställdes. Visar endast installerade paket."
+
 msgid "Applying repository changes..."
 msgstr "Verkställer förrådsändringar..."
 
@@ -814,6 +820,12 @@ msgstr "Förrådsändringar verkställdes. Paketdata uppdaterades."
 msgid "Repository changes may be incomplete. Package data refreshed."
 msgstr "Förrådsändringar kan vara ofullständiga. Paketdata uppdaterades."
 
+msgid "Repository changes may be incomplete. Using cached repository metadata."
+msgstr "Förrådsändringar kan vara ofullständiga. Använder cachad förrådsmetadata."
+
+msgid "Repository changes may be incomplete. Showing installed packages only."
+msgstr "Förrådsändringar kan vara ofullständiga. Visar endast installerade paket."
+
 msgid "Repository changes are still being applied."
 msgstr "Förrådsändringar verkställs fortfarande."
 
@@ -822,6 +834,15 @@ msgstr "Förrådskonfigurationen ändrades före Verkställ. Läs om förråden 
 
 msgid "Repository state already matched the requested changes."
 msgstr "Förrådsstatus matchade redan de begärda ändringarna."
+
+msgid "Repository state already matched the requested changes. Using cached repository metadata."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna. Använder cachad förrådsmetadata."
+
+msgid "Repository state already matched the requested changes. Showing installed packages only."
+msgstr "Förrådsstatus matchade redan de begärda ändringarna. Visar endast installerade paket."
+
+msgid "No repository changes pending."
+msgstr "Inga förrådsändringar väntar."
 
 msgid "Some repository changes were not confirmed by dnf5daemon."
 msgstr "Vissa förrådsändringar bekräftades inte av dnf5daemon."
