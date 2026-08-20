@@ -754,9 +754,6 @@ msgstr "Fel eller inga resultat."
 msgid "Enabled"
 msgstr "Aktiverat"
 
-msgid "Disabled"
-msgstr "Inaktiverat"
-
 msgid "Repository ID"
 msgstr "Förråds-ID"
 
@@ -765,6 +762,12 @@ msgstr "Inläsning av förråd avbröts."
 
 msgid "Failed to load repositories."
 msgstr "Kunde inte läsa in förråd."
+
+#, c-format
+msgid "%zu repository change is pending."
+msgid_plural "%zu repository changes are pending."
+msgstr[0] "%zu förrådsändring väntar."
+msgstr[1] "%zu förrådsändringar väntar."
 
 #, c-format
 msgid "Showing %zu repository."
@@ -780,6 +783,18 @@ msgstr "Läser in förråd..."
 
 msgid "Configured repositories"
 msgstr "Konfigurerade förråd"
+
+msgid "Repository change failed."
+msgstr "Förrådsändring misslyckades."
+
+msgid "Failed to apply repository changes."
+msgstr "Kunde inte verkställa förrådsändringar."
+
+msgid "Repository changes applied."
+msgstr "Förrådsändringar verkställdes."
+
+msgid "Applying repository changes..."
+msgstr "Verkställer förrådsändringar..."
 
 msgid "Refresh"
 msgstr "Uppdatera"

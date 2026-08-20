@@ -168,7 +168,7 @@ on_menu_transaction_history(GSimpleAction *, GVariant *, gpointer user_data)
 }
 
 // -----------------------------------------------------------------------------
-// Show the read-only repository list window.
+// Show the repository list window.
 // -----------------------------------------------------------------------------
 static void
 on_menu_repositories(GSimpleAction *, GVariant *, gpointer user_data)

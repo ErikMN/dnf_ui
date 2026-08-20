@@ -124,7 +124,7 @@ The `src/ui` directory is split by UI concern: `window`, `package_query`,
 - [src/ui/common/widgets.cpp](../src/ui/common/widgets.cpp) handles task helpers shared by controllers.
 - [src/ui/refresh/repository_refresh_controller.cpp](../src/ui/refresh/repository_refresh_controller.cpp) handles manual repository refresh.
 - [src/ui/repository/repository_view.cpp](../src/ui/repository/repository_view.cpp)
-  shows the read-only repository list window.
+  shows repositories and applies enabled-state changes.
 - [src/ui/window/main_menu.cpp](../src/ui/window/main_menu.cpp) handles top menu actions.
 - [src/ui/history/transaction_history_view.cpp](../src/ui/history/transaction_history_view.cpp) shows read-only transaction history.
 - [src/ui/package_query/package_query_controller.cpp](../src/ui/package_query/package_query_controller.cpp) handles the public search, list, history, clear, and reload callbacks.

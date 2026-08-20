@@ -1,13 +1,13 @@
 // -----------------------------------------------------------------------------
 // src/ui/repository/repository_view.hpp
-// Read-only repository list window
+// Repository list window
 // -----------------------------------------------------------------------------
 #pragma once
 
 #include <gtk/gtk.h>
 
 // -----------------------------------------------------------------------------
-// Open the read-only repository list window.
+// Open the repository list window.
 // -----------------------------------------------------------------------------
 void repository_view_show_window(GtkWindow *parent);
 

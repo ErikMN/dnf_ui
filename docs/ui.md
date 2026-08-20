@@ -26,7 +26,7 @@ The UI source tree is grouped by the part of the window it owns:
 - `src/ui/details` for the package details panel
 - `src/ui/transaction` for marked actions, preview, apply, review dialogs, and progress
 - `src/ui/refresh` for manual repository refresh
-- `src/ui/repository` for the read-only repository list window
+- `src/ui/repository` for the repository list and enabled-state changes
 - `src/ui/common` for shared widget state and small GTK helpers
 
 ## Window construction
@@ -124,12 +124,14 @@ rebuilds the libdnf5 Base, updates the lower-right progress text, and clears
 stale upgradable rows after repository metadata changes. The same workflow can
 be started with F5.
 
-`View -> Repositories...` opens a read-only repository list window backed by
-dnf5daemon. The implementation lives in
+`View -> Repositories...` opens a repository list window backed by dnf5daemon.
+The implementation lives in
 [src/ui/repository/repository_view.cpp](../src/ui/repository/repository_view.cpp).
 It lists repository ID, name, and enabled state on a worker thread so opening
-the window does not block the main UI. This first repository window does not
-enable or disable repositories from the GTK UI.
+the window does not block the main UI. Checkbox changes are kept pending until
+the user presses Apply. The window applies repository enable and disable changes
+through dnf5daemon, then reloads the repository list through a fresh daemon
+session.
 
 ### Package details controller
 
