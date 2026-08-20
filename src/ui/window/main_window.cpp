@@ -185,6 +185,17 @@ setup_shortcuts(GtkWidget *window, GtkWidget *entry, MainWindowUiState *widgets)
           NULL));
   gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), transaction_history);
 
+  // Open Repositories with Ctrl+Shift+R.
+  GtkShortcut *repositories = gtk_shortcut_new(
+      gtk_keyval_trigger_new(GDK_KEY_R, static_cast<GdkModifierType>(GDK_CONTROL_MASK | GDK_SHIFT_MASK)),
+      gtk_callback_action_new(
+          +[](GtkWidget *widget, GVariant *, gpointer) -> gboolean {
+            return gtk_widget_activate_action(widget, "win.repositories", NULL);
+          },
+          NULL,
+          NULL));
+  gtk_shortcut_controller_add_shortcut(GTK_SHORTCUT_CONTROLLER(shortcuts), repositories);
+
   // Refresh repositories with F5.
   GtkShortcut *refresh_repositories =
       gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_F5, static_cast<GdkModifierType>(0)),

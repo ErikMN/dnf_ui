@@ -124,7 +124,7 @@ rebuilds the libdnf5 Base, updates the lower-right progress text, and clears
 stale upgradable rows after repository metadata changes. The same workflow can
 be started with F5.
 
-`View -> Repositories...` opens a repository list window backed by dnf5daemon.
+`View -> Repositories...` or Ctrl+Shift+R opens a repository list window backed by dnf5daemon.
 The implementation lives in
 [src/ui/repository/repository_view.cpp](../src/ui/repository/repository_view.cpp).
 It lists repository ID, name, and enabled state on a worker thread so opening
