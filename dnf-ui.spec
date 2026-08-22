@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.6.0
+Version:        0.6.1
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Sat Aug 22 2026 ErikMN <dnfui@proton.me> - 0.6.1-1
+- Allow sorting repositories by enabled state, ID, or name
+- Highlight staged repository enable and disable changes
+- Keep package and pending-action state accurate when a transaction reports failure after RPM work has started
+
 * Sat Aug 22 2026 ErikMN <dnfui@proton.me> - 0.6.0-1
 - Add a repository manager for viewing, enabling, and disabling configured repositories
 - Review staged repository changes before applying them through dnf5daemon
