@@ -69,6 +69,11 @@ When the user clicks Apply:
 10. dnf5daemon handles privileged apply work and Polkit behavior.
 11. The GUI refreshes package state and closes the daemon session.
 
+Pending actions are cleared after a successful apply. If apply fails after the
+daemon reports that RPM work started, pending actions are also cleared because
+the old request no longer describes what still needs to be done. Failures before
+RPM work starts keep pending actions so the user can retry.
+
 When the user clicks Upgrade All, the GUI skips the pending action list and asks
 the transaction client to prepare a daemon-side Upgrade All session. If the
 resolved preview is empty, the session is closed and the GUI reports that all

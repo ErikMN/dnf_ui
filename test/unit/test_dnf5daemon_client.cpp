@@ -609,12 +609,18 @@ TEST_CASE("dnf5daemon client releases preview sessions", "[dnf5daemon]")
   transaction_service_client_release_request(transaction_path);
 
   std::vector<std::string> progress_lines;
+  bool transaction_started = false;
   bool applied_after_release = transaction_service_client_apply_started_request(
-      transaction_path, [&](const std::string &line) { progress_lines.push_back(line); }, {}, error);
+      transaction_path,
+      [&](const std::string &line) { progress_lines.push_back(line); },
+      {},
+      error,
+      transaction_started);
 
   transaction_service_client_reset_for_tests();
 
   REQUIRE_FALSE(applied_after_release);
+  REQUIRE_FALSE(transaction_started);
   REQUIRE_FALSE(error.empty());
 }
 
@@ -641,8 +647,13 @@ TEST_CASE("dnf5daemon client applies install requests", "[dnf5daemon]")
   bool preview_contains_package = preview_section_contains_name(preview.install, install_spec);
 
   std::vector<std::string> progress_lines;
+  bool transaction_started = false;
   bool applied = transaction_service_client_apply_started_request(
-      transaction_path, [&](const std::string &line) { progress_lines.push_back(line); }, {}, error);
+      transaction_path,
+      [&](const std::string &line) { progress_lines.push_back(line); },
+      {},
+      error,
+      transaction_started);
 
   transaction_service_client_release_request(transaction_path);
   bool session_exists_after_release = transaction_service_client_session_exists_for_tests(transaction_path);
@@ -652,6 +663,7 @@ TEST_CASE("dnf5daemon client applies install requests", "[dnf5daemon]")
   INFO(error);
   INFO(joined_progress_lines(progress_lines));
   REQUIRE(applied);
+  REQUIRE(transaction_started);
   REQUIRE(progress_contains(progress_lines, "Transaction applied successfully."));
   REQUIRE_FALSE(session_exists_after_release);
 }
@@ -683,17 +695,28 @@ TEST_CASE("dnf5daemon client releases sessions after failed apply", "[dnf5daemon
   REQUIRE_FALSE(second_transaction_path.empty());
 
   std::vector<std::string> progress_lines;
+  bool second_transaction_started = false;
   REQUIRE(transaction_service_client_apply_started_request(
-      second_transaction_path, [&](const std::string &line) { progress_lines.push_back(line); }, {}, error));
+      second_transaction_path,
+      [&](const std::string &line) { progress_lines.push_back(line); },
+      {},
+      error,
+      second_transaction_started));
   transaction_service_client_release_request(second_transaction_path);
 
+  bool first_transaction_started = false;
   bool failed_apply = transaction_service_client_apply_started_request(
-      first_transaction_path, [&](const std::string &line) { progress_lines.push_back(line); }, {}, error);
+      first_transaction_path,
+      [&](const std::string &line) { progress_lines.push_back(line); },
+      {},
+      error,
+      first_transaction_started);
   transaction_service_client_release_request(first_transaction_path);
   bool session_exists_after_release = transaction_service_client_session_exists_for_tests(first_transaction_path);
   transaction_service_client_reset_for_tests();
 
   REQUIRE_FALSE(failed_apply);
+  REQUIRE(second_transaction_started);
   INFO(error);
   INFO(joined_progress_lines(progress_lines));
   REQUIRE_FALSE(error.empty());

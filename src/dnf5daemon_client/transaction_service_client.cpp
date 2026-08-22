@@ -321,9 +321,11 @@ transaction_service_client_apply_started_request(const std::string &transaction_
                                                  const std::function<void(const std::string &)> &progress_callback,
                                                  const TransactionKeyImportCallback &key_import_callback,
                                                  std::string &error_out,
+                                                 bool &transaction_started_out,
                                                  GCancellable *cancellable)
 {
   error_out.clear();
+  transaction_started_out = false;
 
   if (transaction_path.empty()) {
     error_out = _("dnf5daemon session path is empty.");
@@ -372,6 +374,8 @@ transaction_service_client_apply_started_request(const std::string &transaction_
     DNFUI_TRACE("Transaction service client apply done path=%s", transaction_path.c_str());
     ok = true;
   } while (false);
+
+  transaction_started_out = progress_forwarder.transaction_started;
 
   if (!ok) {
     DNFUI_TRACE(

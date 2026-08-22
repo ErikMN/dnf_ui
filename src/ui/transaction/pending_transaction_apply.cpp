@@ -38,6 +38,7 @@ struct ApplyTaskData {
   MainWindowUiState *widgets = nullptr;
   std::string transaction_path;
   TransactionProgressWindow *progress_window;
+  bool transaction_started = false;
 };
 
 // Data passed to the transaction preview worker.
@@ -401,6 +402,11 @@ start_apply_transaction(MainWindowUiState *widgets)
           transaction_progress_finish(td ? td->progress_window : nullptr, false, details);
           mark_package_state_uncertain_after_apply(widgets);
           pending_transaction_invalidate_service_preview(widgets);
+          if (td && td->transaction_started) {
+            widgets->transaction_state.actions.clear();
+            package_table_refresh_statuses(widgets);
+            package_details_refresh_selected_package_actions(widgets);
+          }
           pending_transaction_set_preview_controls_sensitive(widgets, true);
           ui_helpers_set_status(
               widgets->query.status_label, _("Transaction failed. See the transaction window for details."), "red");
@@ -427,6 +433,7 @@ start_apply_transaction(MainWindowUiState *widgets)
               return transaction_dialogs_confirm_key_import(td->widgets, request, cancellable);
             },
             err,
+            td->transaction_started,
             cancellable);
         if (ok) {
           g_task_return_boolean(t, TRUE);

@@ -269,7 +269,7 @@ It is responsible for:
 - asking the transaction client for a preview
 - showing the review dialog
 - starting apply after confirmation
-- clearing pending actions after a successful apply
+- clearing pending actions after success or after RPM work started
 - refreshing package state after apply
 
 Ctrl+Enter starts the same pending-transaction preview as the Apply button.
