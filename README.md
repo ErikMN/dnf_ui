@@ -49,7 +49,8 @@ sudo dnf install dnf-ui
 DNF UI is a package manager frontend, **NOT** an app store.
 
 It focuses on fast package search, package details, installed package inspection,
-explicit transaction review, and applying DNF package transactions through Polkit.
+repository management, explicit transaction review, and applying DNF package
+transactions through Polkit.
 
 DNF UI does **NOT** aim to manage Flatpaks, firmware updates, ratings, featured
 applications, or software-center discovery workflows.
@@ -65,7 +66,8 @@ Applications such as [GNOME Software](https://apps.gnome.org/Software/) cover th
 - Select which available updates to apply or upgrade everything
 - Review all package changes before applying a transaction
 - Apply package changes through dnf5daemon with Polkit authorization
-- Enable and disable configured repositories through dnf5daemon
+- Manage configured repositories through dnf5daemon
+- Review and clear staged repository enable and disable changes before applying them
 - Cancel long-running package queries
 - Search previous queries
 - Export the visible package list as CSV
@@ -127,6 +129,21 @@ This keeps the main application **unprivileged** while still allowing normal des
 authentication when a transaction is applied.
 
 For the full transaction flow, see [docs/transactions.md](docs/transactions.md).
+
+## Repository management
+
+DNF UI can show your configured software repositories and lets you enable or
+disable them from the app.
+
+Changes are staged first, so you can review or clear them before applying.
+
+## Transaction history
+
+DNF UI includes a transaction history browser so you can look back at previous
+package changes.
+
+You can search and filter the history when you need to answer what changed,
+when it changed, or which package was involved.
 
 ## Screenshots
 
