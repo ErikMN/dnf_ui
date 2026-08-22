@@ -1052,7 +1052,7 @@ transaction_history_show_window(GtkWindow *parent)
   gtk_box_append(GTK_BOX(navigation_row), page_spin_button);
   state->page_spin_button = GTK_SPIN_BUTTON(page_spin_button);
 
-  GtkWidget *goto_button = ui_helpers_create_icon_button("go-jump-symbolic", _("Go"));
+  GtkWidget *goto_button = ui_helpers_create_icon_button_with_fallback("go-jump-symbolic", "go-next-symbolic", _("Go"));
   gtk_box_append(GTK_BOX(navigation_row), goto_button);
   state->goto_button = GTK_BUTTON(goto_button);
 
