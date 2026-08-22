@@ -1461,6 +1461,9 @@ msgstr "Uppgradera alla"
 msgid "Mark Listed Upgrades"
 msgstr "Markera listade uppgraderingar"
 
+msgid "Clear Pending"
+msgstr "Rensa väntande"
+
 msgid "Clear Transactions"
 msgstr "Rensa transaktioner"
 

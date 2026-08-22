@@ -42,9 +42,11 @@ struct RepositoryWindowState {
   GtkLabel *status_label = nullptr;
   GtkSpinner *spinner = nullptr;
   GtkButton *refresh_button = nullptr;
+  GtkButton *clear_pending_button = nullptr;
   GtkButton *apply_button = nullptr;
   GCancellable *cancellable = nullptr;
   std::weak_ptr<MainWindowUiState> main_widgets;
+  std::vector<RepositoryInfo> repositories;
   std::map<std::string, bool> pending_enabled;
   uint64_t load_id = 0;
   bool needs_reload = false;
@@ -433,6 +435,10 @@ repository_view_update_action_buttons(const std::shared_ptr<RepositoryWindowStat
     gtk_widget_set_sensitive(GTK_WIDGET(state->refresh_button),
                              !state->loading && !state->applying && !has_pending_changes);
   }
+  if (state->clear_pending_button) {
+    gtk_widget_set_sensitive(GTK_WIDGET(state->clear_pending_button),
+                             has_pending_changes && !state->loading && !state->applying);
+  }
   if (state->apply_button) {
     bool sensitive = has_pending_changes && !state->loading && !state->applying && !state->needs_reload;
     gtk_widget_set_sensitive(GTK_WIDGET(state->apply_button), sensitive);
@@ -761,8 +767,30 @@ repository_view_render_repositories(const std::shared_ptr<RepositoryWindowState>
     return;
   }
 
+  state->repositories = repositories;
   repository_view_set_model(state->column_view, repositories);
   repository_view_update_action_buttons(state);
+}
+
+// -----------------------------------------------------------------------------
+// Clear staged repository changes without applying them.
+// -----------------------------------------------------------------------------
+void
+repository_view_clear_pending_changes(const std::shared_ptr<RepositoryWindowState> &state)
+{
+  if (!state || state->destroyed || state->loading || state->applying) {
+    return;
+  }
+
+  if (state->pending_enabled.empty()) {
+    repository_view_show_pending_status(state);
+    return;
+  }
+
+  state->pending_enabled.clear();
+  repository_view_set_model(state->column_view, state->repositories);
+  repository_view_update_action_buttons(state);
+  repository_view_show_pending_status(state);
 }
 
 // -----------------------------------------------------------------------------
@@ -857,6 +885,7 @@ repository_view_start_load(const std::shared_ptr<RepositoryWindowState> &state)
   state->cancellable = g_cancellable_new();
   ++state->load_id;
   state->pending_enabled.clear();
+  state->repositories.clear();
 
   repository_view_set_model(state->column_view, {});
   repository_view_set_loading(state, true);
@@ -1339,6 +1368,11 @@ repository_view_show_window(GtkWindow *parent, const std::shared_ptr<MainWindowU
   gtk_box_append(GTK_BOX(top_row), refresh_button);
   state->refresh_button = GTK_BUTTON(refresh_button);
 
+  GtkWidget *clear_pending_button = ui_helpers_create_icon_button("edit-clear-symbolic", _("Clear Pending"));
+  gtk_widget_set_sensitive(clear_pending_button, FALSE);
+  gtk_box_append(GTK_BOX(top_row), clear_pending_button);
+  state->clear_pending_button = GTK_BUTTON(clear_pending_button);
+
   GtkWidget *apply_button = ui_helpers_create_icon_button("system-run-symbolic", _("Apply"));
   gtk_widget_set_sensitive(apply_button, FALSE);
   gtk_box_append(GTK_BOX(top_row), apply_button);
@@ -1378,6 +1412,15 @@ repository_view_show_window(GtkWindow *parent, const std::shared_ptr<MainWindowU
                      auto *state_holder = static_cast<std::shared_ptr<RepositoryWindowState> *>(user_data);
                      if (state_holder) {
                        repository_view_start_load(*state_holder);
+                     }
+                   }),
+                   state_holder);
+  g_signal_connect(clear_pending_button,
+                   "clicked",
+                   G_CALLBACK(+[](GtkButton *, gpointer user_data) {
+                     auto *state_holder = static_cast<std::shared_ptr<RepositoryWindowState> *>(user_data);
+                     if (state_holder) {
+                       repository_view_clear_pending_changes(*state_holder);
                      }
                    }),
                    state_holder);
