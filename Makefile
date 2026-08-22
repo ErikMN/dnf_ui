@@ -355,7 +355,7 @@ indent:
 .PHONY: clean
 clean:
 	$(RM) -r "$(MESON_BUILD_ROOT)"
-	$(RM) "$(APP_BIN_NAME)" "$(TEST_BIN_NAME)"
+	$(RM) "$(APP_BIN_NAME)" "$(BACKEND_CLI_BIN_NAME)" "$(TEST_BIN_NAME)"
 
 # Remove everything:
 .PHONY: distclean
