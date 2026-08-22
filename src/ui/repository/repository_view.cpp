@@ -93,10 +93,23 @@ struct RepositoryReviewDialogData {
 };
 
 void repository_view_start_load(const std::shared_ptr<RepositoryWindowState> &state);
+bool repository_view_effective_enabled(const std::shared_ptr<RepositoryWindowState> &state,
+                                       const RepositoryInfo &repository);
 
 enum class RepositoryTextColumn {
   ID,
   NAME,
+};
+
+enum class RepositorySortColumn {
+  ENABLED,
+  ID,
+  NAME,
+};
+
+struct RepositorySortData {
+  RepositorySortColumn column = RepositorySortColumn::ID;
+  std::weak_ptr<RepositoryWindowState> state;
 };
 
 // -----------------------------------------------------------------------------
@@ -502,6 +515,81 @@ repository_view_info_from_object(GObject *object)
 }
 
 // -----------------------------------------------------------------------------
+// Compare repository text values for table sorting.
+// -----------------------------------------------------------------------------
+int
+repository_view_compare_text(const std::string &left, const std::string &right)
+{
+  return g_ascii_strcasecmp(left.c_str(), right.c_str());
+}
+
+// -----------------------------------------------------------------------------
+// Compare two repository rows by the requested column.
+// -----------------------------------------------------------------------------
+int
+repository_view_compare_repositories(const RepositoryInfo &left,
+                                     const RepositoryInfo &right,
+                                     RepositorySortColumn column,
+                                     const std::shared_ptr<RepositoryWindowState> &state)
+{
+  int result = 0;
+  switch (column) {
+  case RepositorySortColumn::ENABLED: {
+    const bool left_enabled = repository_view_effective_enabled(state, left);
+    const bool right_enabled = repository_view_effective_enabled(state, right);
+    result = static_cast<int>(left_enabled) - static_cast<int>(right_enabled);
+    break;
+  }
+  case RepositorySortColumn::ID:
+    result = repository_view_compare_text(left.id, right.id);
+    break;
+  case RepositorySortColumn::NAME:
+    result = repository_view_compare_text(left.name, right.name);
+    break;
+  }
+
+  if (result != 0) {
+    return result;
+  }
+
+  return repository_view_compare_text(left.id, right.id);
+}
+
+// -----------------------------------------------------------------------------
+// Adapter from GTK's custom sorter callback to the repository row comparator.
+// -----------------------------------------------------------------------------
+int
+repository_view_sorter_compare(gconstpointer item1, gconstpointer item2, gpointer user_data)
+{
+  auto *sort_data = static_cast<RepositorySortData *>(user_data);
+  if (!sort_data) {
+    return 0;
+  }
+
+  const RepositoryInfo *left = repository_view_info_from_object(G_OBJECT(const_cast<gpointer>(item1)));
+  const RepositoryInfo *right = repository_view_info_from_object(G_OBJECT(const_cast<gpointer>(item2)));
+  if (!left || !right) {
+    return 0;
+  }
+
+  return repository_view_compare_repositories(*left, *right, sort_data->column, sort_data->state.lock());
+}
+
+// -----------------------------------------------------------------------------
+// Create one repository column sorter.
+// -----------------------------------------------------------------------------
+GtkSorter *
+repository_view_create_sorter(RepositorySortColumn column, const std::shared_ptr<RepositoryWindowState> &state = {})
+{
+  auto *sort_data = new RepositorySortData {
+    column,
+    state,
+  };
+  return GTK_SORTER(gtk_custom_sorter_new(
+      repository_view_sorter_compare, sort_data, [](gpointer p) { delete static_cast<RepositorySortData *>(p); }));
+}
+
+// -----------------------------------------------------------------------------
 // Return the currently displayed enabled state for one repository row.
 // -----------------------------------------------------------------------------
 bool
@@ -532,7 +620,12 @@ repository_view_set_model(GtkColumnView *column_view, const std::vector<Reposito
     g_object_unref(object);
   }
 
-  GtkNoSelection *selection = gtk_no_selection_new(G_LIST_MODEL(store));
+  GtkSortListModel *sort_model = gtk_sort_list_model_new(nullptr, nullptr);
+  gtk_sort_list_model_set_model(sort_model, G_LIST_MODEL(store));
+  gtk_sort_list_model_set_sorter(sort_model, gtk_column_view_get_sorter(column_view));
+  g_object_unref(store);
+
+  GtkNoSelection *selection = gtk_no_selection_new(G_LIST_MODEL(sort_model));
 
   gtk_column_view_set_model(column_view, GTK_SELECTION_MODEL(selection));
   g_object_unref(selection);
@@ -617,6 +710,11 @@ repository_view_create_text_column(const char *title, RepositoryTextColumn colum
   g_object_unref(factory);
   gtk_column_view_column_set_resizable(column, TRUE);
   gtk_column_view_column_set_expand(column, expand);
+  RepositorySortColumn sort_column =
+      column_kind == RepositoryTextColumn::ID ? RepositorySortColumn::ID : RepositorySortColumn::NAME;
+  GtkSorter *sorter = repository_view_create_sorter(sort_column);
+  gtk_column_view_column_set_sorter(column, sorter);
+  g_object_unref(sorter);
   if (fixed_width > 0) {
     gtk_column_view_column_set_fixed_width(column, fixed_width);
   }
@@ -721,6 +819,9 @@ repository_view_create_enabled_column(const std::shared_ptr<RepositoryWindowStat
   g_object_unref(factory);
   gtk_column_view_column_set_resizable(column, TRUE);
   gtk_column_view_column_set_fixed_width(column, kRepositoryStateWidthPx);
+  GtkSorter *sorter = repository_view_create_sorter(RepositorySortColumn::ENABLED, state);
+  gtk_column_view_column_set_sorter(column, sorter);
+  g_object_unref(sorter);
   return column;
 }
 
