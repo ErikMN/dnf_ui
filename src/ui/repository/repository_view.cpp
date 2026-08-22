@@ -113,6 +113,138 @@ struct RepositorySortData {
 };
 
 // -----------------------------------------------------------------------------
+// Return the widget that should receive row-color classes for one repository cell.
+// -----------------------------------------------------------------------------
+GtkWidget *
+repository_view_cell_color_target(GtkWidget *cell)
+{
+  GtkWidget *parent = gtk_widget_get_parent(cell);
+  if (!parent || GTK_IS_COLUMN_VIEW(parent)) {
+    return cell;
+  }
+
+  return parent;
+}
+
+// -----------------------------------------------------------------------------
+// Remove pending repository color classes from one widget.
+// -----------------------------------------------------------------------------
+void
+repository_view_clear_pending_css(GtkWidget *widget)
+{
+  if (!widget) {
+    return;
+  }
+
+  gtk_widget_remove_css_class(widget, "repository-row-pending-enable");
+  gtk_widget_remove_css_class(widget, "repository-row-pending-disable");
+}
+
+// -----------------------------------------------------------------------------
+// Return the pending repository color class for one displayed repository.
+// -----------------------------------------------------------------------------
+const char *
+repository_view_pending_css_class(const std::shared_ptr<RepositoryWindowState> &state, const std::string &repo_id)
+{
+  if (!state) {
+    return nullptr;
+  }
+
+  auto pending = state->pending_enabled.find(repo_id);
+  if (pending == state->pending_enabled.end()) {
+    return nullptr;
+  }
+
+  return pending->second ? "repository-row-pending-enable" : "repository-row-pending-disable";
+}
+
+// -----------------------------------------------------------------------------
+// Store the repository id currently bound to one realized cell.
+// -----------------------------------------------------------------------------
+void
+repository_view_set_cell_repository_id(GtkWidget *cell, const std::string &repo_id)
+{
+  if (!cell) {
+    return;
+  }
+
+  auto *old_id = static_cast<std::string *>(g_object_steal_data(G_OBJECT(cell), "repository-row-id"));
+  delete old_id;
+
+  auto *new_id = new std::string(repo_id);
+  g_object_set_data_full(
+      G_OBJECT(cell), "repository-row-id", new_id, [](gpointer p) { delete static_cast<std::string *>(p); });
+}
+
+// -----------------------------------------------------------------------------
+// Clear the repository id stored on one realized cell.
+// -----------------------------------------------------------------------------
+void
+repository_view_clear_cell_repository_id(GtkWidget *cell)
+{
+  if (!cell) {
+    return;
+  }
+
+  auto *old_id = static_cast<std::string *>(g_object_steal_data(G_OBJECT(cell), "repository-row-id"));
+  delete old_id;
+}
+
+// -----------------------------------------------------------------------------
+// Apply pending repository color to one realized cell.
+// -----------------------------------------------------------------------------
+void
+repository_view_update_pending_css_for_cell(GtkWidget *cell, const std::shared_ptr<RepositoryWindowState> &state)
+{
+  if (!cell) {
+    return;
+  }
+
+  GtkWidget *target = repository_view_cell_color_target(cell);
+  repository_view_clear_pending_css(cell);
+  repository_view_clear_pending_css(target);
+
+  auto *repo_id = static_cast<std::string *>(g_object_get_data(G_OBJECT(cell), "repository-row-id"));
+  if (!repo_id) {
+    return;
+  }
+
+  const char *css_class = repository_view_pending_css_class(state, *repo_id);
+  if (css_class) {
+    gtk_widget_add_css_class(target, css_class);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Refresh pending repository colors in currently realized rows.
+// -----------------------------------------------------------------------------
+void
+repository_view_refresh_visible_pending_css(GtkWidget *widget, const std::shared_ptr<RepositoryWindowState> &state)
+{
+  if (!widget) {
+    return;
+  }
+
+  repository_view_update_pending_css_for_cell(widget, state);
+  for (GtkWidget *child = gtk_widget_get_first_child(widget); child; child = gtk_widget_get_next_sibling(child)) {
+    repository_view_refresh_visible_pending_css(child, state);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Refresh pending repository colors for the repository table.
+// -----------------------------------------------------------------------------
+void
+repository_view_refresh_visible_pending_css(const std::shared_ptr<RepositoryWindowState> &state)
+{
+  if (!state || !state->column_view) {
+    return;
+  }
+
+  repository_view_refresh_visible_pending_css(GTK_WIDGET(state->column_view), state);
+}
+
+// -----------------------------------------------------------------------------
 // Return the main application state if it is still alive.
 // -----------------------------------------------------------------------------
 std::shared_ptr<MainWindowUiState>
@@ -665,7 +797,11 @@ repository_view_set_loading(const std::shared_ptr<RepositoryWindowState> &state,
 // Create one resizable text column for the repository table.
 // -----------------------------------------------------------------------------
 GtkColumnViewColumn *
-repository_view_create_text_column(const char *title, RepositoryTextColumn column_kind, int fixed_width, bool expand)
+repository_view_create_text_column(const char *title,
+                                   RepositoryTextColumn column_kind,
+                                   int fixed_width,
+                                   bool expand,
+                                   const std::shared_ptr<RepositoryWindowState> &state)
 {
   GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
   g_object_set_data(G_OBJECT(factory), "repository-text-column", GINT_TO_POINTER(static_cast<int>(column_kind)));
@@ -686,24 +822,32 @@ repository_view_create_text_column(const char *title, RepositoryTextColumn colum
                    }),
                    nullptr);
 
-  g_signal_connect(factory,
-                   "bind",
-                   G_CALLBACK(+[](GtkSignalListItemFactory *factory, GtkListItem *item, gpointer) {
-                     RepositoryTextColumn column_kind = static_cast<RepositoryTextColumn>(
-                         GPOINTER_TO_INT(g_object_get_data(G_OBJECT(factory), "repository-text-column")));
-                     GtkWidget *label = gtk_list_item_get_child(item);
-                     GObject *object = G_OBJECT(gtk_list_item_get_item(item));
-                     const RepositoryInfo *repository = repository_view_info_from_object(object);
-                     if (!repository) {
-                       gtk_label_set_text(GTK_LABEL(label), "");
-                       return;
-                     }
+  auto *state_holder = new std::shared_ptr<RepositoryWindowState>(state);
+  g_signal_connect_data(
+      factory,
+      "bind",
+      G_CALLBACK(+[](GtkSignalListItemFactory *factory, GtkListItem *item, gpointer user_data) {
+        auto *state_holder = static_cast<std::shared_ptr<RepositoryWindowState> *>(user_data);
+        RepositoryTextColumn column_kind = static_cast<RepositoryTextColumn>(
+            GPOINTER_TO_INT(g_object_get_data(G_OBJECT(factory), "repository-text-column")));
+        GtkWidget *label = gtk_list_item_get_child(item);
+        GObject *object = G_OBJECT(gtk_list_item_get_item(item));
+        const RepositoryInfo *repository = repository_view_info_from_object(object);
+        if (!repository) {
+          gtk_label_set_text(GTK_LABEL(label), "");
+          repository_view_clear_cell_repository_id(label);
+          repository_view_update_pending_css_for_cell(label, state_holder ? *state_holder : nullptr);
+          return;
+        }
 
-                     const std::string &text =
-                         column_kind == RepositoryTextColumn::ID ? repository->id : repository->name;
-                     gtk_label_set_text(GTK_LABEL(label), text.c_str());
-                   }),
-                   nullptr);
+        const std::string &text = column_kind == RepositoryTextColumn::ID ? repository->id : repository->name;
+        gtk_label_set_text(GTK_LABEL(label), text.c_str());
+        repository_view_set_cell_repository_id(label, repository->id);
+        repository_view_update_pending_css_for_cell(label, state_holder ? *state_holder : nullptr);
+      }),
+      state_holder,
+      [](gpointer p, GClosure *) { delete static_cast<std::shared_ptr<RepositoryWindowState> *>(p); },
+      G_CONNECT_DEFAULT);
 
   GtkColumnViewColumn *column = gtk_column_view_column_new(title, nullptr);
   gtk_column_view_column_set_factory(column, factory);
@@ -766,6 +910,7 @@ repository_view_create_enabled_column(const std::shared_ptr<RepositoryWindowStat
 
               repository_view_update_action_buttons(toggle_data->state);
               repository_view_show_pending_status(toggle_data->state);
+              repository_view_refresh_visible_pending_css(toggle_data->state);
             }),
             toggle_data);
 
@@ -775,44 +920,49 @@ repository_view_create_enabled_column(const std::shared_ptr<RepositoryWindowStat
       [](gpointer p, GClosure *) { delete static_cast<std::shared_ptr<RepositoryWindowState> *>(p); },
       G_CONNECT_DEFAULT);
 
-  g_signal_connect(factory,
-                   "bind",
-                   G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer) {
-                     GtkWidget *check_button = gtk_list_item_get_child(item);
-                     auto *toggle_data = static_cast<RepositoryToggleData *>(
-                         g_object_get_data(G_OBJECT(check_button), "repository-toggle-data"));
-                     GObject *object = G_OBJECT(gtk_list_item_get_item(item));
-                     const RepositoryInfo *repository = repository_view_info_from_object(object);
+  g_signal_connect(
+      factory,
+      "bind",
+      G_CALLBACK(+[](GtkSignalListItemFactory *, GtkListItem *item, gpointer) {
+        GtkWidget *check_button = gtk_list_item_get_child(item);
+        auto *toggle_data =
+            static_cast<RepositoryToggleData *>(g_object_get_data(G_OBJECT(check_button), "repository-toggle-data"));
+        GObject *object = G_OBJECT(gtk_list_item_get_item(item));
+        const RepositoryInfo *repository = repository_view_info_from_object(object);
 
-                     if (!toggle_data || !repository) {
-                       if (toggle_data) {
-                         toggle_data->repository_id.clear();
-                         toggle_data->original_enabled = false;
-                         if (toggle_data->signal_handler_id != 0) {
-                           g_signal_handler_block(check_button, toggle_data->signal_handler_id);
-                         }
-                         gtk_check_button_set_active(GTK_CHECK_BUTTON(check_button), FALSE);
-                         if (toggle_data->signal_handler_id != 0) {
-                           g_signal_handler_unblock(check_button, toggle_data->signal_handler_id);
-                         }
-                       }
-                       gtk_widget_set_sensitive(check_button, FALSE);
-                       return;
-                     }
+        if (!toggle_data || !repository) {
+          if (toggle_data) {
+            toggle_data->repository_id.clear();
+            toggle_data->original_enabled = false;
+            if (toggle_data->signal_handler_id != 0) {
+              g_signal_handler_block(check_button, toggle_data->signal_handler_id);
+            }
+            gtk_check_button_set_active(GTK_CHECK_BUTTON(check_button), FALSE);
+            if (toggle_data->signal_handler_id != 0) {
+              g_signal_handler_unblock(check_button, toggle_data->signal_handler_id);
+            }
+          }
+          gtk_widget_set_sensitive(check_button, FALSE);
+          repository_view_clear_cell_repository_id(check_button);
+          repository_view_update_pending_css_for_cell(check_button, toggle_data ? toggle_data->state : nullptr);
+          return;
+        }
 
-                     toggle_data->repository_id = repository->id;
-                     toggle_data->original_enabled = repository->enabled;
-                     bool enabled = repository_view_effective_enabled(toggle_data->state, *repository);
-                     if (toggle_data->signal_handler_id != 0) {
-                       g_signal_handler_block(check_button, toggle_data->signal_handler_id);
-                     }
-                     gtk_check_button_set_active(GTK_CHECK_BUTTON(check_button), enabled);
-                     if (toggle_data->signal_handler_id != 0) {
-                       g_signal_handler_unblock(check_button, toggle_data->signal_handler_id);
-                     }
-                     gtk_widget_set_sensitive(check_button, TRUE);
-                   }),
-                   nullptr);
+        toggle_data->repository_id = repository->id;
+        toggle_data->original_enabled = repository->enabled;
+        bool enabled = repository_view_effective_enabled(toggle_data->state, *repository);
+        if (toggle_data->signal_handler_id != 0) {
+          g_signal_handler_block(check_button, toggle_data->signal_handler_id);
+        }
+        gtk_check_button_set_active(GTK_CHECK_BUTTON(check_button), enabled);
+        if (toggle_data->signal_handler_id != 0) {
+          g_signal_handler_unblock(check_button, toggle_data->signal_handler_id);
+        }
+        gtk_widget_set_sensitive(check_button, TRUE);
+        repository_view_set_cell_repository_id(check_button, repository->id);
+        repository_view_update_pending_css_for_cell(check_button, toggle_data->state);
+      }),
+      nullptr);
 
   GtkColumnViewColumn *column = gtk_column_view_column_new(_("Enabled"), nullptr);
   gtk_column_view_column_set_factory(column, factory);
@@ -848,11 +998,11 @@ repository_view_create_column_view(const std::shared_ptr<RepositoryWindowState> 
   gtk_column_view_set_show_column_separators(view, TRUE);
 
   repository_view_append_column(view, repository_view_create_enabled_column(state));
-  repository_view_append_column(
-      view,
-      repository_view_create_text_column(_("Repository ID"), RepositoryTextColumn::ID, kRepositoryIdWidthPx, false));
   repository_view_append_column(view,
-                                repository_view_create_text_column(_("Name"), RepositoryTextColumn::NAME, 0, true));
+                                repository_view_create_text_column(
+                                    _("Repository ID"), RepositoryTextColumn::ID, kRepositoryIdWidthPx, false, state));
+  repository_view_append_column(
+      view, repository_view_create_text_column(_("Name"), RepositoryTextColumn::NAME, 0, true, state));
   repository_view_set_model(view, {});
   return GTK_WIDGET(view);
 }
@@ -1161,6 +1311,7 @@ on_repository_apply_finished(GObject *, GAsyncResult *result, gpointer)
     repository_view_render_repositories(state, apply_result->repositories);
   } else if (apply_result->clear_pending && repository_view_write_was_attempted(apply_result->write_outcome)) {
     state->pending_enabled.clear();
+    repository_view_refresh_visible_pending_css(state);
     state->needs_reload = true;
   }
 
