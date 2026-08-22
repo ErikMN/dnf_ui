@@ -29,6 +29,7 @@
 #include "upgrade/daemon_upgrade_state.hpp"
 
 #include <utility>
+#include <vector>
 
 // Data owned by the apply task.
 // The worker uses transaction_path to call the service, and progress_window receives text lines while the service
@@ -128,6 +129,42 @@ pending_transaction_cancel_service_preview(MainWindowUiState *widgets)
   if (widgets) {
     ui_helpers_set_status(widgets->query.status_label, _("Ready."), "gray");
   }
+}
+
+// -----------------------------------------------------------------------------
+// Treat local package state as uncertain after Apply has been sent to dnf5daemon.
+// -----------------------------------------------------------------------------
+static void
+mark_package_state_uncertain_after_apply(MainWindowUiState *widgets)
+{
+  if (!widgets) {
+    return;
+  }
+
+  DaemonUpgradeState::instance().mark_stale();
+  package_query_clear_search_cache();
+  package_query_clear_displayed_upgradeable_table(widgets);
+}
+
+// -----------------------------------------------------------------------------
+// Clear package data that may describe the system before an attempted Apply.
+// -----------------------------------------------------------------------------
+static void
+clear_package_view_after_apply_refresh_failure(MainWindowUiState *widgets, const char *status_message)
+{
+  if (!widgets) {
+    return;
+  }
+
+  BaseManager::instance().drop_cached_base();
+  package_query_clear_search_cache();
+  package_query_clear_duration_label(widgets);
+  widgets->query_state.reload_selected_nevra.clear();
+  widgets->results.selected_nevra.clear();
+  package_table_fill_package_view(widgets, std::vector<PackageRow> {});
+  package_details_reset_details_view(widgets);
+  pending_transaction_update_action_button_labels_for_selection(widgets, "", "", "", false);
+  ui_helpers_set_status(widgets->query.status_label, status_message, "red");
 }
 
 // -----------------------------------------------------------------------------
@@ -249,8 +286,8 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
   BaseRepoState *refresh_state = static_cast<BaseRepoState *>(g_task_propagate_pointer(task, &error));
 
   if (!refresh_state) {
-    ui_helpers_set_status(
-        widgets->query.status_label, error ? error->message : _("Repository refresh failed after transaction."), "red");
+    const char *message = error ? error->message : _("Repository refresh failed after transaction.");
+    clear_package_view_after_apply_refresh_failure(widgets, message);
     if (error) {
       g_error_free(error);
     }
@@ -347,8 +384,7 @@ start_apply_transaction(MainWindowUiState *widgets)
 
         if (success) {
           transaction_progress_finish(td ? td->progress_window : nullptr, true, "");
-          DaemonUpgradeState::instance().mark_stale();
-          package_query_clear_displayed_upgradeable_table(widgets);
+          mark_package_state_uncertain_after_apply(widgets);
           pending_transaction_invalidate_service_preview(widgets);
           // Clear pending actions and restore the transaction controls.
           widgets->transaction_state.actions.clear();
@@ -363,6 +399,7 @@ start_apply_transaction(MainWindowUiState *widgets)
         } else {
           std::string details = error ? error->message : _("Transaction failed.");
           transaction_progress_finish(td ? td->progress_window : nullptr, false, details);
+          mark_package_state_uncertain_after_apply(widgets);
           pending_transaction_invalidate_service_preview(widgets);
           pending_transaction_set_preview_controls_sensitive(widgets, true);
           ui_helpers_set_status(
@@ -370,6 +407,8 @@ start_apply_transaction(MainWindowUiState *widgets)
           if (error) {
             g_error_free(error);
           }
+
+          rebuild_after_tx_async(widgets);
         }
       });
 

@@ -421,7 +421,8 @@ daemon_apply_error_message(GError *error)
              "then prepare the preview again.");
   }
 
-  std::string message = _("The approved transaction was not applied. Prepare the preview again before retrying.");
+  std::string message = _("The approved transaction did not complete. Refresh package data and prepare the preview "
+                          "again before retrying.");
 
   if (!details.empty()) {
     message += "\n\n";
