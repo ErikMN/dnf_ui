@@ -362,6 +362,26 @@ TEST_CASE("Installed package refresh uses a short-lived system-only Base")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that passive installed-state checks keep the warmed shared Base.
+// -----------------------------------------------------------------------------
+TEST_CASE("Installed package refresh can preserve the cached Base")
+{
+  reset_backend_globals();
+
+  auto &mgr = BaseManager::instance();
+  mgr.reset_for_tests();
+
+  REQUIRE_NOTHROW(mgr.acquire_read());
+  REQUIRE(mgr.has_cached_base_for_tests());
+
+  REQUIRE_NOTHROW(dnf_backend_refresh_installed_snapshot_preserving_cached_base());
+  REQUIRE(dnf_backend_installed_snapshot_size_for_tests() > 0);
+  REQUIRE(mgr.has_cached_base_for_tests());
+
+  mgr.reset_for_tests();
+}
+
+// -----------------------------------------------------------------------------
 // Verify that daemon-target metadata lookup does not refresh installed state.
 // -----------------------------------------------------------------------------
 TEST_CASE("Daemon upgrade metadata lookup does not publish installed state")

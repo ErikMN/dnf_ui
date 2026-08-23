@@ -501,6 +501,9 @@ on_list_upgradeable_task_finished(GObject *, GAsyncResult *res, gpointer user_da
 
   if (result) {
     if (result->package_state_changed) {
+      DaemonUpgradeState::instance().abandon_refresh(result->refresh_owner.id());
+      result->refresh_owner.close();
+      package_query_refresh_upgrade_indicator(widgets);
       ui_helpers_set_status(widgets->query.status_label,
                             _("Package state changed while loading upgrades. Press List Upgradable to try again."),
                             "blue");
@@ -515,6 +518,7 @@ on_list_upgradeable_task_finished(GObject *, GAsyncResult *res, gpointer user_da
       break;
     case DaemonUpgradePublishResult::REFRESH_NO_LONGER_ACTIVE:
       result->refresh_owner.close();
+      package_query_refresh_upgrade_indicator(widgets);
       ui_helpers_set_status(widgets->query.status_label,
                             _("Package state changed while loading upgrades. Press List Upgradable to try again."),
                             "blue");
@@ -525,12 +529,15 @@ on_list_upgradeable_task_finished(GObject *, GAsyncResult *res, gpointer user_da
                             publish_error.empty() ? _("Unable to publish dnf5daemon upgrade information.")
                                                   : publish_error.c_str(),
                             "red");
+      package_query_refresh_upgrade_indicator(widgets);
       return;
     }
     result->refresh_owner.close();
+    package_query_refresh_upgrade_indicator(widgets);
 
     DaemonUpgradeSnapshot snapshot = DaemonUpgradeState::instance().snapshot();
     if (snapshot.status != DaemonUpgradeSnapshotStatus::READY) {
+      package_query_refresh_upgrade_indicator(widgets);
       ui_helpers_set_status(widgets->query.status_label,
                             _("Package state changed while loading upgrades. Press List Upgradable to try again."),
                             "blue");

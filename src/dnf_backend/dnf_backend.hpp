@@ -266,6 +266,12 @@ struct DnfBackendSearchOptions {
 bool dnf_backend_refresh_installed_snapshot();
 
 // -----------------------------------------------------------------------------
+// Refresh the installed-package snapshot without discarding the cached shared Base.
+// This is for passive startup checks that should not undo backend warmup.
+// -----------------------------------------------------------------------------
+bool dnf_backend_refresh_installed_snapshot_preserving_cached_base();
+
+// -----------------------------------------------------------------------------
 // Resolve installed-package state for one visible row from one installed snapshot.
 // -----------------------------------------------------------------------------
 InstalledPackageResolution dnf_backend_resolve_installed_package(const PackageRow &row);

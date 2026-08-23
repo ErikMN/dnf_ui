@@ -108,6 +108,10 @@ List Installed and List Upgradable do not use this checkbox.
 The bottom bar shows the visible row count on the left and the last completed
 package query time on the right.
 
+After startup, DNF UI quietly checks dnf5daemon's read-only upgrade target list.
+When that check succeeds, the List Upgradable button shows the current number
+of daemon-reported upgrades. Pressing the button still loads the full table.
+
 Search result caching uses this file:
 [src/ui/package_query/package_query_cache.cpp](../src/ui/package_query/package_query_cache.cpp).
 The cache is tied to the current backend Base generation and a cache epoch kept

@@ -60,6 +60,12 @@ msgstr "Backend-uppvärmning avbröts."
 msgid "Backend warm up failed."
 msgstr "Backend-uppvärmning misslyckades."
 
+msgid "Startup upgrade check was cancelled."
+msgstr "Startkontroll av uppgraderingar avbröts."
+
+msgid "Unable to check for package upgrades from dnf5daemon."
+msgstr "Kunde inte kontrollera paketuppgraderingar från dnf5daemon."
+
 msgid "Ready. Repository metadata loaded."
 msgstr "Redo. Förrådsmetadata inläst."
 
@@ -698,6 +704,18 @@ msgstr "Lista paket"
 
 msgid "List Upgradable"
 msgstr "Lista uppgraderbara"
+
+#, c-format
+msgid "List Upgradable (%zu)"
+msgid_plural "List Upgradable (%zu)"
+msgstr[0] "Lista uppgraderbara (%zu)"
+msgstr[1] "Lista uppgraderbara (%zu)"
+
+msgid "Checking Upgrades..."
+msgstr "Söker uppgraderingar..."
+
+msgid "Checking upgradable packages..."
+msgstr "Söker efter uppgraderbara paket..."
 
 msgid "Stop"
 msgstr "Stoppa"

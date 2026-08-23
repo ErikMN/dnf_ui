@@ -143,6 +143,7 @@ mark_package_state_uncertain_after_apply(MainWindowUiState *widgets)
   }
 
   DaemonUpgradeState::instance().mark_stale();
+  package_query_refresh_upgrade_indicator(widgets);
   package_query_clear_search_cache();
   package_query_clear_displayed_upgradeable_table(widgets);
 }

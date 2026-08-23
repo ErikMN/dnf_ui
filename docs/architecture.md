@@ -96,11 +96,14 @@ Startup follows a short path:
 - [src/ui/window/main_window.cpp](../src/ui/window/main_window.cpp) creates the main window and wires signals
 - [src/ui/window/main_window_layout.cpp](../src/ui/window/main_window_layout.cpp) builds the main window widget tree
 
-After the window is created, `app.cpp` starts backend warm up and schedules
-the periodic installed-package snapshot refresh:
+After the window is created, `app.cpp` starts backend warm up, schedules the
+periodic installed-package snapshot refresh, and then performs a quiet
+startup check for daemon-reported upgrades:
 
 - backend warm up, so the first package query is faster
 - periodic installed-package snapshot refresh
+- startup upgrade check, so the List Upgradable button can show a count before
+  the user opens that view
 
 ```mermaid
 flowchart TD
@@ -109,6 +112,7 @@ flowchart TD
     Activate --> Window[main_window_create]
     Activate --> Warmup[backend warm up]
     Activate --> Refresh[periodic installed refresh]
+    Warmup --> UpgradeCheck[startup upgrade check]
 ```
 
 ## UI structure
