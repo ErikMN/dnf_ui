@@ -12,6 +12,7 @@
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
 #include "ui/common/widgets_internal.hpp"
+#include "upgrade/daemon_upgrade_state.hpp"
 
 #include <vector>
 
@@ -156,6 +157,36 @@ package_query_has_active_package_list_request(const MainWindowUiState *widgets)
 }
 
 // -----------------------------------------------------------------------------
+// Refresh the List Upgradable button label from the current daemon upgrade snapshot.
+// -----------------------------------------------------------------------------
+void
+package_query_refresh_upgrade_indicator(MainWindowUiState *widgets)
+{
+  if (!widgets || !widgets->query.list_upgradeable_button) {
+    return;
+  }
+
+  if (widgets->query_state.active_request.cancellable &&
+      widgets->query_state.active_request.kind == PackageListRequestKind::LIST_UPGRADEABLE) {
+    return;
+  }
+
+  std::string label = _("List Upgradable");
+  DaemonUpgradeSnapshot snapshot = DaemonUpgradeState::instance().snapshot();
+  if (snapshot.status == DaemonUpgradeSnapshotStatus::REFRESHING) {
+    label = _("Checking Upgrades...");
+  } else if (snapshot.status == DaemonUpgradeSnapshotStatus::READY && !snapshot.targets_by_name_arch.empty()) {
+    label =
+        dnfui_i18n_format_count(snapshot.targets_by_name_arch.size(), "List Upgradable (%zu)", "List Upgradable (%zu)");
+  }
+
+  ui_helpers_set_icon_button_with_fallback(widgets->query.list_upgradeable_button,
+                                           "software-update-available-symbolic",
+                                           "view-list-symbolic",
+                                           label.c_str());
+}
+
+// -----------------------------------------------------------------------------
 // Enable or disable the idle package query controls.
 // -----------------------------------------------------------------------------
 void
@@ -277,10 +308,7 @@ package_query_begin_package_list_request(MainWindowUiState *widgets,
       widgets->query.list_button, "drive-harddisk-system-symbolic", "view-list-symbolic", _("List Installed"));
   ui_helpers_set_icon_button_with_fallback(
       widgets->query.list_packages_button, "package-x-generic-symbolic", "view-list-symbolic", _("List Packages"));
-  ui_helpers_set_icon_button_with_fallback(widgets->query.list_upgradeable_button,
-                                           "software-update-available-symbolic",
-                                           "view-list-symbolic",
-                                           _("List Upgradable"));
+  package_query_refresh_upgrade_indicator(widgets);
   ui_helpers_set_icon_button_with_fallback(
       stop_button, "process-stop-symbolic", "media-playback-stop-symbolic", _("Stop"));
   package_query_set_idle_controls_sensitive(widgets, false);
@@ -305,10 +333,7 @@ restore_package_list_controls(MainWindowUiState *widgets)
       widgets->query.list_button, "drive-harddisk-system-symbolic", "view-list-symbolic", _("List Installed"));
   ui_helpers_set_icon_button_with_fallback(
       widgets->query.list_packages_button, "package-x-generic-symbolic", "view-list-symbolic", _("List Packages"));
-  ui_helpers_set_icon_button_with_fallback(widgets->query.list_upgradeable_button,
-                                           "software-update-available-symbolic",
-                                           "view-list-symbolic",
-                                           _("List Upgradable"));
+  package_query_refresh_upgrade_indicator(widgets);
   package_query_set_idle_controls_sensitive(widgets, true);
   if (widgets->transaction_widgets.mark_listed_upgrades_button) {
     bool transaction_busy =

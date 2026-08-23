@@ -148,6 +148,8 @@ Source:
 Why this matters:
 
 - List Upgradable needs a read-only daemon snapshot of upgrade targets. This snapshot should come from dnf5daemon's package-list API, not from a resolved Upgrade All transaction preview.
+- The startup upgrade indicator uses the same read-only daemon snapshot.
+  It must not create an Upgrade All preview just to count packages.
 - DNF UI keeps daemon upgrade specs and internal package identity separate. `name.arch` is the daemon upgrade spec. The internal package identity uses package name and architecture as separate values.
 - Normal `nevra` is the application-facing package ID because it matches libdnf5 `PackageRow::nevra`. `full_nevra` is kept separately for callers that need the daemon's full epoch form.
 - The shared daemon upgrade state stores complete package-list results by package name and architecture. It does not fetch daemon data itself.

@@ -271,6 +271,32 @@ publish_local_installed_snapshot(InstalledQueryResult installed, std::set<std::s
   return publish_installed_snapshot_locked(std::move(installed), std::move(protected_names));
 }
 
+// -----------------------------------------------------------------------------
+// Refresh the installed snapshot through a short-lived system-only Base.
+// The caller chooses whether this should also discard the cached shared Base.
+//
+// Thread-safety:
+//   The Base read lock and g_installed_mutex must never be held simultaneously.
+//   Installed rows are collected into local containers while the Base lock is
+//   held, then published after that lock has been released.
+// -----------------------------------------------------------------------------
+bool
+refresh_installed_snapshot(bool drop_cached_base)
+{
+  InstalledQueryResult installed;
+  std::set<std::string> protected_names;
+  {
+    auto read = drop_cached_base ? BaseManager::instance().acquire_system_only_read_after_dropping_cached_base()
+                                 : BaseManager::instance().acquire_system_only_read();
+    libdnf5::Base &base = *read.base;
+    const DnfBackendSearchOptions search_options {};
+    installed = collect_installed_rows(base, nullptr, search_options);
+    protected_names = collect_self_protected_package_names(base);
+  } // Base read lock released before acquiring g_installed_mutex
+
+  return publish_local_installed_snapshot(installed, protected_names);
+}
+
 } // namespace dnf_backend_internal
 
 using namespace dnf_backend_internal;
@@ -311,17 +337,17 @@ dnf_backend_installed_snapshot_contains_for_tests(const std::string &nevra)
 bool
 dnf_backend_refresh_installed_snapshot()
 {
-  InstalledQueryResult installed;
-  std::set<std::string> protected_names;
-  {
-    auto read = BaseManager::instance().acquire_system_only_read_after_dropping_cached_base();
-    libdnf5::Base &base = *read.base;
-    const DnfBackendSearchOptions search_options {};
-    installed = collect_installed_rows(base, nullptr, search_options);
-    protected_names = collect_self_protected_package_names(base);
-  } // Base read lock released before acquiring g_installed_mutex
+  return refresh_installed_snapshot(/*drop_cached_base=*/true);
+}
 
-  return publish_local_installed_snapshot(installed, protected_names);
+// -----------------------------------------------------------------------------
+// Refresh the installed snapshot without discarding the warmed shared Base.
+// This path is used by passive startup checks that should not slow the first query.
+// -----------------------------------------------------------------------------
+bool
+dnf_backend_refresh_installed_snapshot_preserving_cached_base()
+{
+  return refresh_installed_snapshot(/*drop_cached_base=*/false);
 }
 
 // -----------------------------------------------------------------------------

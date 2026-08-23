@@ -548,6 +548,7 @@ repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState
 
   package_query_clear_search_cache();
   DaemonUpgradeState::instance().mark_stale();
+  package_query_refresh_upgrade_indicator(widgets.get());
 
   if (result.backend_sync_result == RepositoryBackendSyncResult::FAILED) {
     BaseManager::instance().drop_cached_base();

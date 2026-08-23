@@ -58,6 +58,10 @@ bool package_query_has_active_package_list_request(const MainWindowUiState *widg
 // -----------------------------------------------------------------------------
 void package_query_set_idle_controls_sensitive(MainWindowUiState *widgets, bool sensitive);
 // -----------------------------------------------------------------------------
+// Refresh the List Upgradable button label from the current daemon upgrade snapshot.
+// -----------------------------------------------------------------------------
+void package_query_refresh_upgrade_indicator(MainWindowUiState *widgets);
+// -----------------------------------------------------------------------------
 // Put one query button into Stop mode while a worker owns it.
 // -----------------------------------------------------------------------------
 void package_query_begin_package_list_request(MainWindowUiState *widgets,

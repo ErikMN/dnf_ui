@@ -49,7 +49,7 @@ These tests protect:
 - package search and merge behavior
 - Latest only and all-version package query behavior
 - config file parsing and fallback behavior
-- installed snapshot behavior
+- installed snapshot behavior, including passive refresh without dropping the warmed Base
 - pending transaction action row selection for install, upgrade, downgrade, remove, and reinstall
 - package table CSV export formatting
 - package table column text and sorting behavior

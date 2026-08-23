@@ -296,6 +296,8 @@ repository_refresh_on_force_rebuild_task_finished(GObject *, GAsyncResult *res, 
   repository_refresh_set_button_idle(widgets);
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.refresh_button), TRUE);
   repository_refresh_finish_operation(widgets);
+  DaemonUpgradeState::instance().mark_stale();
+  package_query_refresh_upgrade_indicator(widgets);
 
   if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
     DNFUI_TRACE("Repository refresh completion stopped");
@@ -399,6 +401,7 @@ repository_refresh_on_button_clicked(GtkButton *, gpointer user_data)
   // not reuse rows from repository state that is changing.
   package_query_clear_search_cache();
   DaemonUpgradeState::instance().mark_stale();
+  package_query_refresh_upgrade_indicator(widgets);
   package_query_clear_displayed_upgradeable_table(widgets);
   DNFUI_TRACE("Repository refresh start requested from button");
   package_query_clear_duration_label(widgets);

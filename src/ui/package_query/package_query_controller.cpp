@@ -17,6 +17,7 @@
 #include "ui/transaction/pending_transaction_view.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/widgets.hpp"
+#include "upgrade/daemon_upgrade_state.hpp"
 
 #include <string>
 #include <vector>
@@ -172,6 +173,13 @@ package_query_on_list_upgradeable_button_clicked(GtkButton *, gpointer user_data
     if (widgets->query_state.active_request.kind == PackageListRequestKind::LIST_UPGRADEABLE) {
       package_query_cancel_active_package_list_request(widgets);
     }
+    return;
+  }
+
+  DaemonUpgradeSnapshot snapshot = DaemonUpgradeState::instance().snapshot();
+  if (snapshot.status == DaemonUpgradeSnapshotStatus::REFRESHING) {
+    package_query_refresh_upgrade_indicator(widgets);
+    ui_helpers_set_status(widgets->query.status_label, _("Checking upgradable packages..."), "blue");
     return;
   }
 
