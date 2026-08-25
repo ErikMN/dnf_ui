@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.6.1
+Version:        0.6.2
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,9 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Tue Aug 25 2026 ErikMN <dnfui@proton.me> - 0.6.2-1
+- Show the available package upgrade count after startup and repository refresh
+
 * Sat Aug 22 2026 ErikMN <dnfui@proton.me> - 0.6.1-1
 - Allow sorting repositories by enabled state, ID, or name
 - Highlight staged repository enable and disable changes
