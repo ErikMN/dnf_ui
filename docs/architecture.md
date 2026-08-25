@@ -102,7 +102,7 @@ startup check for daemon-reported upgrades:
 
 - backend warm up, so the first package query is faster
 - periodic installed-package snapshot refresh
-- startup upgrade check, so the List Upgradable button can show a count before
+- startup upgrade count refresh, so the List Upgradable button can show a count before
   the user opens that view
 
 ```mermaid
@@ -112,7 +112,7 @@ flowchart TD
     Activate --> Window[main_window_create]
     Activate --> Warmup[backend warm up]
     Activate --> Refresh[periodic installed refresh]
-    Warmup --> UpgradeCheck[startup upgrade check]
+    Warmup --> UpgradeCheck[startup upgrade count refresh]
 ```
 
 ## UI structure

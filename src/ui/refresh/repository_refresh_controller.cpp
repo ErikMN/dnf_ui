@@ -328,6 +328,9 @@ repository_refresh_on_force_rebuild_task_finished(GObject *, GAsyncResult *res, 
       ui_helpers_set_status(
           widgets->query.status_label, _("Live repo refresh failed. Showing installed packages only."), "blue");
     }
+    if (*refresh_state == BaseRepoState::LIVE_METADATA) {
+      package_query_start_upgrade_indicator_refresh(widgets);
+    }
     if (!cleared_upgradeable_table) {
       package_query_reload_current_view(widgets);
     }

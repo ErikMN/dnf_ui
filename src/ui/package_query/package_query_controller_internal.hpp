@@ -62,6 +62,10 @@ void package_query_set_idle_controls_sensitive(MainWindowUiState *widgets, bool 
 // -----------------------------------------------------------------------------
 void package_query_refresh_upgrade_indicator(MainWindowUiState *widgets);
 // -----------------------------------------------------------------------------
+// Start a quiet daemon upgrade count refresh for the List Upgradable button.
+// -----------------------------------------------------------------------------
+void package_query_start_upgrade_indicator_refresh(MainWindowUiState *widgets);
+// -----------------------------------------------------------------------------
 // Put one query button into Stop mode while a worker owns it.
 // -----------------------------------------------------------------------------
 void package_query_begin_package_list_request(MainWindowUiState *widgets,

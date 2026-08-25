@@ -111,6 +111,8 @@ package query time on the right.
 After startup, DNF UI quietly checks dnf5daemon's read-only upgrade target list.
 When that check succeeds, the List Upgradable button shows the current number
 of daemon-reported upgrades. Pressing the button still loads the full table.
+After Refresh Repositories completes with live metadata, DNF UI refreshes that
+count quietly again.
 
 Search result caching uses this file:
 [src/ui/package_query/package_query_cache.cpp](../src/ui/package_query/package_query_cache.cpp).

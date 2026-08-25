@@ -2,14 +2,13 @@
 // src/app.cpp
 // GTK application setup
 // Creates the GTK application, window, periodic refresh task, backend warm up
-// task, and startup upgrade check.
+// task, and startup package-upgrade count check.
 // -----------------------------------------------------------------------------
 #include "app.hpp"
 
 #include "dnf_backend/base_manager.hpp"
 #include "debug_trace.hpp"
 #include "dnf_backend/dnf_backend.hpp"
-#include "dnf5daemon_client/transaction_service_client.hpp"
 #include "i18n.hpp"
 #include "ui/package_query/package_query_controller.hpp"
 #include "ui/package_query/package_query_controller_internal.hpp"
@@ -23,10 +22,6 @@
 
 #include <atomic>
 #include <gtk/gtk.h>
-#include <memory>
-#include <optional>
-#include <stdexcept>
-#include <vector>
 
 // -----------------------------------------------------------------------------
 // Function forward declarations
@@ -44,10 +39,6 @@ static gboolean start_backend_warmup_idle(gpointer user_data);
 static void start_backend_warmup_task(MainWindowUiState *widgets);
 static void on_backend_warmup_task(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable);
 static void on_backend_warmup_task_finished(GObject *source_object, GAsyncResult *result, gpointer user_data);
-static void start_startup_upgrade_check_task(MainWindowUiState *widgets);
-static void
-on_startup_upgrade_check_task(GTask *task, gpointer source_object, gpointer task_data, GCancellable *cancellable);
-static void on_startup_upgrade_check_finished(GObject *source_object, GAsyncResult *result, gpointer user_data);
 #ifdef DNFUI_DEBUG_TRACE
 static const char *base_repo_state_trace_name(BaseRepoState state);
 #endif
@@ -70,13 +61,6 @@ static MainWindowUiState *g_main_widgets = nullptr;
 struct StartupWarmupData {
   MainWindowUiState *widgets = nullptr;
   GCancellable *startup_cancellable = nullptr;
-};
-
-struct StartupUpgradeCheckResult {
-  DaemonUpgradeRefreshOwner refresh_owner;
-  std::vector<DaemonUpgradeTarget> targets;
-  bool package_state_changed = false;
-  bool skipped = false;
 };
 
 // -----------------------------------------------------------------------------
@@ -353,146 +337,7 @@ on_backend_warmup_task_finished(GObject *, GAsyncResult *result, gpointer user_d
     gtk_widget_set_visible(GTK_WIDGET(widgets->window_state.backend_warmup_label), FALSE);
   }
 
-  start_startup_upgrade_check_task(widgets);
-}
-
-// -----------------------------------------------------------------------------
-// Start one quiet startup check for daemon-reported package upgrades.
-// -----------------------------------------------------------------------------
-static void
-start_startup_upgrade_check_task(MainWindowUiState *widgets)
-{
-  if (!widgets || widgets->window_state.destroyed) {
-    return;
-  }
-
-  if (package_query_has_active_package_list_request(widgets) || repository_refresh_is_running() ||
-      pending_transaction_preview_is_busy(widgets) || pending_transaction_apply_is_busy(widgets)) {
-    DNFUI_TRACE("Startup upgrade check skipped because user work is active");
-    return;
-  }
-
-  DaemonUpgradeSnapshot snapshot = DaemonUpgradeState::instance().snapshot();
-  if (snapshot.status != DaemonUpgradeSnapshotStatus::NOT_LOADED) {
-    package_query_refresh_upgrade_indicator(widgets);
-    return;
-  }
-
-  DNFUI_TRACE("Startup upgrade check task start");
-  GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
-  GTask *task = widgets_task_new_for_main_window_ui_state(widgets, c, on_startup_upgrade_check_finished);
-  g_task_run_in_thread(task, on_startup_upgrade_check_task);
-  g_object_unref(task);
-  g_object_unref(c);
-}
-
-// -----------------------------------------------------------------------------
-// Load daemon upgrade targets without loading libdnf package metadata.
-// -----------------------------------------------------------------------------
-static void
-on_startup_upgrade_check_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
-{
-  DaemonUpgradeRefreshOwner refresh_owner;
-
-  try {
-    if (cancellable && g_cancellable_is_cancelled(cancellable)) {
-      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Startup upgrade check was cancelled."));
-      return;
-    }
-
-    if (dnf_backend_refresh_installed_snapshot_preserving_cached_base()) {
-      DaemonUpgradeState::instance().mark_stale();
-    }
-
-    std::optional<DaemonUpgradeRefreshId> refresh_id = DaemonUpgradeState::instance().begin_refresh();
-    if (!refresh_id.has_value()) {
-      DNFUI_TRACE("Startup upgrade check skipped because daemon upgrade refresh is active");
-      auto *result = new StartupUpgradeCheckResult;
-      result->skipped = true;
-      g_task_return_pointer(task, result, [](gpointer p) { delete static_cast<StartupUpgradeCheckResult *>(p); });
-      return;
-    }
-    refresh_owner = DaemonUpgradeRefreshOwner(refresh_id.value());
-
-    std::vector<DaemonUpgradeTarget> targets;
-    std::string error;
-    if (!transaction_service_client_list_upgrade_targets(targets, error, cancellable)) {
-      if (cancellable && g_cancellable_is_cancelled(cancellable)) {
-        g_task_return_new_error(
-            task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Startup upgrade check was cancelled."));
-        return;
-      }
-
-      DaemonUpgradeState::instance().publish_failure(refresh_owner.id());
-      refresh_owner.close();
-      throw std::runtime_error(error.empty() ? _("Unable to check for package upgrades from dnf5daemon.") : error);
-    }
-
-    if (dnf_backend_refresh_installed_snapshot_preserving_cached_base()) {
-      auto *result = new StartupUpgradeCheckResult;
-      result->package_state_changed = true;
-      g_task_return_pointer(task, result, [](gpointer p) { delete static_cast<StartupUpgradeCheckResult *>(p); });
-      return;
-    }
-
-    auto *result = new StartupUpgradeCheckResult;
-    result->refresh_owner = std::move(refresh_owner);
-    result->targets = std::move(targets);
-    g_task_return_pointer(task, result, [](gpointer p) { delete static_cast<StartupUpgradeCheckResult *>(p); });
-  } catch (const std::exception &e) {
-    if (refresh_owner.id() != 0 && cancellable && g_cancellable_is_cancelled(cancellable)) {
-      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Startup upgrade check was cancelled."));
-      return;
-    }
-    g_task_return_error(task, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_FAILED, e.what()));
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Finish the quiet startup upgrade check on the GTK thread.
-// -----------------------------------------------------------------------------
-static void
-on_startup_upgrade_check_finished(GObject *, GAsyncResult *result, gpointer user_data)
-{
-  GTask *task = G_TASK(result);
-  MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
-  if (widgets_task_should_skip_completion(task, widgets)) {
-    return;
-  }
-
-  GError *error = nullptr;
-  std::unique_ptr<StartupUpgradeCheckResult> check_result(
-      static_cast<StartupUpgradeCheckResult *>(g_task_propagate_pointer(task, &error)));
-
-  if (error) {
-    if (!g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
-      DNFUI_TRACE("Startup upgrade check task failed: %s", error->message);
-    }
-    g_clear_error(&error);
-    package_query_refresh_upgrade_indicator(widgets);
-    return;
-  }
-
-  if (!check_result) {
-    package_query_refresh_upgrade_indicator(widgets);
-    return;
-  }
-
-  if (check_result->skipped || check_result->package_state_changed) {
-    package_query_refresh_upgrade_indicator(widgets);
-    return;
-  }
-
-  std::string publish_error;
-  DaemonUpgradePublishResult publish_result = DaemonUpgradeState::instance().publish_success(
-      check_result->refresh_owner.id(), check_result->targets, publish_error);
-  check_result->refresh_owner.close();
-
-  if (publish_result != DaemonUpgradePublishResult::PUBLISHED && !publish_error.empty()) {
-    DNFUI_TRACE("Startup upgrade check publish failed: %s", publish_error.c_str());
-  }
-
-  package_query_refresh_upgrade_indicator(widgets);
+  package_query_start_upgrade_indicator_refresh(widgets);
 }
 
 // -----------------------------------------------------------------------------

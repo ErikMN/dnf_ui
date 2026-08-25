@@ -60,8 +60,8 @@ msgstr "Backend-uppvärmning avbröts."
 msgid "Backend warm up failed."
 msgstr "Backend-uppvärmning misslyckades."
 
-msgid "Startup upgrade check was cancelled."
-msgstr "Startkontroll av uppgraderingar avbröts."
+msgid "Upgrade count check was cancelled."
+msgstr "Kontroll av uppgraderingsantal avbröts."
 
 msgid "Unable to check for package upgrades from dnf5daemon."
 msgstr "Kunde inte kontrollera paketuppgraderingar från dnf5daemon."
