@@ -365,6 +365,8 @@ package_query_end_package_list_request(MainWindowUiState *widgets, uint64_t requ
   if (request_cancelled) {
     ui_helpers_set_status(widgets->query.status_label, package_list_cancelled_status(kind), "gray");
   }
+
+  package_query_maybe_start_upgrade_indicator_refresh(widgets);
 }
 
 // -----------------------------------------------------------------------------

@@ -561,6 +561,7 @@ repository_view_refresh_main_after_apply(const std::shared_ptr<MainWindowUiState
   if (!cleared_upgradeable_table) {
     package_query_reload_current_view(widgets.get());
   }
+  package_query_start_upgrade_indicator_refresh(widgets.get());
   ui_helpers_set_status(widgets->query.status_label,
                         repository_view_main_status_for_result(result),
                         repository_view_main_status_color_for_result(result));

@@ -195,7 +195,7 @@ on_installed_refresh_task_finished(GObject *, GAsyncResult *result, gpointer)
     // Drop those cached rows now that the installed snapshot is up to date.
     package_query_clear_search_cache();
     if (changed) {
-      package_query_refresh_upgrade_indicator(g_main_widgets);
+      package_query_start_upgrade_indicator_refresh(g_main_widgets);
       if (package_query_clear_displayed_upgradeable_table(g_main_widgets)) {
         ui_helpers_set_status(g_main_widgets->query.status_label,
                               _("Installed package state changed. Press List Upgradable to reload upgrades."),

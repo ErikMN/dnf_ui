@@ -297,6 +297,9 @@ repository_refresh_on_force_rebuild_task_finished(GObject *, GAsyncResult *res, 
   gtk_widget_set_sensitive(GTK_WIDGET(widgets->query.refresh_button), TRUE);
   repository_refresh_finish_operation(widgets);
   DaemonUpgradeState::instance().mark_stale();
+  // The repository refresh result supersedes older count requests.
+  // Only live metadata below starts a new count.
+  widgets->query_state.upgrade_indicator_refresh_pending = false;
   package_query_refresh_upgrade_indicator(widgets);
 
   if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
@@ -328,11 +331,11 @@ repository_refresh_on_force_rebuild_task_finished(GObject *, GAsyncResult *res, 
       ui_helpers_set_status(
           widgets->query.status_label, _("Live repo refresh failed. Showing installed packages only."), "blue");
     }
-    if (*refresh_state == BaseRepoState::LIVE_METADATA) {
-      package_query_start_upgrade_indicator_refresh(widgets);
-    }
     if (!cleared_upgradeable_table) {
       package_query_reload_current_view(widgets);
+    }
+    if (*refresh_state == BaseRepoState::LIVE_METADATA) {
+      package_query_start_upgrade_indicator_refresh(widgets);
     }
     delete refresh_state;
   } else {

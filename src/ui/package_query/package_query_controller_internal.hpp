@@ -66,6 +66,10 @@ void package_query_refresh_upgrade_indicator(MainWindowUiState *widgets);
 // -----------------------------------------------------------------------------
 void package_query_start_upgrade_indicator_refresh(MainWindowUiState *widgets);
 // -----------------------------------------------------------------------------
+// Start a pending quiet upgrade count refresh when no conflicting work is active.
+// -----------------------------------------------------------------------------
+void package_query_maybe_start_upgrade_indicator_refresh(MainWindowUiState *widgets);
+// -----------------------------------------------------------------------------
 // Put one query button into Stop mode while a worker owns it.
 // -----------------------------------------------------------------------------
 void package_query_begin_package_list_request(MainWindowUiState *widgets,

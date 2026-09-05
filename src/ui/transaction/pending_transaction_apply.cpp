@@ -293,6 +293,7 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
     if (error) {
       g_error_free(error);
     }
+    package_query_maybe_start_upgrade_indicator_refresh(widgets);
     return;
   }
 
@@ -304,6 +305,7 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
 
   // Repopulate the currently visible package view so rows removed by the transaction disappear without a manual reload.
   package_query_reload_current_view(widgets);
+  package_query_start_upgrade_indicator_refresh(widgets);
 }
 
 // -----------------------------------------------------------------------------
@@ -485,6 +487,7 @@ start_preview_request(MainWindowUiState *widgets, TransactionRequest request)
 
         widgets_spinner_release(widgets->query.spinner);
         set_preview_request_busy_state(widgets, false);
+        package_query_maybe_start_upgrade_indicator_refresh(widgets);
 
         GError *error = nullptr;
         gboolean success = g_task_propagate_boolean(task, &error);

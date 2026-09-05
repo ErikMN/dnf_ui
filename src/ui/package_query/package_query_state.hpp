@@ -130,6 +130,8 @@ struct PackageQueryState {
   // Temporary selection snapshot used only while a rebuild-triggered query is reloading.
   // Empty means no selection should be preserved.
   std::string reload_selected_nevra;
+  // True when a quiet List Upgradable count check should run after current work is idle.
+  bool upgrade_indicator_refresh_pending = false;
   std::vector<std::string> history;
 };
 

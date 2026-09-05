@@ -63,6 +63,9 @@ msgstr "Backend-uppvärmning misslyckades."
 msgid "Upgrade count check was cancelled."
 msgstr "Kontroll av uppgraderingsantal avbröts."
 
+msgid "Unable to start upgrade count check."
+msgstr "Kunde inte starta kontroll av uppgraderingsantal."
+
 msgid "Unable to check for package upgrades from dnf5daemon."
 msgstr "Kunde inte kontrollera paketuppgraderingar från dnf5daemon."
 
