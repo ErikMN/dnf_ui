@@ -418,6 +418,7 @@ transaction_dialogs_show_summary_dialog(MainWindowUiState *widgets,
       gtk_window_set_application(dialog, app);
     }
     gtk_window_set_transient_for(dialog, parent);
+    gtk_window_set_destroy_with_parent(dialog, TRUE);
   }
 
   GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
@@ -635,6 +636,7 @@ transaction_dialogs_show_error_dialog(MainWindowUiState *widgets,
       gtk_window_set_application(dialog, app);
     }
     gtk_window_set_transient_for(dialog, parent);
+    gtk_window_set_destroy_with_parent(dialog, TRUE);
   }
 
   GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
