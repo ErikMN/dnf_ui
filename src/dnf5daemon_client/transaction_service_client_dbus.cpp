@@ -1506,6 +1506,11 @@ transaction_service_client_start_apply_request(GDBusConnection *connection,
     return false;
   }
 
+#ifdef DNFUI_DEBUG_TRACE
+  const gint64 started_at_us = g_get_monotonic_time();
+  DNFUI_TRACE("dnf5daemon apply start path=%s", transaction_path.c_str());
+#endif
+
   gulong cancel_handler_id = 0;
   if (cancellable) {
     cancel_handler_id = g_cancellable_connect(
@@ -1548,6 +1553,13 @@ transaction_service_client_start_apply_request(GDBusConnection *connection,
     g_cancellable_disconnect(cancellable, cancel_handler_id);
   }
   g_object_unref(call_cancellable);
+
+#ifdef DNFUI_DEBUG_TRACE
+  DNFUI_TRACE("dnf5daemon apply returned path=%s dbus_success=%d elapsed_ms=%lld",
+              transaction_path.c_str(),
+              state.error ? 0 : 1,
+              elapsed_ms_since(started_at_us));
+#endif
 
   if (cancellable && g_cancellable_is_cancelled(cancellable)) {
     error_out = _("Transaction apply was cancelled.");

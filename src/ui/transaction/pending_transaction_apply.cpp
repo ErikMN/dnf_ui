@@ -50,6 +50,14 @@ struct PreviewTaskData {
   bool transaction_path_transferred = false;
 };
 
+#ifdef DNFUI_DEBUG_TRACE
+static long long
+elapsed_ms_since(gint64 started_at_us)
+{
+  return static_cast<long long>((g_get_monotonic_time() - started_at_us) / 1000);
+}
+#endif
+
 // -----------------------------------------------------------------------------
 // Free data owned by one apply task.
 // -----------------------------------------------------------------------------
@@ -278,6 +286,9 @@ static void
 rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
 {
   GTask *task = G_TASK(res);
+#ifdef DNFUI_DEBUG_TRACE
+  auto *rebuild_started_at_us = static_cast<gint64 *>(g_task_get_task_data(task));
+#endif
   MainWindowUiState *widgets = static_cast<MainWindowUiState *>(user_data);
   if (widgets_task_should_skip_completion(task, widgets)) {
     return;
@@ -288,6 +299,11 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
   BaseRepoState *refresh_state = static_cast<BaseRepoState *>(g_task_propagate_pointer(task, &error));
 
   if (!refresh_state) {
+#ifdef DNFUI_DEBUG_TRACE
+    if (rebuild_started_at_us) {
+      DNFUI_TRACE("Post-apply Base rebuild failed elapsed_ms=%lld", elapsed_ms_since(*rebuild_started_at_us));
+    }
+#endif
     const char *message = error ? error->message : _("Repository refresh failed after transaction.");
     clear_package_view_after_apply_refresh_failure(widgets, message);
     if (error) {
@@ -298,6 +314,12 @@ rebuild_after_tx_finished(GObject *, GAsyncResult *res, gpointer user_data)
   }
 
   delete refresh_state;
+
+#ifdef DNFUI_DEBUG_TRACE
+  if (rebuild_started_at_us) {
+    DNFUI_TRACE("Post-apply Base rebuild done elapsed_ms=%lld", elapsed_ms_since(*rebuild_started_at_us));
+  }
+#endif
 
   // Transaction follow-up rebuilds produce a new Base generation.
   // Cached search result rows must be discarded before the next search.
@@ -320,9 +342,28 @@ rebuild_after_tx_async(MainWindowUiState *widgets)
 
   GCancellable *c = widgets_make_task_cancellable_for(GTK_WIDGET(widgets->query.entry));
   GTask *task = widgets_task_new_for_main_window_ui_state(widgets, c, rebuild_after_tx_finished);
+#ifdef DNFUI_DEBUG_TRACE
+  auto *rebuild_started_at_us = new gint64(g_get_monotonic_time());
+  g_task_set_task_data(task, rebuild_started_at_us, [](gpointer p) { delete static_cast<gint64 *>(p); });
+#endif
   g_task_run_in_thread(task, repository_refresh_on_rebuild_task);
   g_object_unref(task);
   g_object_unref(c);
+}
+
+// -----------------------------------------------------------------------------
+// Refresh table status labels after Apply and trace how long the UI update took.
+// -----------------------------------------------------------------------------
+static void
+refresh_package_table_statuses_after_apply(MainWindowUiState *widgets)
+{
+#ifdef DNFUI_DEBUG_TRACE
+  const gint64 started_at_us = g_get_monotonic_time();
+#endif
+  package_table_refresh_statuses(widgets);
+#ifdef DNFUI_DEBUG_TRACE
+  DNFUI_TRACE("Post-apply package table status refresh done elapsed_ms=%lld", elapsed_ms_since(started_at_us));
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -393,7 +434,7 @@ start_apply_transaction(MainWindowUiState *widgets)
           // Clear pending actions and restore the transaction controls.
           widgets->transaction_state.actions.clear();
           pending_transaction_set_preview_controls_sensitive(widgets, true);
-          package_table_refresh_statuses(widgets);
+          refresh_package_table_statuses_after_apply(widgets);
           package_details_refresh_selected_package_actions(widgets);
 
           ui_helpers_set_status(widgets->query.status_label, _("Transaction successful."), "green");
@@ -407,7 +448,7 @@ start_apply_transaction(MainWindowUiState *widgets)
           pending_transaction_invalidate_service_preview(widgets);
           if (td && td->transaction_started) {
             widgets->transaction_state.actions.clear();
-            package_table_refresh_statuses(widgets);
+            refresh_package_table_statuses_after_apply(widgets);
             package_details_refresh_selected_package_actions(widgets);
           }
           pending_transaction_set_preview_controls_sensitive(widgets, true);

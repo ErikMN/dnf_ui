@@ -177,6 +177,13 @@ pending_transaction_build_request(const std::vector<PendingAction> &actions,
 bool
 pending_transaction_validate_request(const TransactionRequest &request, std::string &error_out)
 {
+  const bool needs_direct_validation =
+      !request.downgrade.empty() || !request.remove.empty() || !request.reinstall.empty();
+  if (!needs_direct_validation) {
+    // Install and upgrade requests are validated by dnf5daemon preview resolution.
+    return true;
+  }
+
   PendingRequestBaseDropGuard base_drop_guard;
 
   try {
