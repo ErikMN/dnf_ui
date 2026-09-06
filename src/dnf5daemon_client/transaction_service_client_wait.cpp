@@ -118,6 +118,60 @@ forward_progress_line(TransactionServiceProgressForwarder *forwarder, const std:
 }
 
 // -----------------------------------------------------------------------------
+// Forward one activity update for work that has no reliable total.
+// -----------------------------------------------------------------------------
+void
+forward_activity_progress(TransactionServiceProgressForwarder *forwarder)
+{
+  if (!forwarder || !forwarder->progress_update_callback || !*forwarder->progress_update_callback) {
+    return;
+  }
+
+  forwarder->last_progress_percent = -1;
+  (*forwarder->progress_update_callback)(TransactionApplyProgress {});
+}
+
+// -----------------------------------------------------------------------------
+// Forward bounded progress for one daemon phase.
+// -----------------------------------------------------------------------------
+void
+forward_fraction_progress(TransactionServiceProgressForwarder *forwarder,
+                          uint64_t processed,
+                          uint64_t total,
+                          bool force = false)
+{
+  if (!forwarder || !forwarder->progress_update_callback || !*forwarder->progress_update_callback || total == 0) {
+    return;
+  }
+
+  processed = std::min(processed, total);
+  long double fraction = static_cast<long double>(processed) / static_cast<long double>(total);
+  int percent = static_cast<int>(fraction * 100.0L);
+  percent = std::clamp(percent, 0, 100);
+  if (!force && percent == forwarder->last_progress_percent) {
+    return;
+  }
+
+  forwarder->last_progress_percent = percent;
+  TransactionApplyProgress progress;
+  progress.determinate = true;
+  progress.processed = processed;
+  progress.total = total;
+  (*forwarder->progress_update_callback)(progress);
+}
+
+// -----------------------------------------------------------------------------
+// Allow the next phase to report from zero again.
+// -----------------------------------------------------------------------------
+void
+reset_fraction_progress(TransactionServiceProgressForwarder *forwarder)
+{
+  if (forwarder) {
+    forwarder->last_progress_percent = -1;
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Return the package text that belongs to one daemon download id.
 // -----------------------------------------------------------------------------
 std::string
@@ -252,6 +306,7 @@ on_transaction_progress_signal(GDBusConnection *connection,
   }
 
   if (signal == "download_add_new") {
+    forward_activity_progress(forwarder);
     std::string download_id = variant_child_text(parameters, 1);
     std::string description = variant_child_text(parameters, 2);
     if (!download_id.empty() && !description.empty()) {
@@ -270,6 +325,8 @@ on_transaction_progress_signal(GDBusConnection *connection,
     if (download_id.empty() || total == 0) {
       return;
     }
+
+    forward_activity_progress(forwarder);
 
     int percent = static_cast<int>((downloaded * 100) / total);
     percent = std::clamp(percent, 0, 100);
@@ -313,19 +370,52 @@ on_transaction_progress_signal(GDBusConnection *connection,
 
   if (signal == "transaction_before_begin" && !forwarder->transaction_started) {
     forwarder->transaction_started = true;
+    reset_fraction_progress(forwarder);
+    forward_fraction_progress(forwarder, 0, variant_child_uint64(parameters, 1), true);
     forward_progress_line(forwarder, _("Running transaction."));
     return;
   }
 
   if (signal == "transaction_verify_start" && !forwarder->verify_started) {
     forwarder->verify_started = true;
+    reset_fraction_progress(forwarder);
+    forward_fraction_progress(forwarder, 0, variant_child_uint64(parameters, 1), true);
     forward_progress_line(forwarder, _("Verifying package files."));
+    return;
+  }
+
+  if (signal == "transaction_verify_progress") {
+    forward_fraction_progress(forwarder, variant_child_uint64(parameters, 1), variant_child_uint64(parameters, 2));
+    return;
+  }
+
+  if (signal == "transaction_verify_stop") {
+    uint64_t total = variant_child_uint64(parameters, 1);
+    forward_fraction_progress(forwarder, total, total, true);
     return;
   }
 
   if (signal == "transaction_transaction_start" && !forwarder->prepare_started) {
     forwarder->prepare_started = true;
+    reset_fraction_progress(forwarder);
+    forward_fraction_progress(forwarder, 0, variant_child_uint64(parameters, 1), true);
     forward_progress_line(forwarder, _("Preparing transaction."));
+    return;
+  }
+
+  if (signal == "transaction_transaction_progress") {
+    forward_fraction_progress(forwarder, variant_child_uint64(parameters, 1), variant_child_uint64(parameters, 2));
+    return;
+  }
+
+  if (signal == "transaction_transaction_stop") {
+    uint64_t total = variant_child_uint64(parameters, 1);
+    forward_fraction_progress(forwarder, total, total, true);
+    return;
+  }
+
+  if (signal == "transaction_elem_progress") {
+    forward_fraction_progress(forwarder, variant_child_uint64(parameters, 2), variant_child_uint64(parameters, 3));
     return;
   }
 

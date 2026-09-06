@@ -1373,8 +1373,8 @@ msgid_plural "Applying %zu pending package changes"
 msgstr[0] "Verkställer %zu väntande paketändring"
 msgstr[1] "Verkställer %zu väntande paketändringar"
 
-msgid "Resolving dependency changes..."
-msgstr "Löser beroendeändringar..."
+msgid "Starting transaction..."
+msgstr "Startar transaktion..."
 
 msgid "Transaction finished successfully."
 msgstr "Transaktionen slutfördes."

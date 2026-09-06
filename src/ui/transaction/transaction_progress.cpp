@@ -5,10 +5,12 @@
 // -----------------------------------------------------------------------------
 #include "ui/transaction/transaction_progress.hpp"
 
+#include "dnf5daemon_client/transaction_service_client.hpp"
 #include "i18n.hpp"
 #include "ui/common/widgets.hpp"
 
 #include <atomic>
+#include <algorithm>
 #include <sstream>
 #include <string>
 
@@ -35,6 +37,7 @@ struct TransactionProgressWindow {
   GtkTextBuffer *buffer = nullptr;
   GtkTextView *view = nullptr;
   GtkSpinner *spinner = nullptr;
+  GtkProgressBar *progress_bar = nullptr;
   GtkButton *close_button = nullptr;
   bool finished = false;
 };
@@ -44,11 +47,30 @@ struct ProgressAppendData {
   std::string message;
 };
 
+struct ProgressUpdateData {
+  TransactionProgressWindow *progress = nullptr;
+  TransactionApplyProgress update;
+};
+
 // -----------------------------------------------------------------------------
 // Free data owned by one queued progress message.
 // -----------------------------------------------------------------------------
 static void
 progress_append_data_free(ProgressAppendData *data)
+{
+  if (!data) {
+    return;
+  }
+
+  transaction_progress_release(data->progress);
+  delete data;
+}
+
+// -----------------------------------------------------------------------------
+// Free data owned by one queued progress update.
+// -----------------------------------------------------------------------------
+static void
+progress_update_data_free(ProgressUpdateData *data)
 {
   if (!data) {
     return;
@@ -133,6 +155,7 @@ transaction_progress_create_window(MainWindowUiState *widgets, size_t pending_co
       gtk_window_set_application(progress->window, app);
     }
     gtk_window_set_transient_for(progress->window, parent);
+    gtk_window_set_destroy_with_parent(progress->window, TRUE);
   }
 
   GtkWidget *outer = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
@@ -166,11 +189,17 @@ transaction_progress_create_window(MainWindowUiState *widgets, size_t pending_co
   gtk_spinner_start(progress->spinner);
   gtk_box_append(GTK_BOX(stage_box), GTK_WIDGET(progress->spinner));
 
-  progress->stage_label = GTK_LABEL(gtk_label_new(_("Resolving dependency changes...")));
+  progress->stage_label = GTK_LABEL(gtk_label_new(_("Starting transaction...")));
   gtk_label_set_xalign(progress->stage_label, 0.0f);
   gtk_label_set_ellipsize(progress->stage_label, PANGO_ELLIPSIZE_END);
   gtk_widget_set_hexpand(GTK_WIDGET(progress->stage_label), TRUE);
   gtk_box_append(GTK_BOX(stage_box), GTK_WIDGET(progress->stage_label));
+
+  progress->progress_bar = GTK_PROGRESS_BAR(gtk_progress_bar_new());
+  gtk_progress_bar_set_fraction(progress->progress_bar, 0.0);
+  gtk_progress_bar_set_show_text(progress->progress_bar, FALSE);
+  gtk_widget_set_hexpand(GTK_WIDGET(progress->progress_bar), TRUE);
+  gtk_box_append(GTK_BOX(outer), GTK_WIDGET(progress->progress_bar));
 
   GtkWidget *scroller = gtk_scrolled_window_new();
   gtk_widget_set_hexpand(scroller, TRUE);
@@ -226,6 +255,7 @@ transaction_progress_create_window(MainWindowUiState *widgets, size_t pending_co
                      progress->buffer = nullptr;
                      progress->view = nullptr;
                      progress->spinner = nullptr;
+                     progress->progress_bar = nullptr;
                      progress->close_button = nullptr;
                      transaction_progress_release(progress);
                    }),
@@ -290,6 +320,49 @@ transaction_progress_append(TransactionProgressWindow *progress, const std::stri
 }
 
 // -----------------------------------------------------------------------------
+// Queue one numeric progress update onto the GTK main thread.
+// -----------------------------------------------------------------------------
+void
+transaction_progress_update(TransactionProgressWindow *progress, const TransactionApplyProgress &update)
+{
+  if (!progress) {
+    return;
+  }
+
+  auto *data = new ProgressUpdateData();
+  data->progress = transaction_progress_retain(progress);
+  data->update = update;
+
+  g_main_context_invoke(
+      nullptr,
+      +[](gpointer user_data) -> gboolean {
+        auto *data = static_cast<ProgressUpdateData *>(user_data);
+        TransactionProgressWindow *progress = data ? data->progress : nullptr;
+
+        if (!progress || !progress->progress_bar || progress->finished) {
+          progress_update_data_free(data);
+          return G_SOURCE_REMOVE;
+        }
+
+        if (!data->update.determinate || data->update.total == 0) {
+          gtk_progress_bar_set_show_text(progress->progress_bar, FALSE);
+          gtk_progress_bar_pulse(progress->progress_bar);
+          progress_update_data_free(data);
+          return G_SOURCE_REMOVE;
+        }
+
+        uint64_t processed = std::min(data->update.processed, data->update.total);
+        double fraction = static_cast<double>(processed) / static_cast<double>(data->update.total);
+        gtk_progress_bar_set_show_text(progress->progress_bar, TRUE);
+        gtk_progress_bar_set_text(progress->progress_bar, nullptr);
+        gtk_progress_bar_set_fraction(progress->progress_bar, std::clamp(fraction, 0.0, 1.0));
+        progress_update_data_free(data);
+        return G_SOURCE_REMOVE;
+      },
+      data);
+}
+
+// -----------------------------------------------------------------------------
 // Mark the popup finished. After this the user may close it.
 // -----------------------------------------------------------------------------
 void
@@ -314,6 +387,11 @@ transaction_progress_finish(TransactionProgressWindow *progress, bool success, c
   if (progress->stage_label) {
     gtk_label_set_text(progress->stage_label,
                        success ? _("Transaction finished successfully.") : _("Transaction finished with errors."));
+  }
+  if (progress->progress_bar && success) {
+    gtk_progress_bar_set_show_text(progress->progress_bar, TRUE);
+    gtk_progress_bar_set_text(progress->progress_bar, nullptr);
+    gtk_progress_bar_set_fraction(progress->progress_bar, 1.0);
   }
   if (progress->window) {
     gtk_window_set_title(progress->window, success ? _("Transaction Complete") : _("Transaction Failed"));

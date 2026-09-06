@@ -370,8 +370,13 @@ Assumptions:
 - The progress window listens to selected dnf5daemon signals:
   `download_add_new`, `download_progress`, `download_end`,
   `download_mirror_failure`, `transaction_before_begin`,
-  `transaction_verify_start`, `transaction_transaction_start`,
-  `transaction_action_start`, and `transaction_unpack_error`.
+  `transaction_verify_start`, `transaction_verify_progress`,
+  `transaction_verify_stop`, `transaction_transaction_start`,
+  `transaction_transaction_progress`, `transaction_transaction_stop`,
+  `transaction_elem_progress`, `transaction_action_start`, and
+  `transaction_unpack_error`.
+- The Apply progress bar reports progress inside the current daemon phase.
+  DNF UI does not create a weighted overall transaction percentage.
 
 Why this matters:
 

@@ -10,6 +10,7 @@
 #include <string>
 
 struct MainWindowUiState;
+struct TransactionApplyProgress;
 struct TransactionProgressWindow;
 
 // -----------------------------------------------------------------------------
@@ -28,6 +29,10 @@ void transaction_progress_release(TransactionProgressWindow *progress);
 // Append a progress message to the transaction progress window.
 // -----------------------------------------------------------------------------
 void transaction_progress_append(TransactionProgressWindow *progress, const std::string &message);
+// -----------------------------------------------------------------------------
+// Update the numeric transaction progress display.
+// -----------------------------------------------------------------------------
+void transaction_progress_update(TransactionProgressWindow *progress, const TransactionApplyProgress &update);
 // -----------------------------------------------------------------------------
 // Mark the transaction progress window as finished.
 // -----------------------------------------------------------------------------
