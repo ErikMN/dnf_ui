@@ -614,6 +614,7 @@ TEST_CASE("dnf5daemon client releases preview sessions", "[dnf5daemon]")
       transaction_path,
       [&](const std::string &line) { progress_lines.push_back(line); },
       {},
+      {},
       error,
       transaction_started);
 
@@ -647,10 +648,12 @@ TEST_CASE("dnf5daemon client applies install requests", "[dnf5daemon]")
   bool preview_contains_package = preview_section_contains_name(preview.install, install_spec);
 
   std::vector<std::string> progress_lines;
+  std::vector<TransactionApplyProgress> progress_updates;
   bool transaction_started = false;
   bool applied = transaction_service_client_apply_started_request(
       transaction_path,
       [&](const std::string &line) { progress_lines.push_back(line); },
+      [&](const TransactionApplyProgress &progress) { progress_updates.push_back(progress); },
       {},
       error,
       transaction_started);
@@ -665,6 +668,16 @@ TEST_CASE("dnf5daemon client applies install requests", "[dnf5daemon]")
   REQUIRE(applied);
   REQUIRE(transaction_started);
   REQUIRE(progress_contains(progress_lines, "Transaction applied successfully."));
+  bool has_determinate_progress = false;
+  for (const auto &progress : progress_updates) {
+    if (!progress.determinate) {
+      continue;
+    }
+    REQUIRE(progress.total > 0);
+    REQUIRE(progress.processed <= progress.total);
+    has_determinate_progress = true;
+  }
+  REQUIRE(has_determinate_progress);
   REQUIRE_FALSE(session_exists_after_release);
 }
 
@@ -700,6 +713,7 @@ TEST_CASE("dnf5daemon client releases sessions after failed apply", "[dnf5daemon
       second_transaction_path,
       [&](const std::string &line) { progress_lines.push_back(line); },
       {},
+      {},
       error,
       second_transaction_started));
   transaction_service_client_release_request(second_transaction_path);
@@ -708,6 +722,7 @@ TEST_CASE("dnf5daemon client releases sessions after failed apply", "[dnf5daemon
   bool failed_apply = transaction_service_client_apply_started_request(
       first_transaction_path,
       [&](const std::string &line) { progress_lines.push_back(line); },
+      {},
       {},
       error,
       first_transaction_started);

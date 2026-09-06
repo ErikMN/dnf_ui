@@ -473,6 +473,9 @@ start_apply_transaction(MainWindowUiState *widgets)
         bool ok = transaction_service_client_apply_started_request(
             td->transaction_path,
             [td](const std::string &message) { transaction_progress_append(td->progress_window, message); },
+            [td](const TransactionApplyProgress &progress) {
+              transaction_progress_update(td->progress_window, progress);
+            },
             [td, cancellable](const TransactionKeyImportRequest &request) {
               return transaction_dialogs_confirm_key_import(td->widgets, request, cancellable);
             },

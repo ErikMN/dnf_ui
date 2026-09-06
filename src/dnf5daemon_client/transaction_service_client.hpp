@@ -7,6 +7,7 @@
 
 #include "upgrade/daemon_upgrade_target.hpp"
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -24,6 +25,14 @@ struct TransactionKeyImportRequest {
 };
 
 using TransactionKeyImportCallback = std::function<bool(const TransactionKeyImportRequest &)>;
+
+struct TransactionApplyProgress {
+  bool determinate = false;
+  uint64_t processed = 0;
+  uint64_t total = 0;
+};
+
+using TransactionApplyProgressCallback = std::function<void(const TransactionApplyProgress &)>;
 
 // -----------------------------------------------------------------------------
 // Prepare one transaction through dnf5daemon and return its resolved preview.
@@ -63,6 +72,7 @@ bool transaction_service_client_refresh_repositories(std::string &error_out, GCa
 // -----------------------------------------------------------------------------
 bool transaction_service_client_apply_started_request(const std::string &transaction_path,
                                                       const std::function<void(const std::string &)> &progress_callback,
+                                                      const TransactionApplyProgressCallback &progress_update_callback,
                                                       const TransactionKeyImportCallback &key_import_callback,
                                                       std::string &error_out,
                                                       bool &transaction_started_out,

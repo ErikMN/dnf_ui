@@ -20,6 +20,7 @@ struct TransactionRequest;
 
 struct TransactionServiceProgressForwarder {
   const std::function<void(const std::string &)> *progress_callback = nullptr;
+  const TransactionApplyProgressCallback *progress_update_callback = nullptr;
   const TransactionKeyImportCallback *key_import_callback = nullptr;
   // Non-owning task cancellable used to avoid sending key approval after cancellation.
   GCancellable *cancellable = nullptr;
@@ -28,6 +29,7 @@ struct TransactionServiceProgressForwarder {
   bool transaction_started = false;
   bool verify_started = false;
   bool prepare_started = false;
+  int last_progress_percent = -1;
   std::string key_confirm_error;
   std::map<std::string, int> download_bucket_by_id;
   std::map<std::string, std::string> download_description_by_id;

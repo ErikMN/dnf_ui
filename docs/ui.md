@@ -337,6 +337,12 @@ The progress window can receive progress messages after the apply request has
 started. The code keeps the progress state alive while queued GTK callbacks are
 still pending.
 
+The window also shows daemon-provided progress for the current apply phase.
+Downloads use activity mode because the daemon reports individual downloads,
+not one reliable total for the full download phase. Verification, transaction
+preparation, and RPM processing use the daemon's processed and total values.
+The bar is not an overall transaction percentage.
+
 The main window stays open while apply is running so the completion callback can
 finish the progress window cleanly.
 
