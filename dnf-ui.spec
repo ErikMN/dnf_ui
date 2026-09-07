@@ -1,5 +1,5 @@
 Name:           dnf-ui
-Version:        0.6.2
+Version:        0.6.3
 Release:        1%{?dist}
 Summary:        GTK interface for DNF5
 
@@ -56,6 +56,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/io.github.dnfui.
 %{_datadir}/metainfo/io.github.dnfui.dnfui.metainfo.xml
 
 %changelog
+* Mon Sep 07 2026 ErikMN <dnfui@proton.me> - 0.6.3-1
+- Show phase progress while applying package transactions
+- Keep the available upgrade count current after package, repository, and transaction changes
+- Speed up transaction preview preparation for installs and upgrades
+- Close transaction dialogs automatically when the main window is closed
+
 * Tue Aug 25 2026 ErikMN <dnfui@proton.me> - 0.6.2-1
 - Show the available package upgrade count after startup and repository refresh
 
