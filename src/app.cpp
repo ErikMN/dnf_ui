@@ -22,6 +22,7 @@
 
 #include <atomic>
 #include <gtk/gtk.h>
+#include <memory>
 
 // -----------------------------------------------------------------------------
 // Function forward declarations
@@ -61,6 +62,51 @@ static MainWindowUiState *g_main_widgets = nullptr;
 struct StartupWarmupData {
   MainWindowUiState *widgets = nullptr;
   GCancellable *startup_cancellable = nullptr;
+};
+
+// -----------------------------------------------------------------------------
+// Bridge a GCancellable into the atomic token used by BaseManager.
+// -----------------------------------------------------------------------------
+class StartupWarmupCancelToken {
+  public:
+  explicit StartupWarmupCancelToken(GCancellable *cancellable)
+      : cancellable(cancellable)
+      , cancel_requested(std::make_shared<std::atomic<bool>>(cancellable && g_cancellable_is_cancelled(cancellable)))
+  {
+    if (cancellable) {
+      handler_id = g_cancellable_connect(cancellable, G_CALLBACK(on_cancelled), cancel_requested.get(), nullptr);
+    }
+  }
+
+  ~StartupWarmupCancelToken()
+  {
+    if (cancellable && handler_id != 0) {
+      g_cancellable_disconnect(cancellable, handler_id);
+    }
+  }
+
+  std::shared_ptr<std::atomic<bool>> token() const
+  {
+    return cancel_requested;
+  }
+
+  bool cancelled() const
+  {
+    return cancel_requested && cancel_requested->load(std::memory_order_relaxed);
+  }
+
+  private:
+  static void on_cancelled(GCancellable *, gpointer user_data)
+  {
+    auto *cancelled = static_cast<std::atomic<bool> *>(user_data);
+    if (cancelled) {
+      cancelled->store(true, std::memory_order_relaxed);
+    }
+  }
+
+  GCancellable *cancellable = nullptr;
+  gulong handler_id = 0;
+  std::shared_ptr<std::atomic<bool>> cancel_requested;
 };
 
 // -----------------------------------------------------------------------------
@@ -268,14 +314,15 @@ start_backend_warmup_task(MainWindowUiState *widgets)
 static void
 on_backend_warmup_task(GTask *task, gpointer, gpointer, GCancellable *cancellable)
 {
-  if (g_cancellable_is_cancelled(cancellable)) {
+  StartupWarmupCancelToken cancel_token(cancellable);
+  if (cancel_token.cancelled()) {
     g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Backend warm up was cancelled."));
     return;
   }
 
   try {
-    BaseManager::instance().acquire_read();
-    if (g_cancellable_is_cancelled(cancellable)) {
+    BaseManager::instance().acquire_read(cancel_token.token());
+    if (cancel_token.cancelled()) {
       g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Backend warm up was cancelled."));
       return;
     }
@@ -283,8 +330,16 @@ on_backend_warmup_task(GTask *task, gpointer, gpointer, GCancellable *cancellabl
     g_task_return_pointer(
         task, new BaseRepoState(repo_state), [](gpointer p) { delete static_cast<BaseRepoState *>(p); });
   } catch (const std::exception &e) {
+    if (cancel_token.cancelled()) {
+      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Backend warm up was cancelled."));
+      return;
+    }
     g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", e.what());
   } catch (...) {
+    if (cancel_token.cancelled()) {
+      g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_CANCELLED, "%s", _("Backend warm up was cancelled."));
+      return;
+    }
     g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_FAILED, "%s", _("Backend warm up failed."));
   }
 }
