@@ -7,6 +7,27 @@
 #include <clocale>
 
 // -----------------------------------------------------------------------------
+// Format a runtime-selected gettext string.
+// Public callers should use dnfui_i18n_format() so literal call sites stay compiler checked.
+// -----------------------------------------------------------------------------
+static std::string
+dnfui_i18n_format_unchecked(const char *format, ...)
+{
+  if (!format) {
+    return {};
+  }
+
+  va_list args;
+  va_start(args, format);
+  char *text = g_strdup_vprintf(format, args);
+  va_end(args);
+
+  std::string result = text ? text : "";
+  g_free(text);
+  return result;
+}
+
+// -----------------------------------------------------------------------------
 // Initialize gettext for DNF UI.
 // -----------------------------------------------------------------------------
 void
@@ -44,7 +65,7 @@ dnfui_i18n_format(const char *format, ...)
 std::string
 dnfui_i18n_format_count(size_t count, const char *singular, const char *plural)
 {
-  return dnfui_i18n_format(g_dngettext(GETTEXT_PACKAGE, singular, plural, count), count);
+  return dnfui_i18n_format_unchecked(g_dngettext(GETTEXT_PACKAGE, singular, plural, count), count);
 }
 
 // -----------------------------------------------------------------------------

@@ -23,7 +23,7 @@ void dnfui_i18n_init(void);
 // -----------------------------------------------------------------------------
 // Format translated text that contains printf placeholders.
 // -----------------------------------------------------------------------------
-std::string dnfui_i18n_format(const char *format, ...);
+std::string dnfui_i18n_format(const char *format, ...) G_GNUC_PRINTF(1, 2);
 
 // -----------------------------------------------------------------------------
 // Format translated singular or plural text that contains one count placeholder.
