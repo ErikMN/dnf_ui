@@ -675,7 +675,6 @@ on_list_upgradeable_task_finished(GObject *, GAsyncResult *res, gpointer user_da
     if (widgets && !widgets->window_state.destroyed) {
       if (GCancellable *c = g_task_get_cancellable(task)) {
         if (g_cancellable_is_cancelled(c) && td) {
-          DaemonUpgradeState::instance().mark_stale();
           widgets_spinner_release(widgets->query.spinner);
           package_query_end_package_list_request(widgets, td->request_id, PackageListRequestKind::LIST_UPGRADEABLE);
         }
