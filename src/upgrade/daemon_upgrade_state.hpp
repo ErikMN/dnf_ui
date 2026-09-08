@@ -36,7 +36,7 @@ enum class DaemonUpgradePublishResult {
   CONFLICTING_TARGETS,
 };
 
-// The shared state holds the last List Upgradable result accepted by GTK.
+// The shared state holds the latest complete daemon upgrade-target result accepted by GTK.
 // It does not fetch data from dnf5daemon. Workers load targets, then GTK
 // publishes the result only after cancellation and state checks pass.
 //
