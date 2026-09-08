@@ -208,6 +208,38 @@ TEST_CASE("dnf5daemon preview parser represents downgrade package actions")
 }
 
 // -----------------------------------------------------------------------------
+// Verify that unsupported daemon item types fail the whole preview.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon preview parser rejects unsupported item types")
+{
+  TransactionPreview preview;
+  std::string error;
+
+  bool ok =
+      transaction_service_client_testonly_build_preview_from_item("group", "install", "test-group", preview, error);
+
+  REQUIRE_FALSE(ok);
+  REQUIRE_FALSE(error.empty());
+  REQUIRE(preview.empty());
+}
+
+// -----------------------------------------------------------------------------
+// Verify that unsupported package actions fail the whole preview.
+// -----------------------------------------------------------------------------
+TEST_CASE("dnf5daemon preview parser rejects unsupported package actions")
+{
+  TransactionPreview preview;
+  std::string error;
+
+  bool ok = transaction_service_client_testonly_build_preview_from_item(
+      "package", "future-action", "test-package", preview, error);
+
+  REQUIRE_FALSE(ok);
+  REQUIRE_FALSE(error.empty());
+  REQUIRE(preview.empty());
+}
+
+// -----------------------------------------------------------------------------
 // Verify that successful resolve warnings do not count as package actions.
 // -----------------------------------------------------------------------------
 TEST_CASE("dnf5daemon preview warnings do not count as package actions")
